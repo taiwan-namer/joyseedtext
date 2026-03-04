@@ -87,6 +87,7 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       thirdPartyApi: typeof raw.thirdPartyApi === "string" ? raw.thirdPartyApi : null,
       atmBankName: typeof raw.atmBankName === "string" ? raw.atmBankName : null,
       atmBankAccount: typeof raw.atmBankAccount === "string" ? raw.atmBankAccount : null,
+      atmBankCode: raw.atmBankCode != null ? String(raw.atmBankCode) : null,
     };
   } catch {
     return {
@@ -107,6 +108,7 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       thirdPartyApi: null,
       atmBankName: null,
       atmBankAccount: null,
+      atmBankCode: null,
     };
   }
 }
@@ -207,6 +209,7 @@ export async function updateFrontendSettings(formData: FormData): Promise<
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
+            atmBankCode: existing.atmBankCode ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -261,6 +264,7 @@ export async function updateAboutPage(formData: FormData): Promise<
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
+            atmBankCode: existing.atmBankCode ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -324,6 +328,7 @@ export async function updateSeoSettings(formData: FormData): Promise<
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
+            atmBankCode: existing.atmBankCode ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -342,6 +347,7 @@ export async function getPaymentSettings(): Promise<{
   linePayApi: string | null;
   thirdPartyApi: string | null;
   atmBankName: string | null;
+  atmBankCode: string | null;
   atmBankAccount: string | null;
 }> {
   const s = await getFrontendSettings();
@@ -349,6 +355,7 @@ export async function getPaymentSettings(): Promise<{
     linePayApi: s.linePayApi ?? null,
     thirdPartyApi: s.thirdPartyApi ?? null,
     atmBankName: s.atmBankName ?? null,
+    atmBankCode: s.atmBankCode ?? null,
     atmBankAccount: s.atmBankAccount ?? null,
   };
 }
@@ -364,6 +371,7 @@ export async function updatePaymentSettings(formData: FormData): Promise<
     const linePayApi = (formData.get("line_pay_api") as string)?.trim() || null;
     const thirdPartyApi = (formData.get("third_party_api") as string)?.trim() || null;
     const atmBankName = (formData.get("atm_bank_name") as string)?.trim() || null;
+    const atmBankCode = (formData.get("atm_bank_code") as string)?.trim() || null;
     const atmBankAccount = (formData.get("atm_bank_account") as string)?.trim() || null;
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
@@ -389,6 +397,7 @@ export async function updatePaymentSettings(formData: FormData): Promise<
             linePayApi,
             thirdPartyApi,
             atmBankName,
+            atmBankCode,
             atmBankAccount,
           },
           updated_at: new Date().toISOString(),
