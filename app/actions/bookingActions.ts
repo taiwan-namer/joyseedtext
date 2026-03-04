@@ -824,7 +824,7 @@ export async function getRollcallSessionsByDate(
       .from("bookings")
       .select("class_id, slot_date, slot_time")
       .eq("merchant_id", merchantId)
-      .in("class_id", [...new Set(classIds)])
+      .in("class_id", Array.from(new Set(classIds)))
       .not("status", "eq", "cancelled");
 
     if (countError) return { success: false, error: countError.message };
