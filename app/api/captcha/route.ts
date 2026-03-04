@@ -1,14 +1,19 @@
+import path from "path";
 import { NextResponse } from "next/server";
 import svgCaptcha from "svg-captcha";
 
 const CAPTCHA_COOKIE_NAME = "captcha_answer";
 const CAPTCHA_MAX_AGE = 120; // 2 分鐘
 
+/** 在 Vercel 等 serverless 環境下，svg-captcha 內建 __dirname 會指向打包路徑，字型需改為 process.cwd() 絕對路徑載入 */
+const FONT_PATH = path.join(process.cwd(), "node_modules", "svg-captcha", "fonts", "Comismsh.ttf");
+
 /**
  * GET /api/captcha
  * 產生一組驗證碼 SVG，並將答案存於 httpOnly cookie，供後端驗證使用。
  */
 export async function GET() {
+  svgCaptcha.loadFont(FONT_PATH);
   const captcha = svgCaptcha.create({
     size: 4,
     ignoreChars: "0oO1ilI",
