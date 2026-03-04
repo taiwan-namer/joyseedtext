@@ -694,10 +694,13 @@ export async function getRollcallDatesWithCounts(): Promise<
     }
 
     const allKeys = new Set<string>();
-    for (const arr of dateToSessions.values()) {
+    // 先用 Array.from 轉換 MapIterator
+    const sessionValues = Array.from(dateToSessions.values());
+    for (const arr of sessionValues) {
       for (const { key } of arr) allKeys.add(key);
     }
-    const classIds = [...new Set(Array.from(allKeys).map((k) => k.split("|")[0]))];
+    // 把外層的 [...] 也改成 Array.from
+    const classIds = Array.from(new Set(Array.from(allKeys).map((k) => k.split("|")[0])));
 
     let countMap = new Map<string, number>();
     if (classIds.length > 0) {
