@@ -82,7 +82,7 @@ function DateTimeModal({
     const times = availableSlots
       .filter((s) => s.date === dateStr)
       .map((s) => s.time);
-    return [...new Set(times)].sort();
+    return Array.from(new Set(times)).sort();
   }, [selectedDate, availableSlots]);
 
   const prevMonth = () => {
