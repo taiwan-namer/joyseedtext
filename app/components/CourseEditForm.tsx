@@ -344,9 +344,9 @@ export default function CourseEditForm({
       setError("請上傳主圖");
       return;
     }
-    if (imageSlots[0].file) formData.set("image_main", imageSlots[0].file);
+    if (imageSlots[0].file) formData.set("image_main", imageSlots[0].file as File);
     for (let i = 1; i <= 4; i++) {
-      if (imageSlots[i].file) formData.set(`image_${i}`, imageSlots[i].file);
+      if (imageSlots[i].file) formData.set(`image_${i}`, imageSlots[i].file as File);
     }
     const postHtml = editorRef.current?.innerHTML ?? "";
     formData.set("post_content", postHtml);
