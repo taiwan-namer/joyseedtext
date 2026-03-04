@@ -46,6 +46,7 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
         linePayApi: null,
         thirdPartyApi: null,
         atmBankName: null,
+        atmBankCode: null,
         atmBankAccount: null,
       };
     }
