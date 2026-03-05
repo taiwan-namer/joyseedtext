@@ -1,0 +1,204 @@
+"use server";
+
+import { requireSignedIn, requireAdmin, getMerchantId } from "@/lib/auth/guards";
+
+/**
+ * 將「目前登入者」同步到 members 表（與 OAuth 回呼邏輯一致）。
+ * 供 E-mail 登入／註冊成功後呼叫，確保後台 B會員功能管理 能列出該會員。
+ * 需已登入；若該 email 尚未在 members 則寫入或補上 user_id。
+ */
+export async function syncAuthUserToMembers(): Promise<
+  | { success: true }
+  | { success: false; error: string }
+> {
+  try {
+    const user = await requireSignedIn();
+    const merchantId = getMerchantId();
+    if (!merchantId) return { success: false, error: "未設定店家" };
+
+    const email = (user.email ?? "").trim();
+    if (!email) return { success: false, error: "無法取得登入資訊" };
+
+    const name =
+      (user.user_metadata?.full_name as string) ||
+      (user.user_metadata?.name as string) ||
+      email.split("@")[0] ||
+      "會員";
+
+    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
+    const supabaseAdmin = await createServerAnonSupabase();
+    const { data: existing } = await supabaseAdmin
+      .from("members")
+      .select("id, user_id")
+      .eq("merchant_id", merchantId)
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!existing) {
+      const { error: insertErr } = await supabaseAdmin.from("members").insert({
+        merchant_id: merchantId,
+        user_id: user.id,
+        name: name.trim() || null,
+        phone: null,
+        email,
+      });
+      if (insertErr) return { success: false, error: insertErr.message };
+    } else if (existing.user_id === null || existing.user_id !== user.id) {
+      const { error: updateErr } = await supabaseAdmin
+        .from("members")
+        .update({ user_id: user.id })
+        .eq("id", existing.id);
+      if (updateErr) return { success: false, error: updateErr.message };
+    }
+    return { success: true };
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    if (err.status === 401) return { success: false, error: "請先登入" };
+    const message = e instanceof Error ? e.message : "同步失敗";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 結帳時同步登入者至 members：若該 email 尚未在 members 則寫入，已存在則補上 user_id。
+ * 需已登入；使用登入者 email 與 params 的 name/phone。
+ */
+export async function ensureMemberForBooking(params: {
+  name: string;
+  phone: string;
+  email: string;
+}): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const user = await requireSignedIn();
+    const merchantId = getMerchantId();
+    if (!merchantId) return { success: false, error: "未設定店家" };
+
+    const name = (params.name ?? "").trim();
+    const phone = (params.phone ?? "").trim();
+    const email = (user.email ?? "").trim();
+    if (!email) return { success: false, error: "請先登入並確認信箱" };
+
+    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
+    const supabase = await createServerAnonSupabase();
+    const { data: existing } = await supabase
+      .from("members")
+      .select("id, user_id")
+      .eq("merchant_id", merchantId)
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!existing) {
+      const { error: insertErr } = await supabase.from("members").insert({
+        merchant_id: merchantId,
+        user_id: user.id,
+        name: name || null,
+        phone: phone || null,
+        email,
+      });
+      if (insertErr) return { success: false, error: insertErr.message };
+    } else if (existing.user_id === null || existing.user_id !== user.id) {
+      const { error: updateErr } = await supabase
+        .from("members")
+        .update({ user_id: user.id })
+        .eq("id", existing.id);
+      if (updateErr) return { success: false, error: updateErr.message };
+    }
+    return { success: true };
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    if (err.status === 401) return { success: false, error: "請先登入" };
+    const msg = e instanceof Error ? e.message : "建立會員資料失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 前台註冊／加入會員：寫入 members 表。
+ * merchant_id 強制使用 process.env.NEXT_PUBLIC_CLIENT_ID，確保綁定當前店家。
+ */
+export async function registerMember(formData: {
+  name: string;
+  phone: string;
+  email: string;
+}): Promise<
+  | { success: true; message?: string }
+  | { success: false; error: string }
+> {
+  try {
+    const user = await requireSignedIn();
+    const merchantId = getMerchantId();
+    if (!merchantId) {
+      return { success: false, error: "系統未設定店家資訊，請稍後再試" };
+    }
+
+    const name = (formData.name ?? "").trim();
+    const phone = (formData.phone ?? "").trim();
+    const email = (user.email ?? "").trim();
+
+    if (!name) return { success: false, error: "請填寫姓名" };
+    if (!phone) return { success: false, error: "請填寫手機號碼" };
+    if (!email) return { success: false, error: "請填寫電子信箱" };
+
+    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
+    const supabase = await createServerAnonSupabase();
+    const { data: existing } = await supabase
+      .from("members")
+      .select("id, user_id")
+      .eq("merchant_id", merchantId)
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!existing) {
+      const { error: insertErr } = await supabase.from("members").insert({
+        merchant_id: merchantId,
+        user_id: user.id,
+        name,
+        phone,
+        email,
+      });
+      if (insertErr) return { success: false, error: insertErr.message };
+    } else if (existing.user_id === null || existing.user_id !== user.id) {
+      const { error: updateErr } = await supabase
+        .from("members")
+        .update({ user_id: user.id, name, phone })
+        .eq("id", existing.id);
+      if (updateErr) return { success: false, error: updateErr.message };
+    }
+    return { success: true, message: "註冊成功" };
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    if (err.status === 401) return { success: false, error: "請先登入" };
+    const message = e instanceof Error ? e.message : "註冊失敗，請稍後再試";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 後台會員功能管理：刪除一筆會員（僅限本店家 merchant_id）。
+ */
+export async function deleteMember(memberId: string): Promise<
+  | { success: true }
+  | { success: false; error: string }
+> {
+  try {
+    await requireAdmin();
+    const merchantId = getMerchantId();
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    const id = (memberId ?? "").trim();
+    if (!id) return { success: false, error: "無效的會員" };
+
+    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
+    const supabase = await createServerAnonSupabase();
+    const { error } = await supabase
+      .from("members")
+      .delete()
+      .eq("id", id)
+      .eq("merchant_id", merchantId);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "刪除失敗";
+    return { success: false, error: message };
+  }
+}
