@@ -8,6 +8,9 @@ export function middleware(request: NextRequest) {
   if (!pathname.startsWith("/admin")) {
     return NextResponse.next();
   }
+  if (pathname === "/admin/logout") {
+    return NextResponse.next();
+  }
   if (pathname === "/admin/login") {
     const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
     const sessionKey = process.env.ADMIN_SESSION_KEY?.trim();

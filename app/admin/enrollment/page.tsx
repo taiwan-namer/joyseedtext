@@ -22,7 +22,7 @@ function buildAddonOptionDisplay(
   if (classAddonPrices && Array.isArray(row.addon_indices) && row.addon_indices.length > 0) {
     for (const i of row.addon_indices) {
       const addon = classAddonPrices[i];
-      if (addon) parts.push(`${addon.name}${addon.price}`);
+      if (addon) parts.push(`${addon.name} ${addon.price}`);
     }
   }
   return parts.join(" + ");

@@ -84,7 +84,9 @@ export async function createBooking(
   kidName?: string | null,
   kidAge?: string | null,
   addonIndices?: number[] | null,
-  paymentMethod?: PaymentMethodForBooking | null
+  paymentMethod?: PaymentMethodForBooking | null,
+  /** 結帳頁顯示的總金額，寫入訂單供會員中心顯示與結帳頁一致 */
+  totalAmount?: number | null
 ): Promise<
   | { success: true; bookingId: string }
   | { success: false; error: string }
@@ -109,6 +111,11 @@ export async function createBooking(
 
     const pm = paymentMethod === "transfer" ? "atm" : paymentMethod === "linepay" ? "linepay" : paymentMethod === "card" ? "card" : "atm";
 
+    const orderAmount =
+      typeof totalAmount === "number" && !Number.isNaN(totalAmount) && totalAmount >= 0
+        ? Math.round(totalAmount)
+        : null;
+
     const { data, error } = await supabase.rpc("create_booking_and_decrement_capacity", {
       p_merchant_id: merchantId,
       p_member_email: email,
@@ -122,6 +129,7 @@ export async function createBooking(
       p_kid_age: (kidAge ?? "").trim() || null,
       p_addon_indices: Array.isArray(addonIndices) && addonIndices.length > 0 ? addonIndices : null,
       p_payment_method: pm,
+      p_order_amount: orderAmount,
     });
 
     if (error) return { success: false, error: error.message };
@@ -353,6 +361,7 @@ export async function getMyBookings(): Promise<
         created_at,
         slot_date,
         slot_time,
+        order_amount,
         classes ( title, image_url, price )
       `)
       .eq("merchant_id", merchantId)
@@ -373,6 +382,8 @@ export async function getMyBookings(): Promise<
         slotTimeRaw != null && String(slotTimeRaw).trim() !== ""
           ? String(slotTimeRaw).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5)
           : null;
+      const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
+      const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
 
       return {
         id: String(r.id),
@@ -387,7 +398,7 @@ export async function getMyBookings(): Promise<
         slot_time,
         class_title: classes?.title ?? null,
         class_image_url: classes?.image_url ?? null,
-        class_price: classes?.price != null ? Number(classes.price) : null,
+        class_price: classPrice,
       };
     });
 
@@ -423,6 +434,7 @@ export async function getAdminBookings(): Promise<
         created_at,
         slot_date,
         slot_time,
+        order_amount,
         classes ( title, image_url, price )
       `)
       .eq("merchant_id", merchantId)
@@ -442,6 +454,8 @@ export async function getAdminBookings(): Promise<
         slotTimeRaw != null && String(slotTimeRaw).trim() !== ""
           ? String(slotTimeRaw).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5)
           : null;
+      const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
+      const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
 
       return {
         id: String(r.id),
@@ -456,7 +470,7 @@ export async function getAdminBookings(): Promise<
         slot_time,
         class_title: classes?.title ?? null,
         class_image_url: classes?.image_url ?? null,
-        class_price: classes?.price != null ? Number(classes.price) : null,
+        class_price: classPrice,
       };
     });
 
@@ -502,6 +516,18 @@ export type SessionBookingsResult = {
   classAddonPrices: { name: string; price: number }[] | null;
 };
 
+/** 從 DB 讀出的 addon_indices 可能是 array 或 Postgres 陣列字串 "{0,1}"，統一解析為 number[] */
+function parseAddonIndicesFromDb(v: unknown): number[] | null {
+  if (v == null) return null;
+  if (Array.isArray(v)) return v.map((x) => Number(x)).filter((n) => !Number.isNaN(n));
+  if (typeof v === "string") {
+    const s = v.replace(/^\{|\}$/g, "").trim();
+    if (!s) return null;
+    return s.split(",").map((x) => Number(x.trim())).filter((n) => !Number.isNaN(n));
+  }
+  return null;
+}
+
 /** 點名簿用：一門課 + 其報名名單 */
 export type CourseEnrollmentItem = {
   class: ClassForEnrollment;
@@ -542,13 +568,6 @@ export async function getEnrollmentByCourse(): Promise<
 
     if (bookingsError) return { success: false, error: bookingsError.message };
 
-    const parseAddonIndices = (row: Record<string, unknown>): number[] | null => {
-      const v = row.addon_indices;
-      if (v == null) return null;
-      if (Array.isArray(v)) return v.map((x) => Number(x)).filter((n) => !Number.isNaN(n));
-      return null;
-    };
-
     const bookingsByClassId = new Map<string, BookingWithMember[]>();
     for (const r of bookingsRows ?? []) {
       const row = r as Record<string, unknown>;
@@ -561,7 +580,7 @@ export async function getEnrollmentByCourse(): Promise<
         kid_age: row.kid_age != null ? String(row.kid_age).trim() || null : null,
         allergy_or_special_note: row.allergy_or_special_note != null ? String(row.allergy_or_special_note).trim() || null : null,
         contact_phone: row.parent_phone != null ? String(row.parent_phone).trim() || null : null,
-        addon_indices: parseAddonIndices(row),
+        addon_indices: parseAddonIndicesFromDb(row.addon_indices),
         status: String(row.status),
         created_at: String(row.created_at),
       };
@@ -888,12 +907,26 @@ export async function getBookingsForSession(
     const price = r.price != null ? Number(r.price) : 0;
     const salePrice = r.sale_price != null ? Number(r.sale_price) : null;
     const classBasePrice = salePrice != null && price > 0 && salePrice < price ? salePrice : price;
-    const classAddonPrices: { name: string; price: number }[] | null = Array.isArray(r.addon_prices)
-      ? (r.addon_prices as { name?: string; price?: number }[]).map((a) => ({
-          name: a?.name != null ? String(a.name) : "",
-          price: a?.price != null ? Number(a.price) : 0,
-        }))
-      : null;
+    const addonRaw = r.addon_prices;
+    let classAddonPrices: { name: string; price: number }[] | null = null;
+    if (Array.isArray(addonRaw)) {
+      classAddonPrices = (addonRaw as { name?: string; price?: number }[]).map((a) => ({
+        name: a?.name != null ? String(a.name) : "",
+        price: a?.price != null ? Number(a.price) : 0,
+      }));
+    } else if (typeof addonRaw === "string") {
+      try {
+        const parsed = JSON.parse(addonRaw) as unknown;
+        if (Array.isArray(parsed)) {
+          classAddonPrices = (parsed as { name?: string; price?: number }[]).map((a) => ({
+            name: a?.name != null ? String(a.name) : "",
+            price: a?.price != null ? Number(a.price) : 0,
+          }));
+        }
+      } catch {
+        // ignore
+      }
+    }
 
     const { data: bookingsRows, error: bookingsError } = await supabase
       .from("bookings")
@@ -906,13 +939,6 @@ export async function getBookingsForSession(
 
     if (bookingsError) return { success: false, error: bookingsError.message };
 
-    const rawIndices = (r: Record<string, unknown>): number[] | null => {
-      const v = r.addon_indices;
-      if (v == null) return null;
-      if (Array.isArray(v)) return v.map((x) => Number(x)).filter((n) => !Number.isNaN(n));
-      return null;
-    };
-
     const bookings: BookingWithMember[] = (bookingsRows ?? []).map((row: Record<string, unknown>) => ({
       id: String(row.id),
       member_email: String(row.member_email),
@@ -921,7 +947,7 @@ export async function getBookingsForSession(
       kid_age: row.kid_age != null ? String(row.kid_age).trim() || null : null,
       allergy_or_special_note: row.allergy_or_special_note != null ? String(row.allergy_or_special_note).trim() || null : null,
       contact_phone: row.parent_phone != null ? String(row.parent_phone).trim() || null : null,
-      addon_indices: rawIndices(row),
+      addon_indices: parseAddonIndicesFromDb(row.addon_indices),
       status: String(row.status),
       created_at: String(row.created_at),
     }));

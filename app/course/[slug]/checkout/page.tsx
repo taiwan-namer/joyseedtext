@@ -41,6 +41,7 @@ export default function CheckoutPage() {
   const [atmBankName, setAtmBankName] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
   const [hasSession, setHasSession] = useState<boolean | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -128,39 +129,7 @@ export default function CheckoutPage() {
     );
   }
 
-  // 未登入：須先登入或註冊才能報名
-  if (hasSession === false) {
-    const loginNext = `/course/${slug}/checkout?${searchParams.toString()}`;
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
-          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-            <Link href="/" className="text-xl font-bold text-brand">
-              {siteName}
-            </Link>
-            <HeaderMember />
-          </div>
-        </header>
-        <div className="max-w-5xl mx-auto px-4 py-12 flex justify-center">
-          <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">請先登入或註冊才能報名</h2>
-            <p className="text-sm text-gray-600 mb-6">
-              為保障您的訂單與權益，請先使用 E-mail 或 Google 登入／註冊後再填寫報名資料。
-            </p>
-            <Link
-              href={`/login?next=${encodeURIComponent(loginNext)}`}
-              className="inline-block w-full py-3 px-4 rounded-xl font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors"
-            >
-              前往登入／註冊
-            </Link>
-            <Link href={`/course/${slug}`} className="mt-4 inline-block text-sm text-gray-500 hover:text-gray-700">
-              返回課程頁
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const loginNext = `/course/${slug}/checkout?${searchParams.toString()}`;
 
   const buttonText =
     paymentMethod === "card"
@@ -192,6 +161,10 @@ export default function CheckoutPage() {
       setSubmitError("所選日期或時段不在本課程的開課場次中，請回到課程頁重新選擇場次。");
       return;
     }
+    if (hasSession === false) {
+      setShowLoginPrompt(true);
+      return;
+    }
     setSubmitLoading(true);
     try {
       const ensureRes = await ensureMemberForBooking({
@@ -218,7 +191,10 @@ export default function CheckoutPage() {
         slotTime || null,
         allergyNote || null,
         childName.trim() || null,
-        childAge.trim() || null
+        childAge.trim() || null,
+        undefined,
+        paymentMethod,
+        totalFromUrl
       );
       if (!bookRes.success) {
         setSubmitError(bookRes.error);
@@ -253,6 +229,42 @@ export default function CheckoutPage() {
           </div>
         </div>
       </header>
+
+      {/* 填完報名資料後送出時未登入：顯示請先登入提示 */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="login-prompt-title">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center relative">
+            <button
+              type="button"
+              onClick={() => setShowLoginPrompt(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded p-1"
+              aria-label="關閉"
+            >
+              ✕
+            </button>
+            <h2 id="login-prompt-title" className="text-xl font-bold text-gray-800 mb-2">請先登入或註冊才能報名</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              為保障您的訂單與權益，請先使用 E-mail 或 Google 登入／註冊後再送出報名資料。
+            </p>
+            <Link
+              href={`/login?next=${encodeURIComponent(loginNext)}`}
+              className="inline-block w-full py-3 px-4 rounded-xl font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors"
+            >
+              前往登入／註冊
+            </Link>
+            <Link href={`/course/${slug}`} className="mt-4 inline-block text-sm text-gray-500 hover:text-gray-700">
+              返回課程頁
+            </Link>
+            <button
+              type="button"
+              onClick={() => setShowLoginPrompt(false)}
+              className="mt-3 block w-full text-sm text-gray-500 hover:text-gray-700"
+            >
+              稍後登入，繼續填寫
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         {slotInvalid && (

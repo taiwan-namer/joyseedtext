@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { adminLogout } from "@/app/actions/adminAuthActions";
 import {
   ChevronRight,
   ExternalLink,
@@ -196,14 +195,12 @@ function TopBar() {
       <span className="text-sm text-gray-700">
         歡迎 <strong>管理員</strong> 您好
       </span>
-      <form action={adminLogout} className="inline">
-        <button
-          type="submit"
-          className="text-sm text-gray-600 hover:text-amber-600 transition-colors"
-        >
-          登出
-        </button>
-      </form>
+      <Link
+        href="/admin/logout"
+        className="text-sm text-gray-600 hover:text-amber-600 transition-colors"
+      >
+        登出
+      </Link>
     </header>
   );
 }
