@@ -128,19 +128,25 @@ export default function LoginModal({
     setRegisterLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) {
         setFormError(error.message);
         return;
       }
       await syncAuthUserToMembers();
+      // Supabase 若已關閉「確認信箱」，signUp 會直接回傳 session，視為註冊完成
+      if (data.session) {
+        onSuccess?.();
+        onClose();
+        return;
+      }
       setFormError(null);
       setStep(2);
       setFormError("請至信箱收取驗證信完成註冊");
     } finally {
       setRegisterLoading(false);
     }
-  }, []);
+  }, [onClose, onSuccess]);
 
   const { siteName } = useStoreSettings();
   function ModalHeader({ title }: { title?: string }) {
