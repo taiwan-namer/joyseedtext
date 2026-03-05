@@ -1,7 +1,7 @@
 "use server";
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { requireAdminSession } from "@/lib/auth/requireAdminSession";
+import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -127,7 +127,7 @@ export async function createClass(formData: FormData): Promise<
   | { success: false; error: string }
 > {
   try {
-    await requireAdminSession();
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return {
@@ -232,7 +232,7 @@ export async function updateCourseCapacity(
   | { success: false; error: string }
 > {
   try {
-    await requireAdminSession();
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     if (!Number.isInteger(capacity) || capacity < 1) {
@@ -260,7 +260,7 @@ export async function deleteClasses(ids: string[]): Promise<
 > {
   if (ids.length === 0) return { success: false, error: "請選擇要刪除的項目" };
   try {
-    await requireAdminSession();
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const { createServerSupabase } = await import("@/lib/supabase/server");
@@ -303,7 +303,7 @@ export async function createCourseFull(formData: FormData): Promise<
   | { success: false; error: string }
 > {
   try {
-    await requireAdminSession();
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
@@ -622,7 +622,7 @@ export async function updateCourseFull(
   | { success: false; error: string }
 > {
   try {
-    await requireAdminSession();
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
 
