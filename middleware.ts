@@ -19,14 +19,10 @@ export function middleware(request: NextRequest) {
     }
     return NextResponse.next();
   }
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-  const sessionKey = process.env.ADMIN_SESSION_KEY?.trim();
-  if (!sessionKey || token !== sessionKey) {
-    const loginUrl = new URL("/admin/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-  return NextResponse.next();
+  // 其餘 /admin 由 app/admin/(protected)/layout.tsx 在 Node 環境驗證；傳 pathname 供 redirect 帶 next
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

@@ -395,6 +395,31 @@ export default function CheckoutPage() {
             >
               前往登入／註冊
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                const pending: PendingCheckoutData = {
+                  slug: slug ?? "",
+                  date: searchParams.get("date") ?? null,
+                  time: searchParams.get("time") ?? null,
+                  total: totalFromUrl,
+                  addonIndices: addonIndicesFromUrl,
+                  parentName: parentName.trim(),
+                  parentPhone: parentPhone.trim(),
+                  memberEmail: memberEmail.trim(),
+                  childName: childName.trim(),
+                  hasAllergyOrGenetic: hasAllergyOrGenetic,
+                  childAllergyDetail: childAllergyDetail.trim(),
+                  childAge: childAge.trim(),
+                  paymentMethod,
+                };
+                sessionStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(pending));
+                window.location.href = `/register?next=${encodeURIComponent(loginNext)}`;
+              }}
+              className="mt-3 block w-full py-2.5 rounded-xl font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
+            >
+              使用 E-mail 註冊
+            </button>
             <Link href={`/course/${slug}`} className="mt-4 inline-block text-sm text-gray-500 hover:text-gray-700">
               返回課程頁
             </Link>

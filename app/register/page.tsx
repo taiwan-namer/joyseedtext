@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { registerMember } from "@/app/actions/memberActions";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 
 export default function RegisterPage() {
+  const searchParams = useSearchParams();
+  const nextUrl = searchParams.get("next") ?? "/";
   const { siteName } = useStoreSettings();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -24,7 +27,7 @@ export default function RegisterPage() {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("member_registered", "1");
         }
-        setResult({ type: "success", message: "🎉 註冊成功！" });
+        setResult({ type: "success", message: "🎉 註冊成功！請前往登入以完成報名。" });
         setName("");
         setPhone("");
         setEmail("");
@@ -69,7 +72,15 @@ export default function RegisterPage() {
                     : "bg-red-50 text-red-800 border border-red-200"
                 }`}
               >
-                {result.message}
+                <p>{result.message}</p>
+                {result.type === "success" && (
+                  <Link
+                    href={nextUrl.startsWith("/") && !nextUrl.startsWith("//") ? `/login?next=${encodeURIComponent(nextUrl)}` : "/login"}
+                    className="mt-2 inline-block font-medium underline hover:no-underline"
+                  >
+                    前往登入 →
+                  </Link>
+                )}
               </div>
             )}
 
