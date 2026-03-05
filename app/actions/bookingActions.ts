@@ -3,6 +3,7 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getAdminSessionOrThrow } from "@/lib/auth/adminSession";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -156,6 +157,7 @@ export async function markBookingAsPaid(
   | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
@@ -189,6 +191,7 @@ export async function completeBooking(
   | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
@@ -221,6 +224,7 @@ export async function deleteBooking(
   | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 

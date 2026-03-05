@@ -3,6 +3,7 @@
 import { unstable_noStore } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { FAQ_DATA } from "@/app/data/faq";
+import { getAdminSessionOrThrow } from "@/lib/auth/adminSession";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -116,6 +117,7 @@ export async function updateFaqItems(
   items: FaqItem[]
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const list = items.filter((i) => (i.question?.trim() || i.answer?.trim()) !== "");
@@ -150,6 +152,7 @@ export async function updateStoreSettings(
   contactAddress?: string
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };

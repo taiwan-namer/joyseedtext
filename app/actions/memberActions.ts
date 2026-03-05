@@ -2,6 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getAdminSessionOrThrow } from "@/lib/auth/adminSession";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -125,6 +126,7 @@ export async function ensureMemberForBooking(params: {
 
 /**
  * 前台註冊／加入會員：寫入 members 表。
+ * 防濫用：須已登入（Supabase session），且以登入者信箱寫入，不接受任意 email。
  * merchant_id 強制使用 process.env.NEXT_PUBLIC_CLIENT_ID，確保綁定當前店家。
  */
 export async function registerMember(formData: {
@@ -136,6 +138,30 @@ export async function registerMember(formData: {
   | { success: false; error: string }
 > {
   try {
+    const cookieStore = await cookies();
+    const supabaseAuth = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              );
+            } catch {}
+          },
+        },
+      }
+    );
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user?.email) {
+      return { success: false, error: "請先登入後再填寫會員資料" };
+    }
+
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return { success: false, error: "系統未設定店家資訊，請稍後再試" };
@@ -143,11 +169,10 @@ export async function registerMember(formData: {
 
     const name = (formData.name ?? "").trim();
     const phone = (formData.phone ?? "").trim();
-    const email = (formData.email ?? "").trim();
+    const email = user.email.trim();
 
     if (!name) return { success: false, error: "請填寫姓名" };
     if (!phone) return { success: false, error: "請填寫手機號碼" };
-    if (!email) return { success: false, error: "請填寫電子信箱" };
 
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
@@ -176,6 +201,7 @@ export async function deleteMember(memberId: string): Promise<
   | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
     const id = (memberId ?? "").trim();

@@ -2,6 +2,7 @@
 
 import { unstable_noStore } from "next/cache";
 import { uploadOneToR2 } from "@/app/actions/productActions";
+import { getAdminSessionOrThrow } from "@/lib/auth/adminSession";
 import {
   type CarouselItem,
   type FrontendSettings,
@@ -118,6 +119,7 @@ export async function updateFrontendSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
 
@@ -234,6 +236,7 @@ export async function updateAboutPage(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();
@@ -297,6 +300,7 @@ export async function updateSeoSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();
@@ -365,6 +369,7 @@ export async function updatePaymentSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await getAdminSessionOrThrow();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { scryptSync, timingSafeEqual } from "crypto";
+import { getAdminSessionOrThrow } from "@/lib/auth/adminSession";
 
 const ADMIN_SESSION_COOKIE = "admin_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 天
@@ -107,6 +108,7 @@ export async function updateAdminPassword(
   newPassword: string,
   confirmNewPassword: string
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  await getAdminSessionOrThrow();
   const merchantId = getEnv("NEXT_PUBLIC_CLIENT_ID");
   if (!merchantId) return { success: false, error: "未設定店家" };
 
