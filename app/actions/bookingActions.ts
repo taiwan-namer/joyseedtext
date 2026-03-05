@@ -220,7 +220,7 @@ export async function deleteBooking(
 
     const { data: booking, error: fetchError } = await supabase
       .from("bookings")
-      .select("id, class_id")
+      .select("id, class_id, slot_date, slot_time")
       .eq("id", bookingId)
       .eq("merchant_id", merchantId)
       .single();
@@ -228,6 +228,7 @@ export async function deleteBooking(
     if (fetchError || !booking) return { success: false, error: "訂單不存在或非本店家" };
 
     const classId = (booking as { class_id?: string }).class_id;
+    const hadSlot = (booking as { slot_date?: string | null; slot_time?: string | null }).slot_date != null && (booking as { slot_time?: string | null }).slot_time != null;
     const { error: deleteError } = await supabase
       .from("bookings")
       .delete()
@@ -236,7 +237,7 @@ export async function deleteBooking(
 
     if (deleteError) return { success: false, error: deleteError.message };
 
-    if (classId) {
+    if (classId && !hadSlot) {
       const { data: cls } = await supabase
         .from("classes")
         .select("capacity")

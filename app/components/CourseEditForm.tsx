@@ -99,15 +99,19 @@ function WheelColumn({
   );
 }
 
+export type ScheduledSlot = { date: string; time: string; capacity: number };
+
 function DateTimeModal({
   open,
   onClose,
   onAddBatch,
+  defaultCapacity = 10,
 }: {
   open: boolean;
   onClose: () => void;
-  /** 一次可加入多筆（同一時段多日），避免多次 setState 只留下最後一筆 */
-  onAddBatch: (slots: { date: string; time: string }[]) => void;
+  /** 一次可加入多筆（同一時段多日），每筆帶此人數名額 */
+  onAddBatch: (slots: ScheduledSlot[]) => void;
+  defaultCapacity?: number;
 }) {
   const today = useMemo(() => new Date(), []);
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -115,6 +119,7 @@ function DateTimeModal({
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [selectedHour, setSelectedHour] = useState<number>(9);
   const [selectedMinute, setSelectedMinute] = useState<string>("00");
+  const [slotCapacity, setSlotCapacity] = useState<number>(defaultCapacity);
   const selectedTime = `${String(selectedHour).padStart(2, "0")}:${selectedMinute}`;
   const calendarDays = useMemo(() => getCalendarDays(viewYear, viewMonth), [viewYear, viewMonth]);
   const isToday = (d: number) => viewYear === today.getFullYear() && viewMonth === today.getMonth() + 1 && d === today.getDate();
@@ -135,7 +140,8 @@ function DateTimeModal({
 
   const handleAdd = () => {
     if (selectedDates.length === 0) return;
-    const newSlots = selectedDates.map((dateStr) => ({ date: dateStr, time: selectedTime }));
+    const cap = Math.max(1, Math.floor(slotCapacity));
+    const newSlots: ScheduledSlot[] = selectedDates.map((dateStr) => ({ date: dateStr, time: selectedTime, capacity: cap }));
     onAddBatch(newSlots);
     setSelectedDates([]);
     setSelectedHour(9);
@@ -211,6 +217,18 @@ function DateTimeModal({
             </div>
             <p className="mt-1.5 text-center text-sm text-gray-500">目前：{selectedTime}</p>
           </div>
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-gray-700">人數名額（單堂）</h3>
+            <input
+              type="number"
+              min={1}
+              value={slotCapacity}
+              onChange={(e) => setSlotCapacity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+              placeholder="可報名人數"
+            />
+            <p className="mt-1 text-xs text-gray-500">此批次新增的每個場次皆為此人數名額</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-gray-50 p-4">
           <span className="text-sm text-gray-600">
@@ -262,7 +280,15 @@ export default function CourseEditForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>(() => initImageSlots(initialData));
   const [dateTimeModalOpen, setDateTimeModalOpen] = useState(false);
-  const [scheduledSlots, setScheduledSlots] = useState<{ date: string; time: string }[]>(() => initialData?.scheduled_slots ?? []);
+  const [scheduledSlots, setScheduledSlots] = useState<ScheduledSlot[]>(() => {
+    const raw = initialData?.scheduled_slots ?? [];
+    const defaultCap = initialData?.capacity ?? 10;
+    return raw.map((s) => ({
+      date: typeof s.date === "string" ? s.date.slice(0, 10) : "",
+      time: typeof s.time === "string" ? s.time.slice(0, 5) : "09:00",
+      capacity: typeof (s as ScheduledSlot).capacity === "number" && (s as ScheduledSlot).capacity >= 1 ? (s as ScheduledSlot).capacity : defaultCap,
+    })).filter((s) => s.date && s.time);
+  });
   const [sidebarOptions, setSidebarOptions] = useState<string[]>(() => initialData?.sidebar_option ?? []);
   const [hasSale, setHasSale] = useState(() => !!initialData?.sale_price);
   const [addonItems, setAddonItems] = useState<{ name: string; price: string }[]>(() => (initialData?.addon_prices ?? []).map((a) => ({ name: a.name, price: String(a.price) })));
@@ -334,6 +360,7 @@ export default function CourseEditForm({
     const firstSlot = scheduledSlots[0];
     formData.set("class_date", firstSlot ? firstSlot.date : "");
     formData.set("class_time", firstSlot ? firstSlot.time.slice(0, 5) : "");
+    formData.set("capacity", String(scheduledSlots.length ? Math.max(...scheduledSlots.map((s) => s.capacity), 1) : 1));
     const addonPayload = addonItems
       .filter((a) => a.name.trim() !== "" && a.price.trim() !== "")
       .map((a) => ({ name: a.name.trim(), price: Number(a.price) }))
@@ -634,12 +661,24 @@ export default function CourseEditForm({
                   {scheduledSlots.length > 0 && (
                     <ul className="mt-3 space-y-1.5">
                       {scheduledSlots.map((slot, i) => (
-                        <li key={`${slot.date}-${slot.time}-${i}`} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
-                          <span className="font-medium text-gray-900">{slot.date} {slot.time}</span>
+                        <li key={`${slot.date}-${slot.time}-${i}`} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                          <span className="font-medium text-gray-900 shrink-0">{slot.date} {slot.time}</span>
+                          <span className="text-gray-600 shrink-0">名額</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={slot.capacity}
+                            onChange={(e) => {
+                              const v = Math.max(1, parseInt(e.target.value, 10) || 1);
+                              setScheduledSlots((prev) => prev.map((s, j) => (j === i ? { ...s, capacity: v } : s)));
+                            }}
+                            className="w-14 rounded border border-gray-200 px-2 py-1 text-center text-gray-900"
+                            disabled={isPending}
+                          />
                           <button
                             type="button"
                             onClick={() => setScheduledSlots((prev) => prev.filter((_, j) => j !== i))}
-                            className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+                            className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-800 shrink-0"
                             aria-label="移除"
                           >
                             <X className="h-4 w-4" />
@@ -652,10 +691,7 @@ export default function CourseEditForm({
                     <p className="mt-2 text-xs text-gray-500">已設定 {scheduledSlots.length} 個場次</p>
                   )}
                 </div>
-                <div className="mb-6">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">人數／名額</label>
-                  <input name="capacity" type="number" min={1} required className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder="可報名人數" disabled={isPending} defaultValue={initialData?.capacity ?? ""} />
-                </div>
+                <p className="mb-4 text-xs text-gray-500">人數名額請在上方「選擇時間」新增場次時設定，每個場次可設不同名額。</p>
                 <div className="space-y-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -744,6 +780,7 @@ export default function CourseEditForm({
         open={dateTimeModalOpen}
         onClose={() => setDateTimeModalOpen(false)}
         onAddBatch={(slots) => setScheduledSlots((prev) => [...prev, ...slots])}
+        defaultCapacity={initialData?.capacity ?? 10}
       />
     </div>
   );

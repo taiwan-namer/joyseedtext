@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStoreSettings, updateStoreSettings } from "@/app/actions/storeSettingsActions";
+import { updateAdminPassword } from "@/app/actions/adminAuthActions";
 import { Loader2 } from "lucide-react";
 
 export default function AdminSettingsPage() {
@@ -21,6 +22,11 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [passwordPending, setPasswordPending] = useState(false);
 
   useEffect(() => {
     getStoreSettings().then((s) => {
@@ -61,6 +67,23 @@ export default function AdminSettingsPage() {
         router.refresh();
       } else {
         setMessage({ type: "error", text: result.error });
+      }
+    });
+  };
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMessage(null);
+    setPasswordPending(true);
+    updateAdminPassword(currentPassword, newPassword, confirmPassword).then((result) => {
+      setPasswordPending(false);
+      if (result.success) {
+        setPasswordMessage({ type: "success", text: result.message ?? "密碼已更新" });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        setPasswordMessage({ type: "error", text: result.error });
       }
     });
   };
@@ -282,6 +305,73 @@ export default function AdminSettingsPage() {
           >
             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {isPending ? "儲存中…" : "儲存"}
+          </button>
+        </div>
+      </form>
+
+      <form onSubmit={handlePasswordSubmit} className="mt-8 space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">後台登入密碼</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            設定後，可使用此密碼或環境變數中的萬能鑰匙登入後台。萬能鑰匙僅供您本人使用，請勿外洩。
+          </p>
+        </div>
+        {passwordMessage && (
+          <div
+            role="alert"
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              passwordMessage.type === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-red-200 bg-red-50 text-red-800"
+            }`}
+          >
+            {passwordMessage.text}
+          </div>
+        )}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">目前密碼</label>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="請輸入現有後台密碼或萬能鑰匙"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            disabled={passwordPending}
+            autoComplete="current-password"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">新密碼</label>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="至少 4 個字元"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            disabled={passwordPending}
+            autoComplete="new-password"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">確認新密碼</label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="再輸入一次新密碼"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            disabled={passwordPending}
+            autoComplete="new-password"
+          />
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={passwordPending || !newPassword || !confirmPassword}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-700 px-5 py-2.5 font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+          >
+            {passwordPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {passwordPending ? "更新中…" : "更新後台密碼"}
           </button>
         </div>
       </form>

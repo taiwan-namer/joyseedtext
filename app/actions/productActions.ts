@@ -350,7 +350,9 @@ export async function createCourseFull(formData: FormData): Promise<
       try {
         const arr = JSON.parse(scheduledSlotsRaw) as unknown;
         if (!Array.isArray(arr)) return [];
-        return arr.filter((x): x is { date: string; time: string } => typeof x === "object" && x != null && "date" in x && "time" in x && typeof (x as { date: unknown }).date === "string" && typeof (x as { time: unknown }).time === "string");
+        return arr
+          .filter((x): x is { date: string; time: string; capacity?: number } => typeof x === "object" && x != null && "date" in x && "time" in x && typeof (x as { date: unknown }).date === "string" && typeof (x as { time: unknown }).time === "string")
+          .map((s) => ({ date: s.date.slice(0, 10), time: String(s.time).slice(0, 5), capacity: typeof s.capacity === "number" && s.capacity >= 1 ? s.capacity : Math.floor(capacity) }));
       } catch {
         return [];
       }
@@ -547,7 +549,7 @@ export type CourseForEdit = {
   post_content: string | null;
   notes: string | null;
   sidebar_option: string[] | null;
-  scheduled_slots: { date: string; time: string }[] | null;
+  scheduled_slots: { date: string; time: string; capacity?: number }[] | null;
   class_date: string | null;
   class_time: string | null;
   sale_price: number | null;
@@ -586,7 +588,13 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       post_content: row.post_content != null ? String(row.post_content) : null,
       notes: row.notes != null ? String(row.notes) : null,
       sidebar_option: Array.isArray(row.sidebar_option) ? (row.sidebar_option as string[]) : null,
-      scheduled_slots: Array.isArray(row.scheduled_slots) ? (row.scheduled_slots as { date: string; time: string }[]) : null,
+      scheduled_slots: Array.isArray(row.scheduled_slots)
+        ? (row.scheduled_slots as { date?: string; time?: string; capacity?: number }[]).map((s) => ({
+            date: String(s?.date ?? "").slice(0, 10),
+            time: String(s?.time ?? "09:00").slice(0, 5),
+            capacity: typeof s?.capacity === "number" && s.capacity >= 1 ? s.capacity : (row.capacity != null ? Number(row.capacity) : 10),
+          }))
+        : null,
       class_date: class_date || null,
       class_time: class_time || null,
       sale_price: row.sale_price != null ? Number(row.sale_price) : null,
