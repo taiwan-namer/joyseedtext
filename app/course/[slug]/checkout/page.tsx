@@ -40,6 +40,7 @@ export default function CheckoutPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [atmBankName, setAtmBankName] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -61,6 +62,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }) => {
+      setHasSession(!!session?.user);
       if (session?.user?.email) setMemberEmail(session.user.email.trim());
     });
   }, []);
@@ -114,6 +116,48 @@ export default function CheckoutPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>
+      </div>
+    );
+  }
+
+  if (hasSession === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
+  // 未登入：須先登入或註冊才能報名
+  if (hasSession === false) {
+    const loginNext = `/course/${slug}/checkout?${searchParams.toString()}`;
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+            <Link href="/" className="text-xl font-bold text-brand">
+              {siteName}
+            </Link>
+            <HeaderMember />
+          </div>
+        </header>
+        <div className="max-w-5xl mx-auto px-4 py-12 flex justify-center">
+          <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+            <h2 className="text-xl font-bold text-gray-800 mb-2">請先登入或註冊才能報名</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              為保障您的訂單與權益，請先使用 E-mail 或 Google 登入／註冊後再填寫報名資料。
+            </p>
+            <Link
+              href={`/login?next=${encodeURIComponent(loginNext)}`}
+              className="inline-block w-full py-3 px-4 rounded-xl font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors"
+            >
+              前往登入／註冊
+            </Link>
+            <Link href={`/course/${slug}`} className="mt-4 inline-block text-sm text-gray-500 hover:text-gray-700">
+              返回課程頁
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }

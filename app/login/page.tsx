@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
@@ -30,6 +31,8 @@ function GoogleIcon({ className }: { className?: string }) {
 }
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const nextUrl = searchParams.get("next") ?? "/";
   const { siteName } = useStoreSettings();
   const [loading, setLoading] = useState<"google" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +43,10 @@ export default function LoginPage() {
     setError(null);
     setLoading("google");
     try {
+      const redirectTo = `${location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`;
       const { error: err } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${location.origin}/auth/callback` },
+        options: { redirectTo },
       });
       if (err) {
         setError(err.message);
