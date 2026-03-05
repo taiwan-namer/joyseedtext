@@ -330,8 +330,12 @@ export type BookingWithClass = {
   slot_time: string | null;
   class_title: string | null;
   class_image_url: string | null;
-  /** 課程售價（來自 classes.price） */
+  /** 訂單金額（order_amount 或 classes.price） */
   class_price: number | null;
+  /** 所選加購索引，用於顯示加購明細 */
+  addon_indices: number[] | null;
+  /** 課程加購項目（來自 classes.addon_prices），與 addon_indices 搭配顯示品名與單價 */
+  class_addon_prices: { name: string; price: number }[] | null;
 };
 
 /**
@@ -362,7 +366,8 @@ export async function getMyBookings(): Promise<
         slot_date,
         slot_time,
         order_amount,
-        classes ( title, image_url, price )
+        addon_indices,
+        classes ( title, image_url, price, addon_prices )
       `)
       .eq("merchant_id", merchantId)
       .eq("member_email", email)
@@ -371,7 +376,7 @@ export async function getMyBookings(): Promise<
     if (error) return { success: false, error: error.message };
 
     const list: BookingWithClass[] = (rows ?? []).map((r: Record<string, unknown>) => {
-      const classes = r.classes as { title?: string; image_url?: string; price?: number } | null;
+      const classes = r.classes as { title?: string; image_url?: string; price?: number; addon_prices?: unknown } | null;
       const slotDateRaw = r.slot_date;
       const slotTimeRaw = r.slot_time;
       const slot_date =
@@ -384,6 +389,26 @@ export async function getMyBookings(): Promise<
           : null;
       const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
       const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
+      const addonRaw = classes?.addon_prices;
+      let classAddonPrices: { name: string; price: number }[] | null = null;
+      if (Array.isArray(addonRaw)) {
+        classAddonPrices = (addonRaw as { name?: string; price?: number }[]).map((a) => ({
+          name: a?.name != null ? String(a.name) : "",
+          price: a?.price != null ? Number(a.price) : 0,
+        }));
+      } else if (typeof addonRaw === "string") {
+        try {
+          const parsed = JSON.parse(addonRaw) as unknown;
+          if (Array.isArray(parsed)) {
+            classAddonPrices = (parsed as { name?: string; price?: number }[]).map((a) => ({
+              name: a?.name != null ? String(a.name) : "",
+              price: a?.price != null ? Number(a.price) : 0,
+            }));
+          }
+        } catch {
+          // ignore
+        }
+      }
 
       return {
         id: String(r.id),
@@ -399,6 +424,8 @@ export async function getMyBookings(): Promise<
         class_title: classes?.title ?? null,
         class_image_url: classes?.image_url ?? null,
         class_price: classPrice,
+        addon_indices: parseAddonIndicesFromDb(r.addon_indices),
+        class_addon_prices: classAddonPrices,
       };
     });
 
@@ -435,7 +462,8 @@ export async function getAdminBookings(): Promise<
         slot_date,
         slot_time,
         order_amount,
-        classes ( title, image_url, price )
+        addon_indices,
+        classes ( title, image_url, price, addon_prices )
       `)
       .eq("merchant_id", merchantId)
       .order("created_at", { ascending: false });
@@ -443,7 +471,7 @@ export async function getAdminBookings(): Promise<
     if (error) return { success: false, error: error.message };
 
     const list: BookingWithClass[] = (rows ?? []).map((r: Record<string, unknown>) => {
-      const classes = r.classes as { title?: string; image_url?: string; price?: number } | null;
+      const classes = r.classes as { title?: string; image_url?: string; price?: number; addon_prices?: unknown } | null;
       const slotDateRaw = r.slot_date;
       const slotTimeRaw = r.slot_time;
       const slot_date =
@@ -456,6 +484,26 @@ export async function getAdminBookings(): Promise<
           : null;
       const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
       const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
+      const addonRaw = classes?.addon_prices;
+      let classAddonPrices: { name: string; price: number }[] | null = null;
+      if (Array.isArray(addonRaw)) {
+        classAddonPrices = (addonRaw as { name?: string; price?: number }[]).map((a) => ({
+          name: a?.name != null ? String(a.name) : "",
+          price: a?.price != null ? Number(a.price) : 0,
+        }));
+      } else if (typeof addonRaw === "string") {
+        try {
+          const parsed = JSON.parse(addonRaw) as unknown;
+          if (Array.isArray(parsed)) {
+            classAddonPrices = (parsed as { name?: string; price?: number }[]).map((a) => ({
+              name: a?.name != null ? String(a.name) : "",
+              price: a?.price != null ? Number(a.price) : 0,
+            }));
+          }
+        } catch {
+          // ignore
+        }
+      }
 
       return {
         id: String(r.id),
@@ -471,6 +519,8 @@ export async function getAdminBookings(): Promise<
         class_title: classes?.title ?? null,
         class_image_url: classes?.image_url ?? null,
         class_price: classPrice,
+        addon_indices: parseAddonIndicesFromDb(r.addon_indices),
+        class_addon_prices: classAddonPrices,
       };
     });
 

@@ -270,16 +270,9 @@ export default function WonderVoyageHomePage() {
                             {activity.description}
                           </p>
                         )}
-                        <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center justify-end gap-2 mb-3">
                           <p className="text-amber-600 font-semibold text-sm">
                             NT$ {activity.price.toLocaleString()} 起
-                          </p>
-                          <p
-                            className={`text-xs shrink-0 ${
-                              isSoldOut ? "text-gray-400" : "text-red-500"
-                            }`}
-                          >
-                            {isSoldOut ? "已售完" : `剩餘人數 ${activity.stock}`}
                           </p>
                         </div>
                         <Link

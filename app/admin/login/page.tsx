@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { adminLogin } from "@/app/actions/adminAuthActions";
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextRaw = searchParams.get("next") ?? "/admin";
   const next = nextRaw.startsWith("/admin") && !nextRaw.startsWith("//") ? nextRaw : "/admin";
@@ -23,8 +22,8 @@ export default function AdminLoginPage() {
     const result = await adminLogin(formData);
     setPending(false);
     if (result.success) {
-      router.push(next);
-      router.refresh();
+      // 用整頁導向避免 router.push + refresh 造成的短暫卡頓，cookie 已由 server action 寫入
+      window.location.href = next;
       return;
     }
     setError(result.error);

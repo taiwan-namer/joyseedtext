@@ -92,6 +92,8 @@ type OrderDisplay = {
   amount: number;
   status: DisplayStatus;
   imageUrl: string | null;
+  /** 加購明細，例如「課程 800 + 珍珠奶茶 50 + 雞排 60」 */
+  addonSummary: string | null;
 };
 
 function OrderCard({
@@ -138,6 +140,12 @@ function OrderCard({
             <dt className="text-gray-500 shrink-0 w-12">參加者</dt>
             <dd>{order.participant}</dd>
           </div>
+          {order.addonSummary && (
+            <div className="flex items-start gap-1.5">
+              <dt className="text-gray-500 shrink-0 w-12">加購</dt>
+              <dd className="text-gray-700">{order.addonSummary}</dd>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2 -mt-0.5 min-h-[1.25rem]">
             <div className="flex items-center gap-1.5">
               <dt className="text-gray-500 shrink-0 w-12">金額</dt>
@@ -164,6 +172,25 @@ function OrderCard({
   );
 }
 
+function buildAddonSummary(b: BookingWithClass): string | null {
+  const total = b.class_price ?? 0;
+  const indices = b.addon_indices;
+  const addonPrices = b.class_addon_prices;
+  if (!indices?.length || !addonPrices?.length) return null;
+  let addonTotal = 0;
+  const parts: string[] = [];
+  for (const i of indices) {
+    const addon = addonPrices[i];
+    if (addon) {
+      addonTotal += addon.price;
+      parts.push(`${addon.name} ${addon.price}`);
+    }
+  }
+  if (parts.length === 0) return null;
+  const base = Math.max(0, total - addonTotal);
+  return `課程 ${base.toLocaleString()} + ${parts.join(" + ")}`;
+}
+
 function mapBookingToOrder(b: BookingWithClass): OrderDisplay {
   return {
     id: b.id,
@@ -174,6 +201,7 @@ function mapBookingToOrder(b: BookingWithClass): OrderDisplay {
     amount: b.class_price ?? 0,
     status: bookingToDisplayStatus(b.status),
     imageUrl: b.class_image_url ?? null,
+    addonSummary: buildAddonSummary(b),
   };
 }
 

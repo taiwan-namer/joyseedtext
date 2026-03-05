@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
@@ -19,6 +19,24 @@ import type { CourseDetail } from "../../course-data";
 type CourseForDisplay = CourseForPublic | CourseDetail;
 
 type PaymentMethod = "card" | "linepay" | "transfer";
+
+const CHECKOUT_PENDING_KEY = "checkout_pending";
+
+type PendingCheckoutData = {
+  slug: string;
+  date: string | null;
+  time: string | null;
+  total: number;
+  addonIndices: number[];
+  parentName: string;
+  parentPhone: string;
+  memberEmail: string;
+  childName: string;
+  hasAllergyOrGenetic: boolean;
+  childAllergyDetail: string;
+  childAge: string;
+  paymentMethod: PaymentMethod;
+};
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -42,6 +60,8 @@ export default function CheckoutPage() {
   const [atmBankAccount, setAtmBankAccount] = useState("");
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [completingPending, setCompletingPending] = useState(false);
+  const hasHandledPendingRef = useRef(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -75,6 +95,79 @@ export default function CheckoutPage() {
     });
   }, []);
 
+  /** 登入返回後：若有暫存的報名資料且與目前網址一致，自動完成報名（無痛註冊購買） */
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      hasSession !== true ||
+      !course ||
+      !("id" in course) ||
+      !slug ||
+      hasHandledPendingRef.current
+    ) {
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem(CHECKOUT_PENDING_KEY);
+      if (!raw) return;
+      const pending: PendingCheckoutData = JSON.parse(raw);
+      const currentDate = searchParams.get("date") ?? null;
+      const currentTime = searchParams.get("time") ?? null;
+      if (
+        pending.slug !== slug ||
+        pending.date !== currentDate ||
+        pending.time !== currentTime
+      ) {
+        return;
+      }
+      hasHandledPendingRef.current = true;
+      sessionStorage.removeItem(CHECKOUT_PENDING_KEY);
+      setCompletingPending(true);
+      (async () => {
+        try {
+          const ensureRes = await ensureMemberForBooking({
+            name: pending.parentName.trim(),
+            phone: pending.parentPhone.trim(),
+            email: pending.memberEmail.trim(),
+          });
+          if (!ensureRes.success) {
+            setSubmitError(ensureRes.error);
+            setCompletingPending(false);
+            return;
+          }
+          const allergyNote = pending.hasAllergyOrGenetic
+            ? (pending.childAllergyDetail.trim() || "有（未填寫說明）")
+            : "無";
+          const bookRes = await createBooking(
+            course.id,
+            pending.memberEmail.trim(),
+            pending.parentName.trim(),
+            pending.parentPhone.trim(),
+            pending.date,
+            pending.time,
+            allergyNote,
+            pending.childName.trim() || null,
+            pending.childAge.trim() || null,
+            Array.isArray(pending.addonIndices) && pending.addonIndices.length > 0 ? pending.addonIndices : undefined,
+            pending.paymentMethod,
+            pending.total
+          );
+          if (!bookRes.success) {
+            setSubmitError(bookRes.error);
+            setCompletingPending(false);
+            return;
+          }
+          router.push(`/booking/success?bookingId=${encodeURIComponent(bookRes.bookingId)}`);
+        } catch (e) {
+          setSubmitError(e instanceof Error ? e.message : "完成報名時發生錯誤");
+          setCompletingPending(false);
+        }
+      })();
+    } catch {
+      sessionStorage.removeItem(CHECKOUT_PENDING_KEY);
+    }
+  }, [hasSession, course, slug, searchParams, router]);
+
   const dateTimeFromUrl = useMemo(() => {
     const date = searchParams.get("date");
     const time = searchParams.get("time");
@@ -107,6 +200,16 @@ export default function CheckoutPage() {
     return base;
   }, [searchParams, course]);
 
+  /** URL 加購參數 addon=0,1 → [0, 1]，結帳與下單時傳給後端 */
+  const addonIndicesFromUrl = useMemo(() => {
+    const addonParam = searchParams.get("addon");
+    if (addonParam == null || addonParam === "") return [];
+    return addonParam
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => !Number.isNaN(n) && n >= 0);
+  }, [searchParams]);
+
   const orderSummary = {
     courseName: course?.title ?? "—",
     dateTime: dateTimeFromUrl,
@@ -130,6 +233,45 @@ export default function CheckoutPage() {
   }
 
   const loginNext = `/course/${slug}/checkout?${searchParams.toString()}`;
+
+  if (completingPending) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+            <Link href="/" className="text-xl font-bold text-brand">
+              {siteName}
+            </Link>
+            <HeaderMember />
+          </div>
+        </header>
+        <div className="flex-1 flex items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-500 shrink-0" />
+          <span className="text-gray-600">正在完成報名…</span>
+        </div>
+      </div>
+    );
+  }
+
+  const savePendingAndGoToLogin = () => {
+    const pending: PendingCheckoutData = {
+      slug: slug ?? "",
+      date: searchParams.get("date") ?? null,
+      time: searchParams.get("time") ?? null,
+      total: totalFromUrl,
+      addonIndices: addonIndicesFromUrl,
+      parentName: parentName.trim(),
+      parentPhone: parentPhone.trim(),
+      memberEmail: memberEmail.trim(),
+      childName: childName.trim(),
+      hasAllergyOrGenetic: hasAllergyOrGenetic,
+      childAllergyDetail: childAllergyDetail.trim(),
+      childAge: childAge.trim(),
+      paymentMethod,
+    };
+    sessionStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(pending));
+    window.location.href = `/login?next=${encodeURIComponent(loginNext)}`;
+  };
 
   const buttonText =
     paymentMethod === "card"
@@ -192,7 +334,7 @@ export default function CheckoutPage() {
         allergyNote || null,
         childName.trim() || null,
         childAge.trim() || null,
-        undefined,
+        addonIndicesFromUrl.length > 0 ? addonIndicesFromUrl : undefined,
         paymentMethod,
         totalFromUrl
       );
@@ -246,12 +388,13 @@ export default function CheckoutPage() {
             <p className="text-sm text-gray-600 mb-6">
               為保障您的訂單與權益，請先使用 E-mail 或 Google 登入／註冊後再送出報名資料。
             </p>
-            <Link
-              href={`/login?next=${encodeURIComponent(loginNext)}`}
+            <button
+              type="button"
+              onClick={savePendingAndGoToLogin}
               className="inline-block w-full py-3 px-4 rounded-xl font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors"
             >
               前往登入／註冊
-            </Link>
+            </button>
             <Link href={`/course/${slug}`} className="mt-4 inline-block text-sm text-gray-500 hover:text-gray-700">
               返回課程頁
             </Link>
