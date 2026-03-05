@@ -7,6 +7,7 @@ import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { useParams, useSearchParams, notFound } from "next/navigation";
 import { CreditCard, Building, Smartphone, Loader2 } from "lucide-react";
 import { HeaderMember } from "@/app/components/HeaderMember";
+import LoginModal from "@/app/components/LoginModal";
 import { createClient } from "@/lib/supabase/client";
 import { getCourseBySlug } from "../../course-data";
 import { getCourseById } from "@/app/actions/productActions";
@@ -61,6 +62,8 @@ export default function CheckoutPage() {
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [completingPending, setCompletingPending] = useState(false);
+  const [triggerSubmitAfterLogin, setTriggerSubmitAfterLogin] = useState(false);
+  const [submitAfterLoginReady, setSubmitAfterLoginReady] = useState(false);
   const hasHandledPendingRef = useRef(false);
 
   useEffect(() => {
@@ -168,6 +171,30 @@ export default function CheckoutPage() {
     }
   }, [hasSession, course, slug, searchParams, router]);
 
+  /** 在彈窗內 E-mail 登入成功後：重新取得 session 並觸發送出報名 */
+  useEffect(() => {
+    if (!triggerSubmitAfterLogin) return;
+    let cancelled = false;
+    createClient()
+      .auth.getSession()
+      .then(({ data }) => {
+        if (cancelled || !data.session) return;
+        setHasSession(true);
+        setTriggerSubmitAfterLogin(false);
+        setSubmitAfterLoginReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [triggerSubmitAfterLogin]);
+
+  useEffect(() => {
+    if (submitAfterLoginReady && hasSession) {
+      setSubmitAfterLoginReady(false);
+      handleSubmit();
+    }
+  }, [submitAfterLoginReady, hasSession]);
+
   const dateTimeFromUrl = useMemo(() => {
     const date = searchParams.get("date");
     const time = searchParams.get("time");
@@ -253,7 +280,8 @@ export default function CheckoutPage() {
     );
   }
 
-  const savePendingAndGoToLogin = () => {
+  /** 僅寫入暫存，不導向（給 LoginModal 內 Google 登入前呼叫） */
+  const savePendingOnly = () => {
     const pending: PendingCheckoutData = {
       slug: slug ?? "",
       date: searchParams.get("date") ?? null,
@@ -270,7 +298,6 @@ export default function CheckoutPage() {
       paymentMethod,
     };
     sessionStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(pending));
-    window.location.href = `/login?next=${encodeURIComponent(loginNext)}`;
   };
 
   const buttonText =
@@ -372,67 +399,17 @@ export default function CheckoutPage() {
         </div>
       </header>
 
-      {/* 填完報名資料後送出時未登入：顯示請先登入提示 */}
-      {showLoginPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-labelledby="login-prompt-title">
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center relative">
-            <button
-              type="button"
-              onClick={() => setShowLoginPrompt(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded p-1"
-              aria-label="關閉"
-            >
-              ✕
-            </button>
-            <h2 id="login-prompt-title" className="text-xl font-bold text-gray-800 mb-2">請先登入或註冊才能報名</h2>
-            <p className="text-sm text-gray-600 mb-6">
-              為保障您的訂單與權益，請先使用 E-mail 或 Google 登入／註冊後再送出報名資料。
-            </p>
-            <button
-              type="button"
-              onClick={savePendingAndGoToLogin}
-              className="inline-block w-full py-3 px-4 rounded-xl font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors"
-            >
-              前往登入／註冊
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const pending: PendingCheckoutData = {
-                  slug: slug ?? "",
-                  date: searchParams.get("date") ?? null,
-                  time: searchParams.get("time") ?? null,
-                  total: totalFromUrl,
-                  addonIndices: addonIndicesFromUrl,
-                  parentName: parentName.trim(),
-                  parentPhone: parentPhone.trim(),
-                  memberEmail: memberEmail.trim(),
-                  childName: childName.trim(),
-                  hasAllergyOrGenetic: hasAllergyOrGenetic,
-                  childAllergyDetail: childAllergyDetail.trim(),
-                  childAge: childAge.trim(),
-                  paymentMethod,
-                };
-                sessionStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(pending));
-                window.location.href = `/register?next=${encodeURIComponent(loginNext)}`;
-              }}
-              className="mt-3 block w-full py-2.5 rounded-xl font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
-            >
-              使用 E-mail 註冊
-            </button>
-            <Link href={`/course/${slug}`} className="mt-4 inline-block text-sm text-gray-500 hover:text-gray-700">
-              返回課程頁
-            </Link>
-            <button
-              type="button"
-              onClick={() => setShowLoginPrompt(false)}
-              className="mt-3 block w-full text-sm text-gray-500 hover:text-gray-700"
-            >
-              稍後登入，繼續填寫
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 填完報名資料後送出時未登入：使用與首頁相同的登入／註冊彈窗，完成後自動送出報名 */}
+      <LoginModal
+        isOpen={showLoginPrompt}
+        onClose={() => setShowLoginPrompt(false)}
+        returnTo={loginNext}
+        onBeforeGoogleRedirect={savePendingOnly}
+        onSuccess={() => {
+          setShowLoginPrompt(false);
+          setTriggerSubmitAfterLogin(true);
+        }}
+      />
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         {slotInvalid && (

@@ -107,7 +107,7 @@ function Sidebar() {
   return (
     <aside className="w-64 shrink-0 bg-slate-900 text-white flex flex-col min-h-screen">
       <div className="p-4 border-b border-slate-700">
-        <Link href="/admin" className="text-lg font-bold text-white">
+        <Link href="/admin" prefetch={false} className="text-lg font-bold text-white">
           {siteName}後台
         </Link>
       </div>
@@ -119,6 +119,7 @@ function Sidebar() {
               <Link
                 key={item.label}
                 href={item.href}
+                prefetch={!item.href.startsWith("/admin")}
                 target={newTab ? "_blank" : undefined}
                 rel={newTab ? "noopener noreferrer" : undefined}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors"
@@ -154,6 +155,7 @@ function Sidebar() {
                     <div key={child.label}>
                       <Link
                         href={href}
+                        prefetch={false}
                         className={`flex items-center gap-2 py-2 pl-8 pr-4 text-sm transition-colors ${
                           isActive
                             ? "bg-amber-600/20 text-amber-400 font-medium"
@@ -167,6 +169,7 @@ function Sidebar() {
                           <Link
                             key={subLabel}
                             href={subLabel === "新增課程" ? "/admin/classes/new" : subLabel === "常見問題" ? "/admin/faq" : "#"}
+                            prefetch={false}
                             className="flex items-center gap-2 py-1.5 pl-12 pr-4 text-xs text-slate-400 hover:text-slate-200"
                           >
                             {subLabel}
@@ -197,6 +200,7 @@ function TopBar() {
       </span>
       <Link
         href="/admin/logout"
+        prefetch={false}
         className="text-sm text-gray-600 hover:text-amber-600 transition-colors"
       >
         登出
