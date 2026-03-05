@@ -313,7 +313,7 @@ export default function AdminSettingsPage() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">後台登入密碼</h2>
           <p className="mt-1 text-sm text-gray-600">
-            設定後，可使用此密碼或環境變數中的萬能鑰匙登入後台。萬能鑰匙僅供您本人使用，請勿外洩。
+            設定後，可使用此密碼登入後台，僅供您本人使用，請勿外洩。
           </p>
         </div>
         {passwordMessage && (
