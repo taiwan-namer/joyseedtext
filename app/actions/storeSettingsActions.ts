@@ -1,9 +1,13 @@
 "use server";
 
 import { unstable_noStore } from "next/cache";
-import { createServerAnonSupabase } from "@/lib/supabase/serverAnon";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { FAQ_DATA } from "@/app/data/faq";
-import { requireAdmin, getMerchantId } from "@/lib/auth/guards";
+
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
 
 const DEFAULT_SITE_NAME = "童趣島";
 const DEFAULT_PRIMARY_COLOR = "#F59E0B"; // Tailwind amber-500
@@ -30,12 +34,12 @@ function getDefaultFaqItems(): FaqItem[] {
   }));
 }
 
-/** 取得目前店家的基本資料（公開讀取，anon） */
+/** 取得目前店家的基本資料（網站名字、主色系、社群連結），無則回傳預設 */
 export async function getStoreSettings(): Promise<StoreSettings> {
   unstable_noStore();
   try {
-    const merchantId = getMerchantId();
-    const supabase = await createServerAnonSupabase();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("store_settings")
       .select("site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address")
@@ -78,11 +82,11 @@ export async function getStoreSettings(): Promise<StoreSettings> {
   }
 }
 
-/** 取得常見問題列表（公開讀取，anon） */
+/** 取得常見問題列表（後台編輯、前台顯示用），無則回傳預設 */
 export async function getFaqItems(): Promise<FaqItem[]> {
   try {
-    const merchantId = getMerchantId();
-    const supabase = await createServerAnonSupabase();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("store_settings")
       .select("faq_items")
@@ -112,11 +116,10 @@ export async function updateFaqItems(
   items: FaqItem[]
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const list = items.filter((i) => (i.question?.trim() || i.answer?.trim()) !== "");
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { error } = await supabase
       .from("store_settings")
       .upsert(
@@ -147,15 +150,14 @@ export async function updateStoreSettings(
   contactAddress?: string
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     }
     const name = siteName?.trim() || DEFAULT_SITE_NAME;
     const color = primaryColor?.trim() || DEFAULT_PRIMARY_COLOR;
     const trim = (s: string | undefined) => (typeof s === "string" ? s.trim() : "") || null;
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { error } = await supabase
       .from("store_settings")
       .upsert(

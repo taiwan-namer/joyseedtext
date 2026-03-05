@@ -1,10 +1,14 @@
-import { createServerAnonSupabase } from "@/lib/supabase/serverAnon";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { DeleteMemberButton } from "./DeleteMemberButton";
-import { getMerchantId } from "@/lib/auth/guards";
+
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
 
 export default async function AdminMembersPage() {
-  const merchantId = getMerchantId();
-  const supabase = await createServerAnonSupabase();
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  const supabase = createServerSupabase();
 
   const { data: rows, error } = await supabase
     .from("members")

@@ -1,7 +1,6 @@
 "use server";
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { requireAdmin, getMerchantId } from "@/lib/auth/guards";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -91,12 +90,11 @@ async function uploadImageToR2(formData: FormData): Promise<string> {
   return imageUrl;
 }
 
-/** 上傳單一檔案到 R2，FormData key 由呼叫端傳入；無檔案或空則回傳 null。僅限後台使用，需為 admin。 */
+/** 上傳單一檔案到 R2，FormData key 由呼叫端傳入；無檔案或空則回傳 null（供 courseIntroActions 等使用） */
 export async function uploadOneToR2(
   formData: FormData,
   key: string
 ): Promise<string | null> {
-  await requireAdmin();
   const file = formData.get(key) as File | null;
   if (!file || !(file instanceof File) || file.size === 0) return null;
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return null;
@@ -128,8 +126,7 @@ export async function createClass(formData: FormData): Promise<
   | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return {
         success: false,
@@ -163,8 +160,8 @@ export async function createClass(formData: FormData): Promise<
     }
 
     // 執行順序 2：寫入 Supabase
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const { error } = await supabase.from("classes").insert({
       merchant_id: merchantId,
       title,
@@ -206,8 +203,8 @@ export async function getClassesForAdmin(): Promise<
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     }
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
       .select("id, merchant_id, title, price, capacity, image_url")
@@ -233,14 +230,13 @@ export async function updateCourseCapacity(
   | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     if (!Number.isInteger(capacity) || capacity < 1) {
       return { success: false, error: "名額須為 1 以上的整數" };
     }
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const { error } = await supabase
       .from("classes")
       .update({ capacity })
@@ -261,11 +257,10 @@ export async function deleteClasses(ids: string[]): Promise<
 > {
   if (ids.length === 0) return { success: false, error: "請選擇要刪除的項目" };
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const { error } = await supabase
       .from("classes")
       .delete()
@@ -304,8 +299,7 @@ export async function createCourseFull(formData: FormData): Promise<
   | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     }
@@ -389,8 +383,8 @@ export async function createCourseFull(formData: FormData): Promise<
       未達人數處置: (formData.get("customer_not_met") as string)?.trim() ?? "改期",
     };
 
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const classDateRaw = (formData.get("class_date") as string)?.trim() || null;
     const classTimeRaw = (formData.get("class_time") as string)?.trim() || null;
     const class_date = classDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(classDateRaw) ? classDateRaw : null;
@@ -428,19 +422,6 @@ export async function createCourseFull(formData: FormData): Promise<
         galleryUrls,
         introText: courseIntro,
       });
-      const capacityValue = Math.floor(capacity);
-      if (scheduledSlots.length > 0) {
-        const slotRows = scheduledSlots.map((slot) => ({
-          merchant_id: merchantId,
-          class_id: newId,
-          slot_date: String(slot.date).slice(0, 10),
-          slot_time: String(slot.time).slice(0, 5),
-          capacity: capacityValue,
-        }));
-        await supabase
-          .from("class_slots")
-          .upsert(slotRows, { onConflict: "merchant_id,class_id,slot_date,slot_time" });
-      }
     }
     return { success: true, message: "課程已新增", id: newId };
   } catch (e) {
@@ -542,8 +523,8 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
 /** 依 id 取得單一課程（供前台 /course/[id] 使用），含 capacity 供剩餘人數顯示 */
 export async function getCourseById(id: string): Promise<CourseForPublic | null> {
   try {
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
       .select("id, title, price, sale_price, capacity, image_url, course_intro, post_content, gallery_urls, customer_notice, notes, sidebar_option, scheduled_slots, addon_prices")
@@ -580,8 +561,8 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
   try {
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return null;
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
       .select("*")
@@ -628,8 +609,7 @@ export async function updateCourseFull(
   | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
 
     const title = (formData.get("title") as string)?.trim();
@@ -699,8 +679,8 @@ export async function updateCourseFull(
       未達人數處置: (formData.get("customer_not_met") as string)?.trim() ?? "改期",
     };
 
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
 
     const mainFile = formData.get("image_main") as File | null;
     let mainUrl: string | null = null;
@@ -754,19 +734,6 @@ export async function updateCourseFull(
         galleryUrls: finalGallery,
         introText: courseIntro,
       });
-      const capacityValue = Math.floor(capacity);
-      if (scheduledSlots.length > 0) {
-        const slotRows = scheduledSlots.map((slot) => ({
-          merchant_id: merchantId,
-          class_id: id,
-          slot_date: String(slot.date).slice(0, 10),
-          slot_time: String(slot.time).slice(0, 5),
-          capacity: capacityValue,
-        }));
-        await supabase
-          .from("class_slots")
-          .upsert(slotRows, { onConflict: "merchant_id,class_id,slot_date,slot_time" });
-      }
     }
     return { success: true, message: "課程已更新" };
   } catch (e) {
@@ -784,8 +751,8 @@ export async function getCoursesForHomepage(): Promise<
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     }
-    const { createServerAnonSupabase } = await import("@/lib/supabase/serverAnon");
-    const supabase = await createServerAnonSupabase();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
       .select("id, merchant_id, title, price, sale_price, capacity, image_url, course_intro, gallery_urls, sidebar_option, notes, customer_notice, scheduled_slots, addon_prices")

@@ -21,6 +21,9 @@ export default function RegisterPage() {
     try {
       const res = await registerMember({ name, phone, email });
       if (res.success) {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("member_registered", "1");
+        }
         setResult({ type: "success", message: "🎉 註冊成功！" });
         setName("");
         setPhone("");

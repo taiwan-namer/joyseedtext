@@ -86,8 +86,8 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       linePayApi: typeof raw.linePayApi === "string" ? raw.linePayApi : null,
       thirdPartyApi: typeof raw.thirdPartyApi === "string" ? raw.thirdPartyApi : null,
       atmBankName: typeof raw.atmBankName === "string" ? raw.atmBankName : null,
+      atmBankCode: typeof raw.atmBankCode === "string" ? raw.atmBankCode : null,
       atmBankAccount: typeof raw.atmBankAccount === "string" ? raw.atmBankAccount : null,
-      atmBankCode: raw.atmBankCode != null ? String(raw.atmBankCode) : null,
     };
   } catch {
     return {
@@ -107,8 +107,8 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       linePayApi: null,
       thirdPartyApi: null,
       atmBankName: null,
-      atmBankAccount: null,
       atmBankCode: null,
+      atmBankAccount: null,
     };
   }
 }
@@ -208,8 +208,8 @@ export async function updateFrontendSettings(formData: FormData): Promise<
             linePayApi: existing.linePayApi ?? null,
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
-            atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            atmBankAccount: existing.atmBankAccount ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -263,8 +263,8 @@ export async function updateAboutPage(formData: FormData): Promise<
             linePayApi: existing.linePayApi ?? null,
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
-            atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            atmBankAccount: existing.atmBankAccount ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -327,8 +327,8 @@ export async function updateSeoSettings(formData: FormData): Promise<
             linePayApi: existing.linePayApi ?? null,
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
-            atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            atmBankAccount: existing.atmBankAccount ?? null,
           },
           updated_at: new Date().toISOString(),
         },

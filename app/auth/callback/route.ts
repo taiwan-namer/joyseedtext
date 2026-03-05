@@ -1,8 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createServerAnonSupabase } from "@/lib/supabase/serverAnon";
-import { getMerchantId } from "@/lib/auth/guards";
+import { createServerSupabase } from "@/lib/supabase/server";
+
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
 
 /**
  * OAuth 登入回呼：交換 code 取得 session，並以 upsert 同步寫入 members 表。
@@ -48,7 +52,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/login?error=auth_failed", requestUrl.origin));
   }
 
-  const merchantId = getMerchantId();
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
   const email = user.email ?? "";
   const name =
     (user.user_metadata?.full_name as string) ||
@@ -57,11 +61,10 @@ export async function GET(request: Request) {
     "會員";
 
   if (merchantId && email) {
-    const supabaseAdmin = await createServerAnonSupabase();
+    const supabaseAdmin = createServerSupabase();
     await supabaseAdmin.from("members").upsert(
       {
         merchant_id: merchantId,
-        user_id: user.id,
         name: name.trim() || null,
         phone: null,
         email: email.trim(),

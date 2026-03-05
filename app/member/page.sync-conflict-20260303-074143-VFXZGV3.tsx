@@ -2,11 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronRight, UserPlus } from "lucide-react";
+import { ChevronRight, User, UserPlus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { HeaderMember } from "@/app/components/HeaderMember";
-import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
-import { getMyBookings, getCurrentMemberName, type BookingWithClass } from "@/app/actions/bookingActions";
 
 const MEMBER_STORAGE_KEY = "member_registered";
 
@@ -35,10 +32,80 @@ function useIsMember() {
   return isMember;
 }
 
-/** 後台 status：upcoming=即將上課, completed=已完成, cancelled=已取消 → 顯示用 */
-type DisplayStatus = "PAID" | "PENDING" | "REFUNDED";
+type OrderStatus = "PAID" | "PENDING" | "REFUNDED";
 
-function getStatusBadgeClass(status: DisplayStatus): string {
+type OrderItem = {
+  id: string;
+  courseName: string;
+  courseSlug: string; // 課程 slug，用於連結 /course/[slug]
+  date: string;
+  participant: string;
+  amount: number;
+  status: OrderStatus;
+};
+
+const MOCK_ORDERS: OrderItem[] = [
+  {
+    id: "A",
+    courseName: "汪汪隊主題派對",
+    courseSlug: "5",
+    date: "2026-03-15",
+    participant: "小寶",
+    amount: 850,
+    status: "PAID",
+  },
+  {
+    id: "B",
+    courseName: "兒童微型紙建築",
+    courseSlug: "1",
+    date: "2026-03-20",
+    participant: "大寶",
+    amount: 1200,
+    status: "PENDING",
+  },
+  {
+    id: "C",
+    courseName: "幼兒塗鴉體驗",
+    courseSlug: "4",
+    date: "2026-02-10",
+    participant: "小寶",
+    amount: 600,
+    status: "REFUNDED",
+  },
+];
+
+// 歷史訂單（已完成／已結束的課程）
+const MOCK_HISTORY_ORDERS: OrderItem[] = [
+  {
+    id: "H1",
+    courseName: "兒童微型紙建築實驗室",
+    courseSlug: "1",
+    date: "2026-01-12",
+    participant: "小寶",
+    amount: 1200,
+    status: "PAID",
+  },
+  {
+    id: "H2",
+    courseName: "親子黏土捏塑創作課",
+    courseSlug: "2",
+    date: "2025-12-08",
+    participant: "大寶",
+    amount: 880,
+    status: "PAID",
+  },
+  {
+    id: "H3",
+    courseName: "汪汪隊主題派對",
+    courseSlug: "5",
+    date: "2025-11-20",
+    participant: "小寶",
+    amount: 850,
+    status: "REFUNDED",
+  },
+];
+
+function getStatusBadgeClass(status: OrderStatus): string {
   switch (status) {
     case "PAID":
       return "bg-green-100 text-green-700";
@@ -51,7 +118,7 @@ function getStatusBadgeClass(status: DisplayStatus): string {
   }
 }
 
-function getStatusLabel(status: DisplayStatus): string {
+function getStatusLabel(status: OrderStatus): string {
   switch (status) {
     case "PAID":
       return "已付款";
@@ -64,54 +131,20 @@ function getStatusLabel(status: DisplayStatus): string {
   }
 }
 
-/** 將後台訂單轉成顯示用狀態 */
-function bookingToDisplayStatus(status: string): DisplayStatus {
-  if (status === "completed" || status === "paid") return "PAID";
-  if (status === "cancelled") return "REFUNDED";
-  return "PENDING"; // unpaid, upcoming
-}
-
-function formatBookingDate(createdAt: string): string {
-  try {
-    const d = new Date(createdAt);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  } catch {
-    return createdAt.slice(0, 10) || "—";
-  }
-}
-
-type OrderDisplay = {
-  id: string;
-  courseName: string;
-  courseSlug: string;
-  date: string;
-  participant: string;
-  amount: number;
-  status: DisplayStatus;
-  imageUrl: string | null;
-};
-
 function OrderCard({
   order,
   showRefundButton,
   onRefundClick,
 }: {
-  order: OrderDisplay;
+  order: OrderItem;
   showRefundButton: boolean;
   onRefundClick?: () => void;
 }) {
   const courseHref = `/course/${order.courseSlug}`;
   return (
     <article className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex gap-4 p-4">
-      <div className="w-24 h-24 shrink-0 rounded-lg bg-gray-200 flex items-center justify-center overflow-hidden">
-        {order.imageUrl ? (
-          <img src={order.imageUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <span className="text-gray-400 text-xs">課程圖</span>
-        )}
+      <div className="w-24 h-24 shrink-0 rounded-lg bg-gray-200 flex items-center justify-center">
+        <span className="text-gray-400 text-xs">課程圖</span>
       </div>
       <div className="flex-1 min-w-0 overflow-hidden">
         <div className="flex items-start justify-between gap-2 mb-1 min-h-[1.5rem]">
@@ -164,55 +197,11 @@ function OrderCard({
   );
 }
 
-function mapBookingToOrder(b: BookingWithClass): OrderDisplay {
-  return {
-    id: b.id,
-    courseName: b.class_title ?? "未命名課程",
-    courseSlug: b.class_id,
-    date: formatBookingDate(b.created_at),
-    participant: b.parent_name?.trim() || "—",
-    amount: b.class_price ?? 0,
-    status: bookingToDisplayStatus(b.status),
-    imageUrl: b.class_image_url ?? null,
-  };
-}
-
 export default function MemberDashboardPage() {
   const isMember = useIsMember();
-  const { siteName } = useStoreSettings();
   const [activeTab, setActiveTab] = useState<"orders" | "history">("orders");
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [bookings, setBookings] = useState<BookingWithClass[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [memberName, setMemberName] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isMember) return;
-    setLoading(true);
-    setLoadError(null);
-    getMyBookings()
-      .then((res) => {
-        if (res.success) setBookings(res.data);
-        else setLoadError(res.error);
-      })
-      .finally(() => setLoading(false));
-  }, [isMember]);
-
-  useEffect(() => {
-    if (!isMember) return;
-    getCurrentMemberName().then(setMemberName);
-  }, [isMember]);
-
-  /** 顯示用：後台名字的後兩字 + 你好，例如 羅錦諺 → 錦諺 你好 */
-  const greetingText = memberName
-    ? (memberName.length >= 2 ? memberName.slice(-2) : memberName) + " 你好"
-    : "你好";
-
-  const ordersDisplay = bookings.map(mapBookingToOrder);
-  const upcomingOrders = ordersDisplay.filter((o) => o.status === "PENDING");
-  const historyOrders = ordersDisplay.filter((o) => o.status === "PAID" || o.status === "REFUNDED");
 
   // 需註冊為會員才能進入，未登入顯示註冊引導
   if (isMember === null) {
@@ -227,15 +216,15 @@ export default function MemberDashboardPage() {
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
           <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-            <Link href="/" className="text-xl font-bold text-brand hover:opacity-90 transition-colors">
-              {siteName}
+            <Link href="/" className="text-xl font-bold text-amber-600 hover:text-amber-700 transition-colors">
+              童趣島
             </Link>
           </div>
         </header>
         <main className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm text-center">
-            <div className="w-16 h-16 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-6">
-              <UserPlus className="w-8 h-8 text-brand" />
+          <div className="w-full max-w-md rounded-2xl border border-amber-100 bg-white p-8 shadow-sm text-center">
+            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-6">
+              <UserPlus className="w-8 h-8 text-amber-600" />
             </div>
             <h1 className="text-xl font-bold text-gray-900 mb-2">會員專屬頁面</h1>
             <p className="text-gray-600 text-sm mb-6">
@@ -243,20 +232,20 @@ export default function MemberDashboardPage() {
             </p>
             <Link
               href="/login"
-              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl font-medium bg-brand text-white hover:bg-brand-hover transition-colors"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors"
             >
               <UserPlus className="w-5 h-5" />
               使用 Google 登入
             </Link>
             <Link
               href="/register"
-              className="block mt-3 text-center text-sm text-gray-600 hover:text-brand transition-colors"
+              className="block mt-3 text-center text-sm text-gray-600 hover:text-amber-600 transition-colors"
             >
               或使用信箱註冊
             </Link>
             <Link
               href="/"
-              className="block mt-4 text-sm text-gray-500 hover:text-brand transition-colors"
+              className="block mt-4 text-sm text-gray-500 hover:text-amber-600 transition-colors"
             >
               返回首頁
             </Link>
@@ -281,23 +270,27 @@ export default function MemberDashboardPage() {
     closeRefundModal();
   };
 
-  const canRefund = (status: DisplayStatus) =>
+  const canRefund = (status: OrderStatus) =>
     status === "PAID" || status === "PENDING";
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link
             href="/"
-            className="text-xl font-bold text-brand hover:opacity-90 transition-colors shrink-0"
+            className="text-xl font-bold text-amber-600 hover:text-amber-700 transition-colors"
           >
-            {siteName}
+            童趣島
           </Link>
-          <span className="text-gray-700 font-medium truncate" aria-label="會員問候">
-            {greetingText}
-          </span>
-          <HeaderMember />
+          <Link
+            href="/member"
+            className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
+            aria-label="會員中心"
+          >
+            <User size={22} />
+            <span className="text-sm hidden sm:inline">會員中心</span>
+          </Link>
         </div>
       </header>
 
@@ -314,9 +307,6 @@ export default function MemberDashboardPage() {
             }`}
           >
             我的預約
-            {upcomingOrders.length > 0 && (
-              <span className="ml-1.5 text-xs opacity-90">({upcomingOrders.length})</span>
-            )}
           </button>
           <button
             type="button"
@@ -328,45 +318,28 @@ export default function MemberDashboardPage() {
             }`}
           >
             歷史訂單
-            {historyOrders.length > 0 && (
-              <span className="ml-1.5 text-xs opacity-90">({historyOrders.length})</span>
-            )}
           </button>
         </div>
 
-        {/* Content：我的預約 = 待現場繳費，歷史訂單 = 已付款 / 已退款 */}
-        {loading && (
-          <p className="text-gray-500 py-8 text-center">載入訂單中…</p>
-        )}
-        {!loading && loadError && (
-          <p className="text-amber-600 py-8 text-center">{loadError}</p>
-        )}
-        {!loading && !loadError && activeTab === "orders" && (
+        {/* Content */}
+        {activeTab === "orders" && (
           <div className="space-y-4">
-            {upcomingOrders.length === 0 ? (
-              <p className="text-gray-500 py-8 text-center">目前沒有即將上課的預約</p>
-            ) : (
-              upcomingOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  showRefundButton={canRefund(order.status)}
-                  onRefundClick={() => openRefundModal(order.id)}
-                />
-              ))
-            )}
+            {MOCK_ORDERS.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                showRefundButton={canRefund(order.status)}
+                onRefundClick={() => openRefundModal(order.id)}
+              />
+            ))}
           </div>
         )}
 
-        {!loading && !loadError && activeTab === "history" && (
+        {activeTab === "history" && (
           <div className="space-y-4">
-            {historyOrders.length === 0 ? (
-              <p className="text-gray-500 py-8 text-center">尚無歷史訂單</p>
-            ) : (
-              historyOrders.map((order) => (
-                <OrderCard key={order.id} order={order} showRefundButton={false} />
-              ))
-            )}
+            {MOCK_HISTORY_ORDERS.map((order) => (
+              <OrderCard key={order.id} order={order} showRefundButton={false} />
+            ))}
           </div>
         )}
       </main>

@@ -1,8 +1,7 @@
 "use server";
 
-import { createServerAnonSupabase } from "@/lib/supabase/serverAnon";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { uploadOneToR2 } from "@/app/actions/productActions";
-import { requireAdmin, getMerchantId } from "@/lib/auth/guards";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -48,8 +47,7 @@ export async function backupCourseToIntro(
   data: { title: string; imageUrl: string | null; galleryUrls: string[]; introText: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await requireAdmin();
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data: existing, error: fetchErr } = await supabase
       .from("course_intro_posts")
       .select("id")
@@ -93,7 +91,7 @@ export async function getCourseIntroPostsForAdmin(): Promise<
   try {
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("course_intro_posts")
       .select("*")
@@ -113,7 +111,7 @@ export async function getCourseIntroPostsForPublic(): Promise<CourseIntroPost[]>
   try {
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return [];
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("course_intro_posts")
       .select("*")
@@ -130,7 +128,7 @@ export async function getCourseIntroPostsForPublic(): Promise<CourseIntroPost[]>
 /** 單筆（前台手動文章詳情用） */
 export async function getCourseIntroPostById(id: string): Promise<CourseIntroPost | null> {
   try {
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("course_intro_posts")
       .select("*")
@@ -148,8 +146,7 @@ export async function createCourseIntroPostManual(formData: FormData): Promise<
   { success: true; message?: string; id?: string } | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
 
     const title = (formData.get("title") as string)?.trim();
@@ -166,7 +163,7 @@ export async function createCourseIntroPostManual(formData: FormData): Promise<
       if (url) galleryUrls.push(url);
     }
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data: inserted, error } = await supabase
       .from("course_intro_posts")
       .insert({
@@ -195,10 +192,9 @@ export async function backfillCourseIntroFromClasses(): Promise<
   { success: true; message?: string; count?: number } | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data: classes, error: fetchError } = await supabase
       .from("classes")
       .select("id, title, image_url, gallery_urls, course_intro")
@@ -230,10 +226,9 @@ export async function deleteCourseIntroPosts(ids: string[]): Promise<
 > {
   if (ids.length === 0) return { success: false, error: "請選擇要刪除的項目" };
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { error } = await supabase
       .from("course_intro_posts")
       .delete()

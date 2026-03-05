@@ -263,6 +263,18 @@ export default function CourseEditForm({
   const [imageSlots, setImageSlots] = useState<ImageSlot[]>(() => initImageSlots(initialData));
   const [dateTimeModalOpen, setDateTimeModalOpen] = useState(false);
   const [scheduledSlots, setScheduledSlots] = useState<{ date: string; time: string }[]>(() => initialData?.scheduled_slots ?? []);
+  const firstSlot = scheduledSlots[0];
+  const [classDate, setClassDate] = useState<string>(() => {
+    const slots = initialData?.scheduled_slots ?? [];
+    const first = slots[0];
+    return initialData?.class_date ?? first?.date ?? "";
+  });
+  const [classTime, setClassTime] = useState<string>(() => {
+    const slots = initialData?.scheduled_slots ?? [];
+    const first = slots[0];
+    const t = initialData?.class_time ?? first?.time ?? "";
+    return t.length >= 5 ? t.slice(0, 5) : t;
+  });
   const [sidebarOptions, setSidebarOptions] = useState<string[]>(() => initialData?.sidebar_option ?? []);
   const [hasSale, setHasSale] = useState(() => !!initialData?.sale_price);
   const [addonItems, setAddonItems] = useState<{ name: string; price: string }[]>(() => (initialData?.addon_prices ?? []).map((a) => ({ name: a.name, price: String(a.price) })));
@@ -312,6 +324,15 @@ export default function CourseEditForm({
     };
   }, []);
 
+  // 從「選擇時間」場次列表對應：第一個場次的日期與時間同步到開課日期／開課時間
+  useEffect(() => {
+    const first = scheduledSlots[0];
+    if (first) {
+      setClassDate((prev) => (prev ? prev : first.date));
+      setClassTime((prev) => (prev ? prev : first.time.slice(0, 5)));
+    }
+  }, [scheduledSlots]);
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -331,9 +352,8 @@ export default function CourseEditForm({
     formData.set("post_content", postHtml);
     formData.set("sidebar_option", JSON.stringify(sidebarOptions));
     formData.set("scheduled_slots", JSON.stringify(scheduledSlots));
-    const firstSlot = scheduledSlots[0];
-    formData.set("class_date", firstSlot?.date ?? "");
-    formData.set("class_time", firstSlot?.time?.slice(0, 5) ?? "");
+    formData.set("class_date", classDate || "");
+    formData.set("class_time", classTime || "");
     const addonPayload = addonItems
       .filter((a) => a.name.trim() !== "" && a.price.trim() !== "")
       .map((a) => ({ name: a.name.trim(), price: Number(a.price) }))
@@ -348,6 +368,8 @@ export default function CourseEditForm({
         if (!isEdit) {
           setImageSlots(Array(5).fill(null).map(emptySlot));
           setScheduledSlots([]);
+          setClassDate("");
+          setClassTime("");
           setAddonItems([]);
           form.reset();
           if (editorRef.current) editorRef.current.innerHTML = "";
@@ -651,6 +673,30 @@ export default function CourseEditForm({
                   {scheduledSlots.length > 0 && (
                     <p className="mt-2 text-xs text-gray-500">已設定 {scheduledSlots.length} 個場次</p>
                   )}
+                </div>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">開課日期</label>
+                  <input
+                    name="class_date"
+                    type="date"
+                    value={classDate}
+                    onChange={(e) => setClassDate(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 disabled:opacity-60"
+                    disabled={isPending}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">可留空；若已在上方新增場次，會自動對應第一個場次的日期</p>
+                </div>
+                <div className="mb-6">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">開課時間</label>
+                  <input
+                    name="class_time"
+                    type="time"
+                    value={classTime}
+                    onChange={(e) => setClassTime(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 disabled:opacity-60"
+                    disabled={isPending}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">可留空；若已在上方新增場次，會自動對應第一個場次的時間（如 2026-03-16 09:00 即為單一課程時間）</p>
                 </div>
                 <div className="mb-6">
                   <label className="mb-2 block text-sm font-medium text-gray-700">人數／名額</label>

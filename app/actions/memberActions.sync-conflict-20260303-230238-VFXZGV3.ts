@@ -2,6 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -11,7 +12,7 @@ function envTrim(key: string): string {
 /**
  * 將「目前登入者」同步到 members 表（與 OAuth 回呼邏輯一致）。
  * 供 E-mail 登入／註冊成功後呼叫，確保後台 B會員功能管理 能列出該會員。
- * 從 cookie 讀取 session，若該 email 尚未在 members 則寫入，merchant_id 強制用 env。
+ * 使用 upsert，重複呼叫僅更新同一筆紀錄，merchant_id 強制用 env。
  */
 export async function syncAuthUserToMembers(): Promise<
   | { success: true }
@@ -55,24 +56,17 @@ export async function syncAuthUserToMembers(): Promise<
       email.split("@")[0] ||
       "會員";
 
-    const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabaseAdmin = createServerSupabase();
-    const { data: existing } = await supabaseAdmin
-      .from("members")
-      .select("id")
-      .eq("merchant_id", merchantId)
-      .eq("email", email)
-      .maybeSingle();
-
-    if (!existing) {
-      const { error: insertErr } = await supabaseAdmin.from("members").insert({
+    const { error: upsertErr } = await supabaseAdmin.from("members").upsert(
+      {
         merchant_id: merchantId,
         name: name.trim() || null,
         phone: null,
         email,
-      });
-      if (insertErr) return { success: false, error: insertErr.message };
-    }
+      },
+      { onConflict: "merchant_id,email" }
+    );
+    if (upsertErr) return { success: false, error: upsertErr.message };
     return { success: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : "同步失敗";
@@ -81,7 +75,7 @@ export async function syncAuthUserToMembers(): Promise<
 }
 
 /**
- * 結帳時無痛辦帳號：若該 email 尚未在 members 則寫入，已存在則不覆蓋。
+ * 結帳時無痛辦帳號：以 upsert 寫入 members，同一 email 僅一筆，重複提交會更新為最新資料。
  * 供 checkout 在 createBooking 前呼叫，確保客人有會員紀錄可於後台查詢。
  */
 export async function ensureMemberForBooking(params: {
@@ -98,24 +92,17 @@ export async function ensureMemberForBooking(params: {
     const email = (params.email ?? "").trim();
     if (!email) return { success: false, error: "請填寫電子信箱" };
 
-    const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
-    const { data: existing } = await supabase
-      .from("members")
-      .select("id")
-      .eq("merchant_id", merchantId)
-      .eq("email", email)
-      .maybeSingle();
-
-    if (!existing) {
-      const { error: insertErr } = await supabase.from("members").insert({
+    const { error: upsertErr } = await supabase.from("members").upsert(
+      {
         merchant_id: merchantId,
         name: name || null,
         phone: phone || null,
         email,
-      });
-      if (insertErr) return { success: false, error: insertErr.message };
-    }
+      },
+      { onConflict: "merchant_id,email" }
+    );
+    if (upsertErr) return { success: false, error: upsertErr.message };
     return { success: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "建立會員資料失敗";
@@ -124,7 +111,7 @@ export async function ensureMemberForBooking(params: {
 }
 
 /**
- * 前台註冊／加入會員：寫入 members 表。
+ * 前台註冊／加入會員：以 upsert 寫入 members 表，同一 email 僅一筆，重複註冊會更新為最新資料。
  * merchant_id 強制使用 process.env.NEXT_PUBLIC_CLIENT_ID，確保綁定當前店家。
  */
 export async function registerMember(formData: {
@@ -149,14 +136,16 @@ export async function registerMember(formData: {
     if (!phone) return { success: false, error: "請填寫手機號碼" };
     if (!email) return { success: false, error: "請填寫電子信箱" };
 
-    const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
-    const { error } = await supabase.from("members").insert({
-      merchant_id: merchantId,
-      name,
-      phone,
-      email,
-    });
+    const { error } = await supabase.from("members").upsert(
+      {
+        merchant_id: merchantId,
+        name,
+        phone,
+        email,
+      },
+      { onConflict: "merchant_id,email" }
+    );
 
     if (error) {
       return { success: false, error: error.message };
@@ -164,35 +153,6 @@ export async function registerMember(formData: {
     return { success: true, message: "註冊成功" };
   } catch (e) {
     const message = e instanceof Error ? e.message : "註冊失敗，請稍後再試";
-    return { success: false, error: message };
-  }
-}
-
-/**
- * 後台會員功能管理：刪除一筆會員（僅限本店家 merchant_id）。
- */
-export async function deleteMember(memberId: string): Promise<
-  | { success: true }
-  | { success: false; error: string }
-> {
-  try {
-    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    if (!merchantId) return { success: false, error: "未設定店家" };
-    const id = (memberId ?? "").trim();
-    if (!id) return { success: false, error: "無效的會員" };
-
-    const { createServerSupabase } = await import("@/lib/supabase/server");
-    const supabase = createServerSupabase();
-    const { error } = await supabase
-      .from("members")
-      .delete()
-      .eq("id", id)
-      .eq("merchant_id", merchantId);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "刪除失敗";
     return { success: false, error: message };
   }
 }

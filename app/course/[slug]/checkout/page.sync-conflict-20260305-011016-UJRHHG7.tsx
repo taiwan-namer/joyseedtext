@@ -12,7 +12,6 @@ import { getCourseBySlug } from "../../course-data";
 import { getCourseById } from "@/app/actions/productActions";
 import { createBooking } from "@/app/actions/bookingActions";
 import { ensureMemberForBooking } from "@/app/actions/memberActions";
-import { getPaymentSettings } from "@/app/actions/frontendSettingsActions";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../../course-data";
 
@@ -38,8 +37,6 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [atmBankName, setAtmBankName] = useState("");
-  const [atmBankAccount, setAtmBankAccount] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -62,13 +59,6 @@ export default function CheckoutPage() {
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) setMemberEmail(session.user.email.trim());
-    });
-  }, []);
-
-  useEffect(() => {
-    getPaymentSettings().then((data) => {
-      setAtmBankName(data.atmBankName ?? "");
-      setAtmBankAccount(data.atmBankAccount ?? "");
     });
   }, []);
 
@@ -162,6 +152,14 @@ export default function CheckoutPage() {
       }
       const slotDate = searchParams.get("date") ?? undefined;
       const slotTime = searchParams.get("time") ?? undefined;
+      const addonParam = searchParams.get("addon");
+      const addonIndices: number[] | undefined =
+        addonParam != null && addonParam !== ""
+          ? addonParam
+              .split(",")
+              .map((s) => parseInt(s.trim(), 10))
+              .filter((n) => !Number.isNaN(n))
+          : undefined;
       const allergyNote = hasAllergyOrGenetic
         ? (childAllergyDetail.trim() || "有（未填寫說明）")
         : "無";
@@ -174,7 +172,9 @@ export default function CheckoutPage() {
         slotTime || null,
         allergyNote || null,
         childName.trim() || null,
-        childAge.trim() || null
+        childAge.trim() || null,
+        addonIndices,
+        paymentMethod
       );
       if (!bookRes.success) {
         setSubmitError(bookRes.error);
@@ -229,8 +229,6 @@ export default function CheckoutPage() {
             buttonText={buttonText}
             onSubmit={handleSubmit}
             loading={submitLoading}
-            atmBankName={atmBankName}
-            atmBankAccount={atmBankAccount}
           />
         </div>
 
@@ -448,26 +446,6 @@ export default function CheckoutPage() {
                   </span>
                 </label>
               </div>
-              {/* ATM 轉帳資訊：選 ATM 時顯示 */}
-              {paymentMethod === "transfer" && (atmBankName || atmBankAccount) && (
-                <div className="mt-4 p-5 rounded-xl bg-slate-50 border border-slate-200">
-                  <p className="text-sm font-medium text-slate-700 mb-4">請依以下資訊完成 ATM 轉帳</p>
-                  <dl className="space-y-3 text-sm">
-                    <div>
-                      <dt className="text-slate-500">銀行單位</dt>
-                      <dd className="font-medium text-gray-900 mt-0.5">{atmBankName || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">銀行帳號</dt>
-                      <dd className="font-mono font-medium text-gray-900 mt-0.5">{atmBankAccount || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">訂單金額</dt>
-                      <dd className="font-bold text-lg text-gray-900 mt-0.5">NT$ {totalFromUrl.toLocaleString()}</dd>
-                    </div>
-                  </dl>
-                </div>
-              )}
             </section>
           </div>
 
@@ -480,8 +458,6 @@ export default function CheckoutPage() {
                 buttonText={buttonText}
                 onSubmit={handleSubmit}
                 loading={submitLoading}
-                atmBankName={atmBankName}
-                atmBankAccount={atmBankAccount}
               />
             </div>
           </div>
@@ -493,22 +469,16 @@ export default function CheckoutPage() {
 
 function OrderSummaryCard({
   orderSummary,
-  paymentMethod,
   buttonText,
   onSubmit,
   loading = false,
-  atmBankName = "",
-  atmBankAccount = "",
 }: {
   orderSummary: { courseName: string; dateTime: string; totalAmount: number };
   paymentMethod: PaymentMethod;
   buttonText: string;
   onSubmit: () => void;
   loading?: boolean;
-  atmBankName?: string;
-  atmBankAccount?: string;
 }) {
-  const showAtmBlock = paymentMethod === "transfer" && (atmBankName || atmBankAccount);
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm">
       <h2 className="text-lg font-bold text-gray-900 mb-4">訂單明細</h2>
@@ -532,25 +502,6 @@ function OrderSummaryCard({
           </dd>
         </div>
       </dl>
-      {showAtmBlock && (
-        <div className="mb-6 p-4 rounded-lg bg-slate-50 border border-slate-200">
-          <p className="text-xs font-medium text-slate-600 mb-3">ATM 轉帳資訊</p>
-          <dl className="space-y-2 text-sm">
-            <div>
-              <dt className="text-slate-500">銀行單位</dt>
-              <dd className="font-medium text-gray-900">{atmBankName || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">銀行帳號</dt>
-              <dd className="font-mono font-medium text-gray-900">{atmBankAccount || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">訂單金額</dt>
-              <dd className="font-bold text-gray-900">NT$ {orderSummary.totalAmount.toLocaleString()}</dd>
-            </div>
-          </dl>
-        </div>
-      )}
       <button
         type="button"
         onClick={onSubmit}

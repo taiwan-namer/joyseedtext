@@ -39,6 +39,7 @@ export default function CheckoutPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [atmBankName, setAtmBankName] = useState("");
+  const [atmBankCode, setAtmBankCode] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
 
   useEffect(() => {
@@ -68,6 +69,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     getPaymentSettings().then((data) => {
       setAtmBankName(data.atmBankName ?? "");
+      setAtmBankCode(data.atmBankCode ?? "");
       setAtmBankAccount(data.atmBankAccount ?? "");
     });
   }, []);
@@ -230,6 +232,7 @@ export default function CheckoutPage() {
             onSubmit={handleSubmit}
             loading={submitLoading}
             atmBankName={atmBankName}
+            atmBankCode={atmBankCode}
             atmBankAccount={atmBankAccount}
           />
         </div>
@@ -449,16 +452,20 @@ export default function CheckoutPage() {
                 </label>
               </div>
               {/* ATM 轉帳資訊：選 ATM 時顯示 */}
-              {paymentMethod === "transfer" && (atmBankName || atmBankAccount) && (
+              {paymentMethod === "transfer" && (atmBankName || atmBankCode || atmBankAccount) && (
                 <div className="mt-4 p-5 rounded-xl bg-slate-50 border border-slate-200">
                   <p className="text-sm font-medium text-slate-700 mb-4">請依以下資訊完成 ATM 轉帳</p>
                   <dl className="space-y-3 text-sm">
                     <div>
-                      <dt className="text-slate-500">銀行單位</dt>
+                      <dt className="text-slate-500">1. 銀行單位</dt>
                       <dd className="font-medium text-gray-900 mt-0.5">{atmBankName || "—"}</dd>
                     </div>
                     <div>
-                      <dt className="text-slate-500">銀行帳號</dt>
+                      <dt className="text-slate-500">2. 銀行代碼</dt>
+                      <dd className="font-mono font-medium text-gray-900 mt-0.5">{atmBankCode || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">3. 銀行帳號</dt>
                       <dd className="font-mono font-medium text-gray-900 mt-0.5">{atmBankAccount || "—"}</dd>
                     </div>
                     <div>
@@ -481,6 +488,7 @@ export default function CheckoutPage() {
                 onSubmit={handleSubmit}
                 loading={submitLoading}
                 atmBankName={atmBankName}
+                atmBankCode={atmBankCode}
                 atmBankAccount={atmBankAccount}
               />
             </div>
@@ -498,6 +506,7 @@ function OrderSummaryCard({
   onSubmit,
   loading = false,
   atmBankName = "",
+  atmBankCode = "",
   atmBankAccount = "",
 }: {
   orderSummary: { courseName: string; dateTime: string; totalAmount: number };
@@ -506,9 +515,10 @@ function OrderSummaryCard({
   onSubmit: () => void;
   loading?: boolean;
   atmBankName?: string;
+  atmBankCode?: string;
   atmBankAccount?: string;
 }) {
-  const showAtmBlock = paymentMethod === "transfer" && (atmBankName || atmBankAccount);
+  const showAtmBlock = paymentMethod === "transfer" && (atmBankName || atmBankCode || atmBankAccount);
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm">
       <h2 className="text-lg font-bold text-gray-900 mb-4">訂單明細</h2>
@@ -537,11 +547,15 @@ function OrderSummaryCard({
           <p className="text-xs font-medium text-slate-600 mb-3">ATM 轉帳資訊</p>
           <dl className="space-y-2 text-sm">
             <div>
-              <dt className="text-slate-500">銀行單位</dt>
+              <dt className="text-slate-500">1. 銀行單位</dt>
               <dd className="font-medium text-gray-900">{atmBankName || "—"}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">銀行帳號</dt>
+              <dt className="text-slate-500">2. 銀行代碼</dt>
+              <dd className="font-mono font-medium text-gray-900">{atmBankCode || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">3. 銀行帳號</dt>
               <dd className="font-mono font-medium text-gray-900">{atmBankAccount || "—"}</dd>
             </div>
             <div>

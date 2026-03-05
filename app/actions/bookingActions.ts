@@ -1,11 +1,8 @@
 "use server";
 
 import { createServerSupabase } from "@/lib/supabase/server";
-import { createServerAnonSupabase } from "@/lib/supabase/serverAnon";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { requireAdmin, getMerchantId } from "@/lib/auth/guards";
-import { verifyCaptcha } from "@/app/actions/captchaActions";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -72,8 +69,6 @@ async function isSlotAllowed(
  * 下單並扣除庫存（多租戶：merchant_id 強制來自 NEXT_PUBLIC_CLIENT_ID）。
  * 透過 RPC 在同一交易內：檢查名額 → 新增訂單(upcoming) → capacity - 1。
  * 下單前會檢查所選 slot 是否在課程的 scheduled_slots／class_date+class_time 內，避免點錯或竄改網址。
- * 暫時仍用 service role 呼叫 RPC（create_booking_and_decrement_capacity 為 SECURITY DEFINER）。
- * Phase 3 將改為 RPC 與 RLS 相容（例如 RPC 內 SET LOCAL 或改為 anon 可呼叫之寫入流程）。
  */
 /** 結帳頁傳入的付款方式；存進 DB 為 atm | card | linepay（transfer → atm） */
 export type PaymentMethodForBooking = "card" | "linepay" | "transfer";
@@ -89,17 +84,13 @@ export async function createBooking(
   kidName?: string | null,
   kidAge?: string | null,
   addonIndices?: number[] | null,
-  paymentMethod?: PaymentMethodForBooking | null,
-  captchaAnswer?: string | null
+  paymentMethod?: PaymentMethodForBooking | null
 ): Promise<
   | { success: true; bookingId: string }
   | { success: false; error: string }
 > {
   try {
-    const captchaResult = await verifyCaptcha((captchaAnswer ?? "").trim());
-    if (!captchaResult.success) return { success: false, error: captchaResult.error };
-
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
     const email = (memberEmail ?? "").trim();
@@ -157,11 +148,10 @@ export async function markBookingAsPaid(
   | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("bookings")
       .update({ status: "paid" })
@@ -191,11 +181,10 @@ export async function completeBooking(
   | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("bookings")
       .update({ status: "completed" })
@@ -224,11 +213,10 @@ export async function deleteBooking(
   | { success: false; error: string }
 > {
   try {
-    await requireAdmin();
-    const merchantId = getMerchantId();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
 
     const { data: booking, error: fetchError } = await supabase
       .from("bookings")
@@ -301,7 +289,7 @@ export async function getCurrentMemberName(): Promise<string | null> {
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     const email = await getCurrentMemberEmail();
     if (!merchantId || !email) return null;
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("members")
       .select("name")
@@ -350,7 +338,7 @@ export async function getMyBookings(): Promise<
     if (!merchantId) return { success: false, error: "未設定店家" };
     if (!email) return { success: false, error: "請先登入" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data: rows, error } = await supabase
       .from("bookings")
       .select(`
@@ -420,7 +408,7 @@ export async function getAdminBookings(): Promise<
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data: rows, error } = await supabase
       .from("bookings")
       .select(`
@@ -531,7 +519,7 @@ export async function getEnrollmentByCourse(): Promise<
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
 
     const { data: classesRows, error: classesError } = await supabase
       .from("classes")
@@ -618,7 +606,7 @@ export async function getRollcallDates(): Promise<
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data: rows, error } = await supabase
       .from("classes")
       .select("scheduled_slots, class_date")
@@ -663,7 +651,7 @@ export async function getRollcallDatesWithCounts(): Promise<
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
     const { data: classesRows, error: classesError } = await supabase
       .from("classes")
       .select("id, capacity, scheduled_slots, class_date, class_time")
@@ -768,7 +756,7 @@ export async function getRollcallSessionsByDate(
     if (!merchantId) return { success: false, error: "未設定店家" };
 
     const dateStr = slotDate.slice(0, 10);
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
 
     const { data: classesRows, error: classesError } = await supabase
       .from("classes")
@@ -882,7 +870,7 @@ export async function getBookingsForSession(
     const dateStr = slotDate.slice(0, 10);
     const timeStr = slotTime.length >= 5 ? slotTime.slice(0, 5) : slotTime;
 
-    const supabase = await createServerAnonSupabase();
+    const supabase = createServerSupabase();
 
     const { data: classRow, error: classError } = await supabase
       .from("classes")
