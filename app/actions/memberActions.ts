@@ -2,7 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { getAdminSessionOrThrow } from "@/lib/auth/adminSession";
+import { requireAdminSession } from "@/lib/auth/requireAdminSession";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -201,7 +201,7 @@ export async function deleteMember(memberId: string): Promise<
   | { success: false; error: string }
 > {
   try {
-    await getAdminSessionOrThrow();
+    await requireAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
     const id = (memberId ?? "").trim();

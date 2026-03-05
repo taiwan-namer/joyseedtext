@@ -2,7 +2,7 @@
 
 import { createServerSupabase } from "@/lib/supabase/server";
 import { uploadOneToR2 } from "@/app/actions/productActions";
-import { getAdminSessionOrThrow } from "@/lib/auth/adminSession";
+import { requireAdminSession } from "@/lib/auth/requireAdminSession";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -48,7 +48,7 @@ export async function backupCourseToIntro(
   data: { title: string; imageUrl: string | null; galleryUrls: string[]; introText: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await getAdminSessionOrThrow();
+    await requireAdminSession();
     const supabase = createServerSupabase();
     const { data: existing, error: fetchErr } = await supabase
       .from("course_intro_posts")
@@ -148,7 +148,7 @@ export async function createCourseIntroPostManual(formData: FormData): Promise<
   { success: true; message?: string; id?: string } | { success: false; error: string }
 > {
   try {
-    await getAdminSessionOrThrow();
+    await requireAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
 
@@ -195,7 +195,7 @@ export async function backfillCourseIntroFromClasses(): Promise<
   { success: true; message?: string; count?: number } | { success: false; error: string }
 > {
   try {
-    await getAdminSessionOrThrow();
+    await requireAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const supabase = createServerSupabase();
@@ -230,7 +230,7 @@ export async function deleteCourseIntroPosts(ids: string[]): Promise<
 > {
   if (ids.length === 0) return { success: false, error: "請選擇要刪除的項目" };
   try {
-    await getAdminSessionOrThrow();
+    await requireAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const supabase = createServerSupabase();
