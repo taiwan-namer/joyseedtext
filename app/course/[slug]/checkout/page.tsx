@@ -128,10 +128,14 @@ export default function CheckoutPage() {
       setCompletingPending(true);
       (async () => {
         try {
+          // 使用目前登入者信箱，會員中心才能正確連動（避免暫存表單信箱與登入帳號不一致）
+          const { data: sessionData } = await createClient().auth.getSession();
+          const emailToUse =
+            sessionData.session?.user?.email?.trim() || pending.memberEmail.trim();
           const ensureRes = await ensureMemberForBooking({
             name: pending.parentName.trim(),
             phone: pending.parentPhone.trim(),
-            email: pending.memberEmail.trim(),
+            email: emailToUse,
           });
           if (!ensureRes.success) {
             setSubmitError(ensureRes.error);
@@ -143,7 +147,7 @@ export default function CheckoutPage() {
             : "無";
           const bookRes = await createBooking(
             course.id,
-            pending.memberEmail.trim(),
+            emailToUse,
             pending.parentName.trim(),
             pending.parentPhone.trim(),
             pending.date,
@@ -309,7 +313,13 @@ export default function CheckoutPage() {
 
   const handleSubmit = async () => {
     setSubmitError(null);
-    const email = memberEmail.trim();
+    // 已登入時一律用「目前登入者信箱」作為訂單／會員信箱，會員中心才能正確連動顯示
+    let email = memberEmail.trim();
+    if (hasSession === true) {
+      const { data } = await createClient().auth.getSession();
+      const sessionEmail = data.session?.user?.email?.trim();
+      if (sessionEmail) email = sessionEmail;
+    }
     if (!email) {
       setSubmitError("請填寫報名信箱");
       return;
