@@ -150,10 +150,10 @@ export default function WonderVoyageHomePage() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-6xl">
-        {/* 2. Hero 主圖（有設定圖片才顯示，不顯示主圖文字） */}
+        {/* 2. Hero 主圖（有設定圖片才顯示）；手機版加大比例佔比，桌機維持橫幅 */}
         {heroImageUrl && (
           <section className="px-4 pt-6 pb-4">
-            <div className="relative w-full aspect-[16/9] rounded-xl bg-gray-200 overflow-hidden">
+            <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl bg-gray-200 overflow-hidden">
               <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
             </div>
           </section>

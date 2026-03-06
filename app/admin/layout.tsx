@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronRight,
+  ChevronLeft,
   ExternalLink,
+  Menu,
   Store,
   Users,
   FileText,
@@ -86,7 +88,15 @@ const SIDEBAR_MENU = [
   },
 ];
 
-function Sidebar() {
+function Sidebar({
+  isOpen,
+  onClose,
+  isMobile,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  isMobile: boolean;
+}) {
   const pathname = usePathname();
   const { siteName } = useStoreSettings();
   const [openKeys, setOpenKeys] = useState<Record<string, boolean>>({
@@ -104,12 +114,29 @@ function Sidebar() {
     setOpenKeys((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  return (
-    <aside className="w-64 shrink-0 bg-slate-900 text-white flex flex-col min-h-screen">
-      <div className="p-4 border-b border-slate-700">
-        <Link href="/admin" prefetch={false} className="text-lg font-bold text-white">
+  useEffect(() => {
+    if (!isMobile || !isOpen) return;
+    const handler = () => onClose();
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, [isMobile, isOpen, onClose]);
+
+  const navContent = (
+    <>
+      <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+        <Link href="/admin" prefetch={false} className="text-lg font-bold text-white" onClick={isMobile ? onClose : undefined}>
           {siteName}後台
         </Link>
+        {isMobile && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            aria-label="關閉側欄"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
       </div>
       <nav className="flex-1 overflow-y-auto py-2">
         {SIDEBAR_MENU.map((item) => {
@@ -123,6 +150,7 @@ function Sidebar() {
                 target={newTab ? "_blank" : undefined}
                 rel={newTab ? "noopener noreferrer" : undefined}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors"
+                onClick={isMobile ? onClose : undefined}
               >
                 <item.icon className="w-4 h-4 shrink-0" />
                 <span>{item.label}</span>
@@ -161,6 +189,7 @@ function Sidebar() {
                             ? "bg-amber-600/20 text-amber-400 font-medium"
                             : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
                         }`}
+                        onClick={isMobile ? onClose : undefined}
                       >
                         <span>{(child as { label: string }).label}</span>
                       </Link>
@@ -171,6 +200,7 @@ function Sidebar() {
                             href={subLabel === "新增課程" ? "/admin/classes/new" : subLabel === "常見問題" ? "/admin/faq" : "#"}
                             prefetch={false}
                             className="flex items-center gap-2 py-1.5 pl-12 pr-4 text-xs text-slate-400 hover:text-slate-200"
+                            onClick={isMobile ? onClose : undefined}
                           >
                             {subLabel}
                           </Link>
@@ -184,29 +214,75 @@ function Sidebar() {
           );
         })}
       </nav>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {isMobile && isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          aria-hidden
+          onClick={onClose}
+        />
+      )}
+      <aside
+        className={`
+          shrink-0 bg-slate-900 text-white flex flex-col min-h-screen
+          md:relative md:translate-x-0 md:w-64
+          fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-out
+          ${isMobile ? (isOpen ? "translate-x-0" : "-translate-x-full") : ""}
+        `}
+      >
+        {navContent}
+      </aside>
+    </>
   );
 }
 
-function TopBar() {
+function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const now = new Date();
   const dateStr = `${now.getMonth() + 1}月${now.getDate()}日 週${["日", "一", "二", "三", "四", "五", "六"][now.getDay()]} ${now.getHours() < 12 ? "上午" : "下午"}${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   return (
-    <header className="h-14 shrink-0 border-b border-gray-200 bg-white flex items-center justify-end gap-4 px-6">
-      <span className="text-sm text-gray-500">{dateStr}</span>
+    <header className="h-14 shrink-0 border-b border-gray-200 bg-white flex items-center justify-between gap-4 px-4 md:px-6">
+      {onMenuClick && (
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 md:hidden"
+          aria-label="開啟選單"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      )}
+      <div className="flex-1 flex items-center justify-end gap-2 md:gap-4 min-w-0">
+      <span className="text-sm text-gray-500 hidden sm:inline">{dateStr}</span>
       <span className="text-sm text-gray-700">
         歡迎 <strong>管理員</strong> 您好
       </span>
       <Link
         href="/admin/logout"
         prefetch={false}
-        className="text-sm text-gray-600 hover:text-amber-600 transition-colors"
+        className="text-sm text-gray-600 hover:text-amber-600 transition-colors shrink-0"
       >
         登出
       </Link>
+      </div>
     </header>
   );
+}
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
+  return isMobile;
 }
 
 export default function AdminLayout({
@@ -215,15 +291,22 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <Sidebar />
+      <Sidebar
+        isOpen={isMobile ? sidebarOpen : true}
+        onClose={() => setSidebarOpen(false)}
+        isMobile={isMobile}
+      />
       <div className="flex-1 flex flex-col min-w-0">
-        <TopBar />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <TopBar onMenuClick={isMobile ? () => setSidebarOpen(true) : undefined} />
+        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
       </div>
     </div>
   );
