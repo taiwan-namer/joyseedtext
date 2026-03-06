@@ -205,7 +205,36 @@ export default function AdminSettingsPage() {
 
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-700">頁面背景色</label>
-          <p className="mb-2 text-xs text-gray-500">以淺色柔和為主，選擇後可於上方示範區預覽，再儲存。</p>
+          <p className="mb-2 text-xs text-gray-500">以淺色柔和為主，選擇後可於本區塊與上方示範區預覽，再儲存。</p>
+          {/* 本區塊內底色示意 */}
+          <div className="mb-4 rounded-lg border border-gray-200 overflow-hidden">
+            <p className="px-3 py-1.5 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">目前底色示意</p>
+            <div
+              className="h-14 w-full transition-colors"
+              style={{ backgroundColor }}
+            />
+          </div>
+          {/* 自訂顏色（與主色系相同操作） */}
+          <p className="mb-2 text-xs text-gray-600 font-medium">自訂顏色</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <input
+              type="color"
+              value={backgroundColor}
+              onChange={(e) => setBackgroundColor(e.target.value)}
+              className="h-10 w-14 cursor-pointer rounded border border-gray-300 p-0.5 bg-white"
+              disabled={isPending}
+            />
+            <input
+              type="text"
+              value={backgroundColor}
+              onChange={(e) => setBackgroundColor(e.target.value)}
+              className="w-28 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
+              placeholder="#fafaf9"
+              disabled={isPending}
+            />
+          </div>
+          {/* 色票圖庫（淺色柔和） */}
+          <p className="mt-4 mb-2 text-xs text-gray-600 font-medium">色票（淺色柔和）</p>
           <div className="flex flex-wrap gap-2">
             {SOFT_BACKGROUND_PALETTE.map((hex) => (
               <button
@@ -226,17 +255,7 @@ export default function AdminSettingsPage() {
               </button>
             ))}
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <input
-              type="text"
-              value={backgroundColor}
-              onChange={(e) => setBackgroundColor(e.target.value)}
-              className="w-28 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
-              placeholder="#fafaf9"
-              disabled={isPending}
-            />
-            <span className="text-xs text-gray-500">可輸入色碼或從上列選擇</span>
-          </div>
+          <p className="mt-2 text-xs text-gray-500">點選色票或使用自訂色塊／色碼，可於上方「目前底色示意」即時預覽。</p>
         </div>
 
         <div className="border-t border-gray-200 pt-6">
