@@ -138,11 +138,12 @@ export default function AdminSettingsPage() {
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="mb-4 text-sm font-medium text-gray-700">示範區（儲存前可預覽）— 一區塊體驗三種配色變化</p>
         <div className="rounded-lg border border-gray-200 overflow-hidden min-h-[200px]">
-          {/* 上方：頁面底色（導覽列） */}
+          {/* 上方區塊：對應「關於我們區塊背景色」設定 */}
           <div
             className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200/80 transition-colors"
-            style={{ backgroundColor }}
+            style={{ backgroundColor: aboutSectionBackgroundColor }}
           >
+            <span className="text-xs text-gray-500 mr-2">關於我們區塊底色</span>
             <span className="text-sm font-bold" style={{ color: primaryColor }}>{siteName || "童趣島"}</span>
             <div className="flex gap-2 text-xs">
               <span style={{ color: primaryColor }}>關於我們</span>
@@ -151,12 +152,12 @@ export default function AdminSettingsPage() {
               <span className="text-gray-500">常見問題</span>
             </div>
           </div>
-          {/* 下方：關於我們區塊底色 + 主色按鈕／連結／網站名稱 */}
+          {/* 下方區塊：對應「頁面背景色」設定 */}
           <div
             className="px-4 py-6 transition-colors"
-            style={{ backgroundColor: aboutSectionBackgroundColor }}
+            style={{ backgroundColor }}
           >
-            <p className="text-xs text-gray-500 mb-2">關於我們區塊底色</p>
+            <p className="text-xs text-gray-500 mb-2">頁面底色</p>
             <div className="flex flex-wrap items-center gap-3 mb-2">
               <span
                 className="inline-block rounded-lg px-3 py-1.5 text-sm font-medium text-white"
@@ -168,7 +169,7 @@ export default function AdminSettingsPage() {
                 主色連結 · {siteName || "網站名稱"}
               </span>
             </div>
-            <p className="text-sm text-gray-600">此區為首頁「關於我們」區塊，可感受與上方欄位的配色變化。</p>
+            <p className="text-sm text-gray-600">上方為關於我們區塊底色、下方為頁面底色，可感受兩種配色的變化。</p>
           </div>
         </div>
         <p className="mt-3 text-xs text-gray-500">滿意後再按「儲存」即可套用至前台。</p>
