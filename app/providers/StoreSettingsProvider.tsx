@@ -6,6 +6,7 @@ import type { StoreSettings } from "@/app/actions/storeSettingsActions";
 const StoreSettingsContext = createContext<StoreSettings>({
   siteName: "童趣島",
   primaryColor: "#F59E0B",
+  backgroundColor: "#fafaf9",
   socialFbUrl: "",
   socialIgUrl: "",
   socialLineUrl: "",
@@ -39,6 +40,7 @@ export function StoreSettingsProvider({
     [
       initial.siteName,
       initial.primaryColor,
+      initial.backgroundColor,
       initial.socialFbUrl,
       initial.socialIgUrl,
       initial.socialLineUrl,
@@ -52,7 +54,11 @@ export function StoreSettingsProvider({
     const root = document.documentElement;
     root.style.setProperty("--color-primary", value.primaryColor);
     root.style.setProperty("--color-primary-hover", darkenHex(value.primaryColor, 0.85));
-  }, [value.primaryColor]);
+    root.style.setProperty("--color-background", value.backgroundColor);
+    if (typeof document !== "undefined" && document.body) {
+      document.body.style.backgroundColor = value.backgroundColor;
+    }
+  }, [value.primaryColor, value.backgroundColor]);
 
   return (
     <StoreSettingsContext.Provider value={value}>

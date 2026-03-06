@@ -7,7 +7,7 @@ import { HeaderMember } from "@/app/components/HeaderMember";
 export default function TermsPage() {
   const { siteName } = useStoreSettings();
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold text-brand">

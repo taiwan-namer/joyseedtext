@@ -2,11 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 網站主色系（由後台基本資料設定，預設 amber） */
+/* 網站主色系與背景色（由後台基本資料設定） */
 :root {
   --color-primary: #f59e0b;
   --color-primary-hover: #d97706;
+  --color-background: #fafaf9;
 }
+/* 前台頁面底色（依設定變更） */
+.bg-page { background-color: var(--color-background); }
 
 /* 主色系 utility：供全站按設定替換 */
 .text-brand { color: var(--color-primary); }

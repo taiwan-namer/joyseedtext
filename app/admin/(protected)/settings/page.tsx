@@ -4,12 +4,37 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStoreSettings, updateStoreSettings } from "@/app/actions/storeSettingsActions";
 import { updateAdminPassword } from "@/app/actions/adminAuthActions";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
+
+/** 淺色柔和背景色圖庫（供用戶選擇，篩選以不刺眼為主） */
+const SOFT_BACKGROUND_PALETTE = [
+  "#fafaf9",
+  "#f5f5f4",
+  "#fafaf8",
+  "#f7f5f3",
+  "#f5f0eb",
+  "#fefce8",
+  "#fef9c3",
+  "#ecfccb",
+  "#d1fae5",
+  "#dbeafe",
+  "#e0e7ff",
+  "#fce7f3",
+  "#f3e8ff",
+  "#fef2f2",
+  "#fff7ed",
+  "#fffbeb",
+  "#f0fdf4",
+  "#f0f9ff",
+  "#faf5ff",
+  "#f8fafc",
+] as const;
 
 export default function AdminSettingsPage() {
   const router = useRouter();
   const [siteName, setSiteName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#F59E0B");
+  const [backgroundColor, setBackgroundColor] = useState("#fafaf9");
   const [socialFbUrl, setSocialFbUrl] = useState("");
   const [socialIgUrl, setSocialIgUrl] = useState("");
   const [socialLineUrl, setSocialLineUrl] = useState("");
@@ -32,6 +57,7 @@ export default function AdminSettingsPage() {
     getStoreSettings().then((s) => {
       setSiteName(s.siteName);
       setPrimaryColor(s.primaryColor);
+      setBackgroundColor(s.backgroundColor ?? "#fafaf9");
       const fb = (s.socialFbUrl ?? "").trim();
       const ig = (s.socialIgUrl ?? "").trim();
       const line = (s.socialLineUrl ?? "").trim();
@@ -55,6 +81,7 @@ export default function AdminSettingsPage() {
       const result = await updateStoreSettings(
         siteName,
         primaryColor,
+        backgroundColor,
         socialFbOn ? socialFbUrl : "",
         socialIgOn ? socialIgUrl : "",
         socialLineOn ? socialLineUrl : "",
@@ -101,8 +128,31 @@ export default function AdminSettingsPage() {
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-xl font-bold text-gray-900">基本資料</h1>
       <p className="text-sm text-gray-600">
-        設定網站名稱與主色系，前台（含課程介紹、會員等）會依此顯示；之後其他用戶可在此隨時更換自己的資訊。
+        設定網站名稱、主色系與背景色，前台會依此顯示。下方示範區可先預覽再儲存，無須反覆至前台查看。
       </p>
+
+      {/* 示範區：主色系與背景色即時預覽（未儲存前可見） */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <p className="mb-3 text-sm font-medium text-gray-700">示範區（儲存前可預覽）</p>
+        <div
+          className="rounded-lg border border-gray-200 p-4 transition-colors"
+          style={{ backgroundColor }}
+        >
+          <p className="mb-2 text-xs text-gray-500">頁面底色</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="inline-block rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+              style={{ backgroundColor: primaryColor }}
+            >
+              主色按鈕
+            </span>
+            <span className="text-sm text-gray-700" style={{ color: primaryColor }}>
+              主色連結 · {siteName || "網站名稱"}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-gray-500">滿意後再按「儲存」即可套用至前台。</p>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         {message && (
@@ -150,7 +200,43 @@ export default function AdminSettingsPage() {
               disabled={isPending}
             />
           </div>
-          <p className="mt-1 text-xs text-gray-500">目前色系：上列色塊與色碼。按鈕、連結等主色會依此套用。</p>
+          <p className="mt-1 text-xs text-gray-500">主色用於按鈕、連結等，與背景色不同。示範區可即時預覽。</p>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-gray-700">頁面背景色</label>
+          <p className="mb-2 text-xs text-gray-500">以淺色柔和為主，選擇後可於上方示範區預覽，再儲存。</p>
+          <div className="flex flex-wrap gap-2">
+            {SOFT_BACKGROUND_PALETTE.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                onClick={() => setBackgroundColor(hex)}
+                className={`h-8 w-8 rounded-lg border-2 shadow-sm transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 ${
+                  backgroundColor.toLowerCase() === hex.toLowerCase()
+                    ? "border-amber-500 ring-2 ring-amber-500/30"
+                    : "border-gray-300"
+                }`}
+                style={{ backgroundColor: hex }}
+                title={hex}
+              >
+                {backgroundColor.toLowerCase() === hex.toLowerCase() ? (
+                  <Check className="mx-auto h-4 w-4 text-gray-600" strokeWidth={2.5} />
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="text"
+              value={backgroundColor}
+              onChange={(e) => setBackgroundColor(e.target.value)}
+              className="w-28 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
+              placeholder="#fafaf9"
+              disabled={isPending}
+            />
+            <span className="text-xs text-gray-500">可輸入色碼或從上列選擇</span>
+          </div>
         </div>
 
         <div className="border-t border-gray-200 pt-6">

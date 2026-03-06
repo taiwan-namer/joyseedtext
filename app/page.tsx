@@ -134,7 +134,7 @@ export default function WonderVoyageHomePage() {
   }, [activityIndex, activities.length]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-page flex flex-col">
       {/* 1. Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-2">
@@ -150,11 +150,12 @@ export default function WonderVoyageHomePage() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-6xl">
-        {/* 2. Hero 主圖（有設定圖片才顯示）；手機版加大比例佔比，桌機維持橫幅 */}
+        {/* 2. Hero 主圖（有設定圖片才顯示）；底色與圖片融合，底部漸層過渡至頁面 */}
         {heroImageUrl && (
           <section className="px-4 pt-6 pb-4">
-            <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl bg-gray-200 overflow-hidden">
+            <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
               <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none" aria-hidden />
             </div>
           </section>
         )}
@@ -198,7 +199,7 @@ export default function WonderVoyageHomePage() {
       </main>
 
       {/* 4. 熱門課程 - 全寬區塊，橫向輪播卡片（連動後台新增課程） */}
-      <section className="w-full py-6 pb-8 relative bg-gray-50">
+      <section className="w-full py-6 pb-8 relative bg-page">
         <div className="max-w-6xl mx-auto px-4 mb-4">
           <h2 className="text-lg font-semibold text-gray-800">熱門課程</h2>
         </div>
@@ -329,7 +330,7 @@ export default function WonderVoyageHomePage() {
       </section>
 
       {/* 5.5 聯絡區：左側店名＋聯絡＋社群，右側地圖；下方隱私權／服務條款 */}
-      <section className="bg-gray-50 border-t border-gray-100 py-12 px-4">
+      <section className="bg-page border-t border-gray-100 py-12 px-4">
         <div className="mx-auto max-w-6xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             <div className="space-y-6">

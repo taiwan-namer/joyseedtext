@@ -249,7 +249,7 @@ export default function CheckoutPage() {
 
   if (!course) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>
       </div>
     );
@@ -257,7 +257,7 @@ export default function CheckoutPage() {
 
   if (hasSession === null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
       </div>
     );
@@ -267,7 +267,7 @@ export default function CheckoutPage() {
 
   if (completingPending) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-page flex flex-col">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
           <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
             <Link href="/" className="text-xl font-bold text-brand">
@@ -396,7 +396,7 @@ export default function CheckoutPage() {
     "w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold text-brand">

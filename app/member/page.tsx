@@ -245,14 +245,14 @@ export default function MemberDashboardPage() {
   // 需註冊為會員才能進入，未登入顯示註冊引導
   if (isMember === null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>
       </div>
     );
   }
   if (!isMember) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-page flex flex-col">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
           <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
             <Link href="/" className="text-xl font-bold text-brand hover:opacity-90 transition-colors">
@@ -313,7 +313,7 @@ export default function MemberDashboardPage() {
     status === "PAID" || status === "PENDING";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link

@@ -30,7 +30,7 @@ export default function BookingSuccessPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-page">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm shrink-0">
         <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold text-brand">

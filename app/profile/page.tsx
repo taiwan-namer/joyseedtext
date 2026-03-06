@@ -92,14 +92,14 @@ export default function ProfilePage() {
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-10 bg-white border-b border-gray-100 shadow-sm">
         <div className="mx-auto max-w-2xl px-4 h-14 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">

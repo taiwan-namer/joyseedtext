@@ -12,10 +12,12 @@ function envTrim(key: string): string {
 
 const DEFAULT_SITE_NAME = "童趣島";
 const DEFAULT_PRIMARY_COLOR = "#F59E0B"; // Tailwind amber-500
+const DEFAULT_BACKGROUND_COLOR = "#fafaf9"; // 淺色柔和
 
 export type StoreSettings = {
   siteName: string;
   primaryColor: string;
+  backgroundColor: string;
   socialFbUrl: string;
   socialIgUrl: string;
   socialLineUrl: string;
@@ -43,13 +45,14 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("store_settings")
-      .select("site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address")
+      .select("site_name, primary_color, background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address")
       .eq("merchant_id", merchantId || "")
       .maybeSingle();
     if (error || !data) {
       return {
         siteName: DEFAULT_SITE_NAME,
         primaryColor: DEFAULT_PRIMARY_COLOR,
+        backgroundColor: DEFAULT_BACKGROUND_COLOR,
         socialFbUrl: "",
         socialIgUrl: "",
         socialLineUrl: "",
@@ -62,6 +65,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     return {
       siteName: trim(data.site_name) || DEFAULT_SITE_NAME,
       primaryColor: trim(data.primary_color) || DEFAULT_PRIMARY_COLOR,
+      backgroundColor: trim(data.background_color) || DEFAULT_BACKGROUND_COLOR,
       socialFbUrl: trim(data.social_fb_url),
       socialIgUrl: trim(data.social_ig_url),
       socialLineUrl: trim(data.social_line_url),
@@ -73,6 +77,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     return {
       siteName: DEFAULT_SITE_NAME,
       primaryColor: DEFAULT_PRIMARY_COLOR,
+      backgroundColor: DEFAULT_BACKGROUND_COLOR,
       socialFbUrl: "",
       socialIgUrl: "",
       socialLineUrl: "",
@@ -140,10 +145,11 @@ export async function updateFaqItems(
   }
 }
 
-/** 更新基本資料（網站名字、主色系、社群連結、聯絡資訊） */
+/** 更新基本資料（網站名字、主色系、背景色、社群連結、聯絡資訊） */
 export async function updateStoreSettings(
   siteName: string,
   primaryColor: string,
+  backgroundColor: string,
   socialFbUrl?: string,
   socialIgUrl?: string,
   socialLineUrl?: string,
@@ -159,6 +165,7 @@ export async function updateStoreSettings(
     }
     const name = siteName?.trim() || DEFAULT_SITE_NAME;
     const color = primaryColor?.trim() || DEFAULT_PRIMARY_COLOR;
+    const bgColor = backgroundColor?.trim() || DEFAULT_BACKGROUND_COLOR;
     const trim = (s: string | undefined) => (typeof s === "string" ? s.trim() : "") || null;
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -168,6 +175,7 @@ export async function updateStoreSettings(
           merchant_id: merchantId,
           site_name: name,
           primary_color: color,
+          background_color: bgColor,
           social_fb_url: trim(socialFbUrl),
           social_ig_url: trim(socialIgUrl),
           social_line_url: trim(socialLineUrl),
