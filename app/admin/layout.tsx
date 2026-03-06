@@ -1,5 +1,5 @@
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import AdminShell from "./AdminShell";
 
 const ADMIN_SESSION_COOKIE = "admin_session";
@@ -7,7 +7,7 @@ const ADMIN_SESSION_COOKIE = "admin_session";
 /**
  * 後台 layout：未登入時先於此 redirect 至登入頁，避免先渲染後台殼再跳轉。
  * /admin/login、/admin/logout 不驗證，直接渲染 children。
- * 外層 try-catch 避免 Vercel 上 headers/cookies 異常時整頁崩潰，改導向登入頁。
+ * catch 時用 unstable_rethrow 讓 redirect() 等框架錯誤正確傳遞，否則會出現 Application error。
  */
 export default async function AdminLayout({
   children,
@@ -30,10 +30,12 @@ export default async function AdminLayout({
     }
 
     return <AdminShell>{children}</AdminShell>;
-  } catch {
+  } catch (e) {
+    unstable_rethrow(e);
     try {
       redirect("/admin/login?next=%2Fadmin");
-    } catch {
+    } catch (e2) {
+      unstable_rethrow(e2);
       throw new Error("無法驗證後台，請直接前往 /admin/login");
     }
   }
