@@ -41,6 +41,7 @@ export default function WonderVoyageHomePage() {
   const {
     siteName,
     primaryColor,
+    aboutSectionBackgroundColor,
     socialFbUrl,
     socialIgUrl,
     socialLineUrl,
@@ -150,9 +151,9 @@ export default function WonderVoyageHomePage() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-6xl">
-        {/* 2. Hero 主圖（有設定圖片才顯示）；底色與圖片融合，底部漸層過渡至頁面 */}
+        {/* 2. Hero 主圖（有設定圖片才顯示）；緊貼 header 無間隙，底色與圖片融合 */}
         {heroImageUrl && (
-          <section className="px-4 pt-6 pb-4">
+          <section className="px-4 pt-0 pb-4">
             <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
               <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none" aria-hidden />
@@ -163,7 +164,7 @@ export default function WonderVoyageHomePage() {
         {/* 3. 輪播牆（由前台設定） */}
         {carouselList.length > 0 && (
           <section className="px-4 py-4">
-            <div className="relative w-full aspect-[2/1] max-h-48 rounded-xl overflow-hidden">
+            <div className="relative w-full aspect-[12/5] rounded-xl overflow-hidden">
               {carouselList.map((item, i) => (
                 <div
                   key={item.id}
@@ -310,7 +311,7 @@ export default function WonderVoyageHomePage() {
 
       {/* 4.5 關於我們（後台前台設定可編輯富文本） */}
       {(aboutContent != null && aboutContent.trim() !== "") && (
-        <section id="about" className="bg-white py-12 px-4 scroll-mt-20 border-t border-gray-100">
+        <section id="about" className="py-12 px-4 scroll-mt-20 border-t border-gray-100" style={{ backgroundColor: aboutSectionBackgroundColor }}>
           <div className="mx-auto max-w-6xl">
             <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">{navAboutLabel || "關於我們"}</h2>
             <div

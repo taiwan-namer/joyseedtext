@@ -35,6 +35,7 @@ export default function AdminSettingsPage() {
   const [siteName, setSiteName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#F59E0B");
   const [backgroundColor, setBackgroundColor] = useState("#fafaf9");
+  const [aboutSectionBackgroundColor, setAboutSectionBackgroundColor] = useState("#ffffff");
   const [socialFbUrl, setSocialFbUrl] = useState("");
   const [socialIgUrl, setSocialIgUrl] = useState("");
   const [socialLineUrl, setSocialLineUrl] = useState("");
@@ -58,6 +59,7 @@ export default function AdminSettingsPage() {
       setSiteName(s.siteName);
       setPrimaryColor(s.primaryColor);
       setBackgroundColor(s.backgroundColor ?? "#fafaf9");
+      setAboutSectionBackgroundColor(s.aboutSectionBackgroundColor ?? "#ffffff");
       const fb = (s.socialFbUrl ?? "").trim();
       const ig = (s.socialIgUrl ?? "").trim();
       const line = (s.socialLineUrl ?? "").trim();
@@ -82,6 +84,7 @@ export default function AdminSettingsPage() {
         siteName,
         primaryColor,
         backgroundColor,
+        aboutSectionBackgroundColor,
         socialFbOn ? socialFbUrl : "",
         socialIgOn ? socialIgUrl : "",
         socialLineOn ? socialLineUrl : "",
@@ -151,6 +154,31 @@ export default function AdminSettingsPage() {
             </span>
           </div>
           <p className="mt-2 text-xs text-gray-500">滿意後再按「儲存」即可套用至前台。</p>
+        </div>
+      </div>
+      {/* 上下配色示意：上方導覽列 + 關於我們區塊，感受顏色變化 */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <p className="mb-3 text-sm font-medium text-gray-700">上下配色示意（頁面底色 → 關於我們區塊）</p>
+        <div className="rounded-lg border border-gray-200 overflow-hidden">
+          <div
+            className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-200/80 transition-colors"
+            style={{ backgroundColor }}
+          >
+            <span className="text-sm font-bold" style={{ color: primaryColor }}>{siteName || "童趣島"}</span>
+            <div className="flex gap-2 text-xs">
+              <span style={{ color: primaryColor }}>關於我們</span>
+              <span className="text-gray-500">課程介紹</span>
+              <span className="text-gray-500">課程預約</span>
+              <span className="text-gray-500">常見問題</span>
+            </div>
+          </div>
+          <div
+            className="px-3 py-4 transition-colors"
+            style={{ backgroundColor: aboutSectionBackgroundColor }}
+          >
+            <p className="text-xs text-gray-500 mb-1">關於我們區塊底色</p>
+            <p className="text-sm text-gray-700">此區為首頁「關於我們」區塊，可感受與上方欄位的配色變化。</p>
+          </div>
         </div>
       </div>
 
@@ -256,6 +284,55 @@ export default function AdminSettingsPage() {
             ))}
           </div>
           <p className="mt-2 text-xs text-gray-500">點選色票或使用自訂色塊／色碼，可於上方「目前底色示意」即時預覽。</p>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-gray-700">關於我們區塊背景色</label>
+          <p className="mb-2 text-xs text-gray-500">首頁「關於我們」區塊的底色，與頁面背景色分開。可於上方「上下配色示意」預覽與導覽列的配色變化。</p>
+          <div className="mb-4 rounded-lg border border-gray-200 overflow-hidden">
+            <p className="px-3 py-1.5 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">關於我們區塊底色示意</p>
+            <div
+              className="h-14 w-full transition-colors"
+              style={{ backgroundColor: aboutSectionBackgroundColor }}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <input
+              type="color"
+              value={aboutSectionBackgroundColor}
+              onChange={(e) => setAboutSectionBackgroundColor(e.target.value)}
+              className="h-10 w-14 cursor-pointer rounded border border-gray-300 p-0.5 bg-white"
+              disabled={isPending}
+            />
+            <input
+              type="text"
+              value={aboutSectionBackgroundColor}
+              onChange={(e) => setAboutSectionBackgroundColor(e.target.value)}
+              className="w-28 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
+              placeholder="#ffffff"
+              disabled={isPending}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {SOFT_BACKGROUND_PALETTE.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                onClick={() => setAboutSectionBackgroundColor(hex)}
+                className={`h-8 w-8 rounded-lg border-2 shadow-sm transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 ${
+                  aboutSectionBackgroundColor.toLowerCase() === hex.toLowerCase()
+                    ? "border-amber-500 ring-2 ring-amber-500/30"
+                    : "border-gray-300"
+                }`}
+                style={{ backgroundColor: hex }}
+                title={hex}
+              >
+                {aboutSectionBackgroundColor.toLowerCase() === hex.toLowerCase() ? (
+                  <Check className="mx-auto h-4 w-4 text-gray-600" strokeWidth={2.5} />
+                ) : null}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="border-t border-gray-200 pt-6">

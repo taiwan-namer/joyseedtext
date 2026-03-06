@@ -7,6 +7,7 @@ const StoreSettingsContext = createContext<StoreSettings>({
   siteName: "童趣島",
   primaryColor: "#F59E0B",
   backgroundColor: "#fafaf9",
+  aboutSectionBackgroundColor: "#ffffff",
   socialFbUrl: "",
   socialIgUrl: "",
   socialLineUrl: "",
@@ -41,6 +42,7 @@ export function StoreSettingsProvider({
       initial.siteName,
       initial.primaryColor,
       initial.backgroundColor,
+      initial.aboutSectionBackgroundColor,
       initial.socialFbUrl,
       initial.socialIgUrl,
       initial.socialLineUrl,
@@ -55,10 +57,11 @@ export function StoreSettingsProvider({
     root.style.setProperty("--color-primary", value.primaryColor);
     root.style.setProperty("--color-primary-hover", darkenHex(value.primaryColor, 0.85));
     root.style.setProperty("--color-background", value.backgroundColor);
+    root.style.setProperty("--color-about-section-bg", value.aboutSectionBackgroundColor);
     if (typeof document !== "undefined" && document.body) {
       document.body.style.backgroundColor = value.backgroundColor;
     }
-  }, [value.primaryColor, value.backgroundColor]);
+  }, [value.primaryColor, value.backgroundColor, value.aboutSectionBackgroundColor]);
 
   return (
     <StoreSettingsContext.Provider value={value}>

@@ -7,6 +7,7 @@
   --color-primary: #f59e0b;
   --color-primary-hover: #d97706;
   --color-background: #fafaf9;
+  --color-about-section-bg: #ffffff;
 }
 /* 前台頁面底色（依設定變更） */
 .bg-page { background-color: var(--color-background); }
