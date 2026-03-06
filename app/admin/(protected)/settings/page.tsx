@@ -134,34 +134,13 @@ export default function AdminSettingsPage() {
         設定網站名稱、主色系與背景色，前台會依此顯示。下方示範區可先預覽再儲存，無須反覆至前台查看。
       </p>
 
-      {/* 示範區：主色系與背景色即時預覽（未儲存前可見） */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <p className="mb-3 text-sm font-medium text-gray-700">示範區（儲存前可預覽）</p>
-        <div
-          className="rounded-lg border border-gray-200 p-4 transition-colors"
-          style={{ backgroundColor }}
-        >
-          <p className="mb-2 text-xs text-gray-500">頁面底色</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className="inline-block rounded-lg px-3 py-1.5 text-sm font-medium text-white"
-              style={{ backgroundColor: primaryColor }}
-            >
-              主色按鈕
-            </span>
-            <span className="text-sm text-gray-700" style={{ color: primaryColor }}>
-              主色連結 · {siteName || "網站名稱"}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-gray-500">滿意後再按「儲存」即可套用至前台。</p>
-        </div>
-      </div>
-      {/* 上下配色示意：上方導覽列 + 關於我們區塊，感受顏色變化 */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <p className="mb-3 text-sm font-medium text-gray-700">上下配色示意（頁面底色 → 關於我們區塊）</p>
-        <div className="rounded-lg border border-gray-200 overflow-hidden">
+      {/* 整合示範區 + 上下配色：一區塊體驗三種配色（頁面底色、關於我們區塊底色、主色） */}
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p className="mb-4 text-sm font-medium text-gray-700">示範區（儲存前可預覽）— 一區塊體驗三種配色變化</p>
+        <div className="rounded-lg border border-gray-200 overflow-hidden min-h-[200px]">
+          {/* 上方：頁面底色（導覽列） */}
           <div
-            className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-200/80 transition-colors"
+            className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200/80 transition-colors"
             style={{ backgroundColor }}
           >
             <span className="text-sm font-bold" style={{ color: primaryColor }}>{siteName || "童趣島"}</span>
@@ -172,14 +151,27 @@ export default function AdminSettingsPage() {
               <span className="text-gray-500">常見問題</span>
             </div>
           </div>
+          {/* 下方：關於我們區塊底色 + 主色按鈕／連結／網站名稱 */}
           <div
-            className="px-3 py-4 transition-colors"
+            className="px-4 py-6 transition-colors"
             style={{ backgroundColor: aboutSectionBackgroundColor }}
           >
-            <p className="text-xs text-gray-500 mb-1">關於我們區塊底色</p>
-            <p className="text-sm text-gray-700">此區為首頁「關於我們」區塊，可感受與上方欄位的配色變化。</p>
+            <p className="text-xs text-gray-500 mb-2">關於我們區塊底色</p>
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+              <span
+                className="inline-block rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+                style={{ backgroundColor: primaryColor }}
+              >
+                主色按鈕
+              </span>
+              <span className="text-sm text-gray-700" style={{ color: primaryColor }}>
+                主色連結 · {siteName || "網站名稱"}
+              </span>
+            </div>
+            <p className="text-sm text-gray-600">此區為首頁「關於我們」區塊，可感受與上方欄位的配色變化。</p>
           </div>
         </div>
+        <p className="mt-3 text-xs text-gray-500">滿意後再按「儲存」即可套用至前台。</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -516,7 +508,7 @@ export default function AdminSettingsPage() {
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="請輸入現有後台密碼或萬能鑰匙"
+            placeholder="請輸入現有後台密碼"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
             disabled={passwordPending}
             autoComplete="current-password"

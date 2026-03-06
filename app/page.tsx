@@ -138,7 +138,7 @@ export default function WonderVoyageHomePage() {
     <div className="min-h-screen bg-page flex flex-col">
       {/* 1. Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-        <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-2">
+        <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between gap-2">
           <h1 className="text-xl font-bold text-brand shrink-0">{siteName}</h1>
           <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0 overflow-x-auto scrollbar-hide">
             <a href="#about" className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">{navAboutLabel || "關於我們"}</a>
@@ -150,7 +150,7 @@ export default function WonderVoyageHomePage() {
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-6xl">
+      <main className="flex-1 mx-auto w-full max-w-7xl">
         {/* 2. Hero 主圖（有設定圖片才顯示）；緊貼 header 無間隙，底色與圖片融合 */}
         {heroImageUrl && (
           <section className="px-4 pt-0 pb-4">
@@ -201,7 +201,7 @@ export default function WonderVoyageHomePage() {
 
       {/* 4. 熱門課程 - 全寬區塊，橫向輪播卡片（連動後台新增課程） */}
       <section className="w-full py-6 pb-8 relative bg-page">
-        <div className="max-w-6xl mx-auto px-4 mb-4">
+        <div className="max-w-7xl mx-auto px-4 mb-4">
           <h2 className="text-lg font-semibold text-gray-800">熱門課程</h2>
         </div>
         <div className="relative w-full">
@@ -294,7 +294,7 @@ export default function WonderVoyageHomePage() {
           </div>
         </div>
         {/* 輪播指示點：點擊可跳至該課程 */}
-        <div className="max-w-6xl mx-auto px-4 flex justify-center gap-2 mt-4">
+        <div className="max-w-7xl mx-auto px-4 flex justify-center gap-2 mt-4">
           {activities.map((_, i) => (
             <button
               key={i}
@@ -312,7 +312,7 @@ export default function WonderVoyageHomePage() {
       {/* 4.5 關於我們（後台前台設定可編輯富文本） */}
       {(aboutContent != null && aboutContent.trim() !== "") && (
         <section id="about" className="py-12 px-4 scroll-mt-20 border-t border-gray-100" style={{ backgroundColor: aboutSectionBackgroundColor }}>
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-7xl">
             <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">{navAboutLabel || "關於我們"}</h2>
             <div
               className="prose prose-gray max-w-none text-gray-700"
@@ -324,7 +324,7 @@ export default function WonderVoyageHomePage() {
 
       {/* 5. 常見問題 */}
       <section id="faq" className="bg-white py-12 px-4 scroll-mt-20">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-7xl">
           <h2 className="text-xl font-bold text-gray-900 mb-8 text-center">常見問題</h2>
           <FAQ />
         </div>
@@ -332,7 +332,7 @@ export default function WonderVoyageHomePage() {
 
       {/* 5.5 聯絡區：左側店名＋聯絡＋社群，右側地圖；下方隱私權／服務條款 */}
       <section className="bg-page border-t border-gray-100 py-12 px-4">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-7xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             <div className="space-y-6">
               {(hasContact || hasSocialLinks) && (
@@ -449,7 +449,7 @@ export default function WonderVoyageHomePage() {
 
       {/* 6. Footer */}
       <footer className="bg-white border-t border-gray-100 mt-auto">
-        <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mx-auto max-w-7xl px-4 py-8">
           <div className="text-center text-gray-400 text-sm">
             <p>© 2026 {siteName} WonderVoyage 版權所有</p>
           </div>
