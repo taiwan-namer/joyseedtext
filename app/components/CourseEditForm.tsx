@@ -2,7 +2,6 @@
 
 import React, { useState, useTransition, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createCourseFull, updateCourseFull, type CourseForEdit } from "@/app/actions/productActions";
 import { Loader2, ChevronRight, ChevronLeft, ChevronRight as ChevronRightArrow, X, Plus } from "lucide-react";
 import {
@@ -298,7 +297,6 @@ export default function CourseEditForm({
     { value: "2", label: "6-9歲" },
     { value: "3", label: "可大人陪同" },
   ] as const;
-  const router = useRouter();
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const editorRef = useRef<HTMLDivElement>(null);
   const postContentHiddenRef = useRef<HTMLInputElement>(null);
@@ -378,7 +376,7 @@ export default function CourseEditForm({
           setAddonItems([]);
           form.reset();
           if (editorRef.current) editorRef.current.innerHTML = "";
-          if ("id" in result && result.id) router.push(`/course/${result.id}`);
+          if ("id" in result && result.id) window.open(`/course/${result.id}`, "_blank");
         }
       } else {
         setError(result.error);

@@ -332,6 +332,18 @@ export default function CheckoutPage() {
       setSubmitError("請填寫家長手機");
       return;
     }
+    if (!childName.trim()) {
+      setSubmitError("請填寫小孩暱稱");
+      return;
+    }
+    if (hasAllergyOrGenetic && !childAllergyDetail.trim()) {
+      setSubmitError("請填寫過敏或遺傳疾病說明");
+      return;
+    }
+    if (!childAge.trim()) {
+      setSubmitError("請填寫小孩年齡");
+      return;
+    }
     if (!course || !("id" in course) || !course.id) {
       setSubmitError("課程資料不完整，請重新選擇");
       return;
@@ -459,7 +471,7 @@ export default function CheckoutPage() {
                     htmlFor="parentName"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    家長姓名
+                    家長姓名 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="parentName"
@@ -468,6 +480,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setParentName(e.target.value)}
                     placeholder="請輸入家長姓名"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
@@ -475,7 +488,7 @@ export default function CheckoutPage() {
                     htmlFor="parentPhone"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    家長手機
+                    家長手機 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="parentPhone"
@@ -484,6 +497,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setParentPhone(e.target.value)}
                     placeholder="請輸入手機號碼"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
@@ -491,7 +505,7 @@ export default function CheckoutPage() {
                     htmlFor="memberEmail"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    報名信箱 <span className="text-amber-600">（必填，用於訂單查詢與會員資料）</span>
+                    報名信箱 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="memberEmail"
@@ -500,6 +514,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setMemberEmail(e.target.value)}
                     placeholder="請輸入常用 E-mail"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
@@ -507,7 +522,7 @@ export default function CheckoutPage() {
                     htmlFor="childName"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    小孩暱稱
+                    小孩暱稱 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="childName"
@@ -516,11 +531,12 @@ export default function CheckoutPage() {
                     onChange={(e) => setChildName(e.target.value)}
                     placeholder="請輸入小孩暱稱（例：小米）"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    小孩有無過敏或其他遺傳疾病
+                    小孩有無過敏或其他遺傳疾病 <span className="text-amber-600">（必填）</span>
                   </label>
                   <div className="flex gap-4 mb-2">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -549,9 +565,10 @@ export default function CheckoutPage() {
                       type="text"
                       value={childAllergyDetail}
                       onChange={(e) => setChildAllergyDetail(e.target.value)}
-                      placeholder="例：蠶豆症"
+                      placeholder="例：蠶豆症（必填）"
                       className={inputBase}
                       aria-label="過敏或遺傳疾病說明"
+                      required
                     />
                   )}
                 </div>
@@ -560,7 +577,7 @@ export default function CheckoutPage() {
                     htmlFor="childAge"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    小孩年齡
+                    小孩年齡 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="childAge"
@@ -569,6 +586,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setChildAge(e.target.value)}
                     placeholder="請填寫小孩年齡，例：5 歲"
                     className={inputBase}
+                    required
                   />
                 </div>
               </div>
