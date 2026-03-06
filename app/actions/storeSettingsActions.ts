@@ -39,57 +39,72 @@ function getDefaultFaqItems(): FaqItem[] {
   }));
 }
 
+/** 較早 migration 已存在的欄位（production 未跑新 migration 時仍可讀取） */
+const STORE_SETTINGS_SELECT_LEGACY =
+  "site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address";
+
+const STORE_SETTINGS_SELECT_FULL =
+  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address";
+
+function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
+  const trim = (v: unknown) => (typeof v === "string" ? v.trim() : "") || "";
+  return {
+    siteName: trim(raw.site_name) || DEFAULT_SITE_NAME,
+    primaryColor: trim(raw.primary_color) || DEFAULT_PRIMARY_COLOR,
+    backgroundColor: trim(raw.background_color) || DEFAULT_BACKGROUND_COLOR,
+    aboutSectionBackgroundColor: trim(raw.about_section_background_color) || DEFAULT_ABOUT_SECTION_BG,
+    socialFbUrl: trim(raw.social_fb_url),
+    socialIgUrl: trim(raw.social_ig_url),
+    socialLineUrl: trim(raw.social_line_url),
+    contactEmail: trim(raw.contact_email),
+    contactPhone: trim(raw.contact_phone),
+    contactAddress: trim(raw.contact_address),
+  };
+}
+
 /** 取得目前店家的基本資料（網站名字、主色系、社群連結），無則回傳預設 */
 export async function getStoreSettings(): Promise<StoreSettings> {
   unstable_noStore();
+  const fallback = (): StoreSettings => ({
+    siteName: DEFAULT_SITE_NAME,
+    primaryColor: DEFAULT_PRIMARY_COLOR,
+    backgroundColor: DEFAULT_BACKGROUND_COLOR,
+    aboutSectionBackgroundColor: DEFAULT_ABOUT_SECTION_BG,
+    socialFbUrl: "",
+    socialIgUrl: "",
+    socialLineUrl: "",
+    contactEmail: "",
+    contactPhone: "",
+    contactAddress: "",
+  });
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  const supabase = createServerSupabase();
+
   try {
-    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("store_settings")
-      .select("site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address")
+      .select(STORE_SETTINGS_SELECT_FULL)
+      .eq("merchant_id", merchantId || "")
+      .maybeSingle();
+    if (!error && data) {
+      return parseStoreSettingsRow(data as Record<string, unknown>);
+    }
+  } catch {
+    /* 可能為新欄位尚未存在，改試僅基本欄位 */
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("store_settings")
+      .select(STORE_SETTINGS_SELECT_LEGACY)
       .eq("merchant_id", merchantId || "")
       .maybeSingle();
     if (error || !data) {
-      return {
-        siteName: DEFAULT_SITE_NAME,
-        primaryColor: DEFAULT_PRIMARY_COLOR,
-        backgroundColor: DEFAULT_BACKGROUND_COLOR,
-        aboutSectionBackgroundColor: DEFAULT_ABOUT_SECTION_BG,
-        socialFbUrl: "",
-        socialIgUrl: "",
-        socialLineUrl: "",
-        contactEmail: "",
-        contactPhone: "",
-        contactAddress: "",
-      };
+      return fallback();
     }
-    const trim = (v: unknown) => (typeof v === "string" ? v.trim() : "") || "";
-    return {
-      siteName: trim(data.site_name) || DEFAULT_SITE_NAME,
-      primaryColor: trim(data.primary_color) || DEFAULT_PRIMARY_COLOR,
-      backgroundColor: trim(data.background_color) || DEFAULT_BACKGROUND_COLOR,
-      aboutSectionBackgroundColor: trim(data.about_section_background_color) || DEFAULT_ABOUT_SECTION_BG,
-      socialFbUrl: trim(data.social_fb_url),
-      socialIgUrl: trim(data.social_ig_url),
-      socialLineUrl: trim(data.social_line_url),
-      contactEmail: trim(data.contact_email),
-      contactPhone: trim(data.contact_phone),
-      contactAddress: trim(data.contact_address),
-    };
+    return parseStoreSettingsRow(data as Record<string, unknown>);
   } catch {
-    return {
-      siteName: DEFAULT_SITE_NAME,
-      primaryColor: DEFAULT_PRIMARY_COLOR,
-      backgroundColor: DEFAULT_BACKGROUND_COLOR,
-      aboutSectionBackgroundColor: DEFAULT_ABOUT_SECTION_BG,
-      socialFbUrl: "",
-      socialIgUrl: "",
-      socialLineUrl: "",
-      contactEmail: "",
-      contactPhone: "",
-      contactAddress: "",
-    };
+    return fallback();
   }
 }
 
