@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { newebpayAesEncrypt, newebpayTradeSha, newebpayQueryString } from "@/lib/payment-utils";
+import {
+  newebpayBuildTradeInfoString,
+  newebpayEncryptTradeInfo,
+  newebpayGetTradeSha,
+  newebpaySanitizeItemDesc,
+} from "@/lib/crypto-utils";
 
 const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/main/standard";
 const NEWEBPAY_PRODUCTION_URL = "https://core.newebpay.com/MPG/mpg_gateway";
@@ -60,6 +65,7 @@ function escapeAttr(s: string): string {
  * 依 pendingId 從 pending_payments 取得待付款，組藍新參數並回傳自動 POST 表單。未付款不寫入 bookings。
  */
 export async function GET(request: NextRequest) {
+  console.log("--- NewebPay Start ---");
   const pendingId = request.nextUrl.searchParams.get("pendingId");
   const bookingIdLegacy = request.nextUrl.searchParams.get("bookingId");
   if (!pendingId && !bookingIdLegacy) {
@@ -121,7 +127,7 @@ export async function GET(request: NextRequest) {
   const returnUrl = `${baseUrl}/api/newebpay/callback/return`;
   const notifyUrl = `${baseUrl}/api/newebpay/callback`;
 
-  // MPG 2.0：TradeInfo 明文必填欄位（精確對應藍新規格），加密前 Query String
+  // MPG 2.0：TradeInfo 明文必填欄位（MerchantID, RespondType=JSON, TimeStamp, Version=2.0, MerchantOrderNo, Amt, ItemDesc, LoginType=0）
   const timeStamp = Math.floor(Date.now() / 1000).toString();
   const tradeInfoObj: Record<string, string> = {
     MerchantID: creds.merchantId,
@@ -130,35 +136,26 @@ export async function GET(request: NextRequest) {
     Version: "2.0",
     MerchantOrderNo: merchantOrderNo,
     Amt: String(amount),
-    ItemDesc: "Booking",
+    ItemDesc: newebpaySanitizeItemDesc("Booking"),
     LoginType: "0",
     ReturnURL: returnUrl,
     NotifyURL: notifyUrl,
   };
   if (userEmail) tradeInfoObj.Email = userEmail;
 
-  const tradeInfoPlain = newebpayQueryString(tradeInfoObj, { sort: false });
-  console.log("Raw TradeInfo:", tradeInfoPlain);
-
-  let tradeInfoHex: string;
+  const rawData = newebpayBuildTradeInfoString(tradeInfoObj);
+  let tradeInfo: string;
   try {
-    tradeInfoHex = newebpayAesEncrypt(tradeInfoPlain, creds.hashKey, creds.hashIv);
+    tradeInfo = newebpayEncryptTradeInfo(rawData, creds.hashKey, creds.hashIv);
   } catch (e) {
     console.error("[NewebPay checkout] AES 加密失敗", e);
     return htmlErrorPage("加密錯誤", "TradeInfo 加密失敗，請確認 HashKey（32 字元）與 HashIV（16 字元）設定正確。");
   }
-  const tradeSha = newebpayTradeSha(tradeInfoHex, creds.hashKey, creds.hashIv);
+  const tradeSha = newebpayGetTradeSha(tradeInfo, creds.hashKey, creds.hashIv);
 
-  console.log("DEBUG_RAW_STR:", tradeInfoPlain);
-  console.log("DEBUG_TRADEINFO_HEX:", tradeInfoHex);
-  console.log("DEBUG_TRADESHA:", tradeSha);
-
-  console.log("[NewebPay checkout] 表單僅送出四欄位: MerchantID, TradeInfo(Hex), TradeSha, Version. 內容摘要:", {
-    MerchantID: creds.merchantId,
-    MerchantOrderNo: merchantOrderNo,
-    Amt: amount,
-    actionUrl: getNewebpayActionUrl(),
-  });
+  console.log("Raw Data:", rawData);
+  console.log("TradeInfo:", tradeInfo);
+  console.log("TradeSha:", tradeSha);
 
   const actionUrl = getNewebpayActionUrl();
   const html = `<!DOCTYPE html>
@@ -172,7 +169,7 @@ export async function GET(request: NextRequest) {
 <body>
   <form id="payment-form" method="POST" action="${escapeAttr(actionUrl)}">
     <input type="hidden" name="MerchantID" value="${escapeAttr(creds.merchantId)}" />
-    <input type="hidden" name="TradeInfo" value="${escapeAttr(tradeInfoHex)}" />
+    <input type="hidden" name="TradeInfo" value="${escapeAttr(tradeInfo)}" />
     <input type="hidden" name="TradeSha" value="${escapeAttr(tradeSha)}" />
     <input type="hidden" name="Version" value="2.0" />
   </form>
