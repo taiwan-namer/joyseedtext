@@ -30,10 +30,12 @@ export async function POST(request: NextRequest) {
   const parsedObject: Record<string, string> = {};
   let tradeInfoEnc = "";
   let tradeShaReceived = "";
+  let rawJsonBody: Record<string, unknown> | null = null;
 
   if (contentType.includes("application/json")) {
     try {
       const body = JSON.parse(rawBody) as Record<string, unknown>;
+      rawJsonBody = body;
       for (const k of Object.keys(body)) {
         parsedKeys.push(k);
         const v = body[k];
@@ -132,16 +134,30 @@ export async function POST(request: NextRequest) {
   const amt = getDec("Amt");
   const responseCode = getDec("ResponseCode");
 
+  const rawSuccess = rawJsonBody && (rawJsonBody.success === true || String(rawJsonBody.Status ?? "").toUpperCase() === "SUCCESS");
+  const rawPayStatus = rawJsonBody?.data && typeof rawJsonBody.data === "object"
+    ? String((rawJsonBody.data as Record<string, unknown>).payStatus ?? "").toUpperCase()
+    : "";
+  const rawStatusSuccess = rawPayStatus === "SUCCESS" || (rawJsonBody && String(rawJsonBody.Status ?? "").toUpperCase() === "SUCCESS");
+
   console.log("[NewebPay callback] after decrypt: Status:", statusVal, "TradeStatus:", tradeStatus, "Message:", message, "MerchantOrderNo:", merchantOrderNo, "TradeNo:", tradeNo, "Amt:", amt, "ResponseCode:", responseCode);
+  console.log("[NewebPay callback] from raw JSON: success:", rawJsonBody?.success, "Status:", rawJsonBody?.Status, "data.payStatus:", rawPayStatus || "(none)");
 
   const isSuccess =
     statusVal.toUpperCase() === "SUCCESS" ||
     tradeStatus === "1" ||
-    String(responseCode).toUpperCase() === "SUCCESS";
+    String(responseCode).toUpperCase() === "SUCCESS" ||
+    rawSuccess === true ||
+    rawStatusSuccess;
 
   if (!isSuccess) {
-    console.log("[NewebPay callback] 非成功 (Status:", statusVal, "TradeStatus:", tradeStatus, "ResponseCode:", responseCode, ") 仍回 200");
+    console.log("[NewebPay callback] 非成功 (decrypt Status:", statusVal, "TradeStatus:", tradeStatus, "raw success:", rawSuccess, "rawPayStatus:", rawPayStatus, ") 仍回 200");
     return NextResponse.json({ message: "payment not success" });
+  }
+
+  if (!merchantOrderNo) {
+    console.log("[NewebPay callback] 判定成功但無 MerchantOrderNo，仍回 200");
+    return NextResponse.json({ message: "OK" });
   }
 
   const supabase = createServerSupabase();

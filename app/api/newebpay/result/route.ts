@@ -73,7 +73,23 @@ export async function POST(request: NextRequest) {
   console.log("[NewebPay result] parsed form object (each key -> value length):", Object.fromEntries(parsedKeys.map((k) => [k, (parsedObject[k] ?? "").length])));
 
   const getStr = (key: string): string => (parsedObject[key] ?? parsedObject[key.toLowerCase()] ?? "").trim();
-  const merchantOrderNoFromPlain = getStr("MerchantOrderNo") || getStr("OrderNo") || getStr("MerchantOrderNo");
+  let merchantOrderNoFromPlain = getStr("MerchantOrderNo") || getStr("OrderNo");
+  if (!merchantOrderNoFromPlain && contentType.includes("application/json")) {
+    try {
+      const body = JSON.parse(rawBody) as Record<string, unknown>;
+      if (typeof body.MerchantOrderNo === "string") merchantOrderNoFromPlain = body.MerchantOrderNo.trim();
+      if (!merchantOrderNoFromPlain && body.data && typeof body.data === "object") {
+        const d = body.data as Record<string, unknown>;
+        if (typeof d.MerchantOrderNo === "string") merchantOrderNoFromPlain = d.MerchantOrderNo.trim();
+      }
+      if (!merchantOrderNoFromPlain && body.Result && typeof body.Result === "object") {
+        const r = body.Result as Record<string, unknown>;
+        if (typeof r.MerchantOrderNo === "string") merchantOrderNoFromPlain = r.MerchantOrderNo.trim();
+      }
+    } catch {
+      // already parsed above
+    }
+  }
   const statusFromPlain = getStr("Status");
   const tradeStatusFromPlain = getStr("TradeStatus");
   const messageFromPlain = getStr("Message");
