@@ -121,17 +121,18 @@ export async function GET(request: NextRequest) {
   const returnUrl = `${baseUrl}/api/newebpay/callback/return`;
   const notifyUrl = `${baseUrl}/api/newebpay/callback`;
 
-  const tradeInfoObj: Record<string, string | number> = {
+  // MPG 2.0：TradeInfo 明文僅含必填欄位，組成 QueryString 後 AES 加密成 Hex，表單只送 MerchantID / TradeInfo / TradeSha / Version
+  const tradeInfoObj: Record<string, string> = {
     MerchantID: creds.merchantId,
     RespondType: "JSON",
-    TimeStamp: Math.floor(Date.now() / 1000),
+    TimeStamp: Math.floor(Date.now() / 1000).toString(),
     Version: "2.0",
     MerchantOrderNo: merchantOrderNo,
-    Amt: amount,
-    ItemDesc: "Course Booking",
+    Amt: String(amount),
+    ItemDesc: "CourseBooking",
+    LoginType: "0",
     ReturnURL: returnUrl,
     NotifyURL: notifyUrl,
-    LoginType: 0,
   };
   if (userEmail) tradeInfoObj.Email = userEmail;
 
@@ -145,12 +146,10 @@ export async function GET(request: NextRequest) {
   }
   const tradeSha = newebpayTradeSha(tradeInfo, creds.hashKey, creds.hashIv);
 
-  console.log("[NewebPay checkout] 送出參數（已隱藏金鑰）:", {
+  console.log("[NewebPay checkout] 表單僅送出四欄位: MerchantID, TradeInfo(Hex), TradeSha, Version. 內容摘要:", {
     MerchantID: creds.merchantId,
     MerchantOrderNo: merchantOrderNo,
     Amt: amount,
-    ReturnURL: returnUrl,
-    NotifyURL: notifyUrl,
     actionUrl: getNewebpayActionUrl(),
   });
 
