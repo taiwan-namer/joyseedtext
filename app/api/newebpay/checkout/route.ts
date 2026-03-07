@@ -167,14 +167,14 @@ export async function GET(request: NextRequest) {
   <style>body{font-family:system-ui,sans-serif;max-width:480px;margin:2rem auto;padding:0 1rem;text-align:center;color:#374151;}p{margin-top:1rem;}</style>
 </head>
 <body>
-  <form id="payment-form" method="POST" action="${escapeAttr(actionUrl)}">
+  <form method="post" action="${escapeAttr(actionUrl)}">
     <input type="hidden" name="MerchantID" value="${escapeAttr(creds.merchantId)}" />
     <input type="hidden" name="TradeInfo" value="${escapeAttr(tradeInfo)}" />
     <input type="hidden" name="TradeSha" value="${escapeAttr(tradeSha)}" />
     <input type="hidden" name="Version" value="2.0" />
   </form>
   <p>正在導向藍新付款頁…</p>
-  <script>document.getElementById("payment-form").submit();</script>
+  <script>document.forms[0].submit();</script>
 </body>
 </html>`;
 

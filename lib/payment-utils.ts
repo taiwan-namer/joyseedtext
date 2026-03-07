@@ -2,38 +2,7 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from "crypt
 
 // ========== 綠界 ECPay ==========
 
-/**
- * 綠界 AIO CheckMacValue（SHA256）。
- * 順序：參數 A-Z 排序 → 組合 HashKey=...&Amt=...&...&HashIV=... → encodeURIComponent → 小寫
- *       → 綠界官方字元取代（7 項）→ SHA256 → 結果轉大寫。
- */
-export function ecpayCheckMacValue(
-  params: Record<string, string>,
-  hashKey: string,
-  hashIv: string
-): string {
-  const sortedKeys = Object.keys(params)
-    .filter((k) => k !== "CheckMacValue" && params[k] !== undefined && String(params[k]).trim() !== "")
-    .sort();
-  const query = sortedKeys.map((k) => `${k}=${params[k]}`).join("&");
-  const beforeEncode = `HashKey=${hashKey}&${query}&HashIV=${hashIv}`;
-
-  const masked = `HashKey=***&${query}&HashIV=***`;
-  console.log("[ECPay CheckMac] 排序並加上 Key/IV 後的原始字串（Key/IV 已遮罩）:", masked);
-
-  let encoded = encodeURIComponent(beforeEncode).replace(/%20/g, "+").toLowerCase();
-  // 綠界官方要求：encode 並小寫後，必須手動執行以下 7 項字元取代
-  encoded = encoded
-    .replace(/%2d/g, "-")
-    .replace(/%5f/g, "_")
-    .replace(/%2e/g, ".")
-    .replace(/%21/g, "!")
-    .replace(/%2a/g, "*")
-    .replace(/%28/g, "(")
-    .replace(/%29/g, ")");
-  const hash = createHash("sha256").update(encoded, "utf8").digest("hex");
-  return hash.toUpperCase();
-}
+import { ecpayCheckMacValue } from "@/lib/crypto-utils";
 
 /**
  * 驗證綠界回傳的 CheckMacValue（回傳參數同樣用 HashKey/HashIV 計算後比對）。
