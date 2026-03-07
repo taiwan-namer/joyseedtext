@@ -33,7 +33,9 @@ export function ecpayCheckMacValue(
     .replace(/%28/g, "(")
     .replace(/%29/g, ")");
 
-  console.log("ECPAY_DEBUG_RAW:", encoded);
+  console.log("--- ECPAY_RAW_START ---");
+  console.log(encoded);
+  console.log("--- ECPAY_RAW_END ---");
 
   const hash = createHash("sha256").update(encoded, "utf8").digest("hex");
   return hash.toUpperCase();
@@ -77,7 +79,7 @@ export function newebpayEncryptTradeInfo(
   const cipher = createCipheriv("aes-256-cbc", key, iv);
   cipher.setAutoPadding(true);
   const enc = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
-  return enc.toString("hex");
+  return enc.toString("hex").toLowerCase();
 }
 
 /**

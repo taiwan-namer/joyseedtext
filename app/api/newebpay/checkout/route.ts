@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import {
-  newebpayBuildTradeInfoString,
-  newebpayEncryptTradeInfo,
-  newebpayGetTradeSha,
-} from "@/lib/crypto-utils";
+import { newebpayEncryptTradeInfo, newebpayGetTradeSha } from "@/lib/crypto-utils";
 
 const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/main/standard";
 const NEWEBPAY_PRODUCTION_URL = "https://core.newebpay.com/MPG/mpg_gateway";
@@ -126,35 +122,34 @@ export async function GET(request: NextRequest) {
   const returnUrl = `${baseUrl}/api/newebpay/callback/return`;
   const notifyUrl = `${baseUrl}/api/newebpay/callback`;
 
-  // MPG 2.0：TradeInfo 明文必填欄位，格式嚴格（Amt 整數、ItemDesc 底線無空格、TimeStamp 10 位、Version 字串 2.0）
+  // MPG 2.0：TradeInfo 明文 8 個必填欄位，固定順序，Amt 整數無小數、ItemDesc 無空格、Version 字串 2.0
   const timeStamp = Math.floor(Date.now() / 1000).toString();
-  const tradeInfoObj: Record<string, string> = {
-    MerchantID: creds.merchantId,
-    RespondType: "JSON",
-    TimeStamp: timeStamp,
-    Version: "2.0",
-    MerchantOrderNo: merchantOrderNo,
-    Amt: Math.round(amount).toString(),
-    ItemDesc: "Course_Booking",
-    LoginType: "0",
-    ReturnURL: returnUrl,
-    NotifyURL: notifyUrl,
-  };
-  if (userEmail) tradeInfoObj.Email = userEmail;
-
-  const rawTradeInfo = newebpayBuildTradeInfoString(tradeInfoObj);
-  console.log("NEWEBPAY_RAW_CONTENT:", rawTradeInfo);
+  const amt = Math.round(amount);
+  const rawData = [
+    `MerchantID=${creds.merchantId}`,
+    "RespondType=JSON",
+    `TimeStamp=${timeStamp}`,
+    "Version=2.0",
+    `MerchantOrderNo=${merchantOrderNo}`,
+    `Amt=${amt}`,
+    "ItemDesc=CourseBooking",
+    "LoginType=0",
+    `ReturnURL=${returnUrl}`,
+    `NotifyURL=${notifyUrl}`,
+  ].join("&");
 
   let tradeInfoHex: string;
   try {
-    tradeInfoHex = newebpayEncryptTradeInfo(rawTradeInfo, creds.hashKey, creds.hashIv);
+    tradeInfoHex = newebpayEncryptTradeInfo(rawData, creds.hashKey, creds.hashIv);
   } catch (e) {
     console.error("[NewebPay checkout] AES 加密失敗", e);
     return htmlErrorPage("加密錯誤", "TradeInfo 加密失敗，請確認 HashKey（32 字元）與 HashIV（16 字元）設定正確。");
   }
   const tradeSha = newebpayGetTradeSha(tradeInfoHex, creds.hashKey, creds.hashIv);
 
-  console.log("TradeInfo:", tradeInfoHex);
+  console.log("--- NEWEBPAY_FINAL_CHECK ---");
+  console.log("RawData:", rawData);
+  console.log("TradeInfoHex:", tradeInfoHex);
   console.log("TradeSha:", tradeSha);
 
   const actionUrl = getNewebpayActionUrl();
