@@ -615,7 +615,7 @@ export async function getMyBookings(): Promise<
 }
 
 /**
- * 後台訂單管理：撈取該 merchant 所有訂單，含課程名稱與圖片。
+ * 後台訂單管理：撈取該 merchant 的訂單。顯示：已付款、完成課程、以及「ATM 未付款」；其他未付款（如 LINE Pay／綠界／藍新未完成）不顯示。
  */
 export async function getAdminBookings(): Promise<
   | { success: true; data: BookingWithClass[] }
@@ -644,6 +644,7 @@ export async function getAdminBookings(): Promise<
         classes ( title, image_url, price, addon_prices )
       `)
       .eq("merchant_id", merchantId)
+      .or("status.in.(paid,completed),and(status.eq.unpaid,payment_method.eq.atm)")
       .order("created_at", { ascending: false });
 
     if (error) return { success: false, error: error.message };
@@ -957,7 +958,7 @@ export async function getRollcallDatesWithCounts(): Promise<
         .select("class_id, slot_date, slot_time")
         .eq("merchant_id", merchantId)
         .in("class_id", classIds)
-        .not("status", "eq", "cancelled");
+        .in("status", ["paid", "completed"]);
 
       if (!countError && countRows) {
         for (const b of countRows) {
@@ -1073,7 +1074,7 @@ export async function getRollcallSessionsByDate(
       .select("class_id, slot_date, slot_time")
       .eq("merchant_id", merchantId)
       .in("class_id", Array.from(new Set(classIds)))
-      .not("status", "eq", "cancelled");
+      .in("status", ["paid", "completed"]);
 
     if (countError) return { success: false, error: countError.message };
 
@@ -1163,6 +1164,7 @@ export async function getBookingsForSession(
       .eq("class_id", classId)
       .eq("slot_date", dateStr)
       .eq("slot_time", timeStr)
+      .in("status", ["paid", "completed"])
       .order("created_at", { ascending: true });
 
     if (bookingsError) return { success: false, error: bookingsError.message };

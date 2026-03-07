@@ -4,19 +4,23 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from "crypt
 
 /**
  * 綠界 CheckMacValue（SHA256）。
- * 步驟：參數依 key A-Z 排序 → Key1=Value1&Key2=Value2（Value 以 encodeURIComponent 編碼）→
- * 前加 HashKey、後加 HashIV → 整段 URLEncode → 轉小寫 → SHA256 → 轉大寫。
+ * 參數依 key A-Z 排序，Key=Value 串接（Value 先 encodeURIComponent，%20 改 +），
+ * 前加 HashKey、後加 HashIV，整段再 encodeURIComponent → 轉小寫 → SHA256 → 轉大寫。
  */
 export function ecpayCheckMacValue(
   params: Record<string, string>,
   hashKey: string,
   hashIv: string
 ): string {
-  const sortedKeys = Object.keys(params).filter((k) => k !== "CheckMacValue" && params[k] !== undefined && params[k] !== "").sort();
-  const query = sortedKeys.map((k) => `${k}=${encodeURIComponent(params[k]).replace(/%20/g, "+")}`).join("&");
+  const sortedKeys = Object.keys(params)
+    .filter((k) => k !== "CheckMacValue" && params[k] !== undefined && String(params[k]).trim() !== "")
+    .sort();
+  const query = sortedKeys
+    .map((k) => `${k}=${encodeURIComponent(params[k]).replace(/%20/g, "+")}`)
+    .join("&");
   const beforeHash = hashKey + query + hashIv;
   const encoded = encodeURIComponent(beforeHash).replace(/%20/g, "+").toLowerCase();
-  return createHash("sha256").update(encoded).digest("hex").toUpperCase();
+  return createHash("sha256").update(encoded, "utf8").digest("hex").toUpperCase();
 }
 
 /**

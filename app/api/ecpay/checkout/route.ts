@@ -92,7 +92,10 @@ export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "";
   const returnUrl = `${baseUrl}/api/ecpay/callback`;
 
-  const tradeNo = bookingId.replace(/-/g, "").slice(0, 20);
+  const tradeNo = (
+    Date.now().toString().slice(-10) +
+    bookingId.replace(/-/g, "").slice(0, 10)
+  ).slice(0, 20);
   const tradeDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
 
   await supabase
@@ -115,6 +118,16 @@ export async function GET(request: NextRequest) {
   };
 
   params.CheckMacValue = ecpayCheckMacValue(params, creds.hashKey, creds.hashIv);
+
+  console.log("[ECPay checkout] 送出參數（已隱藏金鑰）:", {
+    MerchantID: params.MerchantID,
+    MerchantTradeNo: params.MerchantTradeNo,
+    MerchantTradeDate: params.MerchantTradeDate,
+    TotalAmount: params.TotalAmount,
+    ReturnURL: params.ReturnURL,
+    CheckMacValue: params.CheckMacValue?.slice(0, 8) + "...",
+    actionUrl: getEcpayActionUrl(),
+  });
 
   const actionUrl = getEcpayActionUrl();
   const formFields = Object.entries(params)

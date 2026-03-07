@@ -116,6 +116,18 @@ export async function GET(request: NextRequest) {
   const tradeInfo = newebpayAesEncrypt(tradeInfoPlain, creds.hashKey, creds.hashIv);
   const tradeSha = newebpayTradeSha(tradeInfo, creds.hashKey, creds.hashIv);
 
+  console.log("[NewebPay checkout] 送出參數（已隱藏金鑰）:", {
+    MerchantID: creds.merchantId,
+    MerchantOrderNo: merchantOrderNo,
+    Amt: amount,
+    ReturnURL: returnUrl,
+    NotifyURL: notifyUrl,
+    TradeInfoPlain: tradeInfoPlain,
+    TradeInfoLength: tradeInfo.length,
+    TradeSha: tradeSha?.slice(0, 8) + "...",
+    actionUrl: getNewebpayActionUrl(),
+  });
+
   const actionUrl = getNewebpayActionUrl();
   const html = `<!DOCTYPE html>
 <html lang="zh-TW">
