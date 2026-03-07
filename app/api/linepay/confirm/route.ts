@@ -109,7 +109,10 @@ export async function GET(request: NextRequest) {
 
   console.log("[LINE Pay Confirm] 準備更新訂單:", orderId);
 
-  const updatePayload = { status: "paid" as const, line_pay_transaction_id: transactionId ?? "" };
+  const updatePayload: { status: "paid"; line_pay_transaction_id: string } = {
+    status: "paid",
+    line_pay_transaction_id: transactionId ?? "",
+  };
   const bookingsTable = supabase.from("bookings");
   const updateQuery = bookingsTable
     .update(updatePayload)
@@ -120,8 +123,10 @@ export async function GET(request: NextRequest) {
     : await updateQuery.eq("status", "unpaid").select("id").maybeSingle();
 
   if (updateError) {
-    console.log("[LINE Pay Confirm] 更新失敗:", updateError);
-    return redirectFail("更新訂單狀態失敗", updateError.message);
+    console.log("[LINE Pay Confirm] 更新失敗（完整 error 物件）:", JSON.stringify(updateError, null, 2));
+    console.log("[LINE Pay Confirm] updateError.message:", updateError.message);
+    const detailMsg = updateError.message ?? String(updateError);
+    return redirectFail("更新訂單狀態失敗", detailMsg);
   }
   if (!updateData) {
     const detail = isTestMode
