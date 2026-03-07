@@ -3,13 +3,13 @@ import { createHash, createCipheriv } from "crypto";
 // ========== 綠界 ECPay CheckMacValue ==========
 
 /**
- * 綠界 AIO CheckMacValue 生成流程：
- * 1. 10 個參數按 Key 字母 A-Z 排序
- * 2. 組成字串 HashKey=xxx&ChoosePayment=ALL&...&HashIV=xxx
- * 3. encodeURIComponent 並轉小寫
- * 4. 字元取代：%20->+ ，以及 %2d->- %5f->_ %2e->. %21->! %2a->* %28->( %29->)
- * 5. SHA256 加密
- * 6. 結果轉大寫
+ * 綠界 AIO CheckMacValue 生成流程（嚴格順序）：
+ * 1. 參數按 Key A-Z 排序
+ * 2. 組合 HashKey=...&Amt=...&...&HashIV=...
+ * 3. encodeURIComponent → 轉小寫
+ * 4. 空格：.replace(/%20/g, '+')
+ * 5. 7 個特殊符號取代：%2d->- %5f->_ %2e->. %21->! %2a->* %28->( %29->)
+ * 6. SHA256 加密 → 結果轉大寫
  */
 export function ecpayCheckMacValue(
   params: Record<string, string>,
@@ -33,7 +33,7 @@ export function ecpayCheckMacValue(
     .replace(/%28/g, "(")
     .replace(/%29/g, ")");
 
-  console.log("ECPay Raw String Before Hash:", encoded);
+  console.log("ECPAY_DEBUG_RAW:", encoded);
 
   const hash = createHash("sha256").update(encoded, "utf8").digest("hex");
   return hash.toUpperCase();
