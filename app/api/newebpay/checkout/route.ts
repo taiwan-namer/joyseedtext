@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesEncrypt, newebpayTradeSha, newebpayQueryString } from "@/lib/payment-utils";
 
-const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/main/standard";
+const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/mpg_gateway";
 const NEWEBPAY_PRODUCTION_URL = "https://core.newebpay.com/MPG/mpg_gateway";
 
 function getNewebpayCreds() {

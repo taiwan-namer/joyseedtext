@@ -96,7 +96,11 @@ export async function GET(request: NextRequest) {
     Date.now().toString().slice(-10) +
     bookingId.replace(/-/g, "").slice(0, 10)
   ).slice(0, 20);
-  const tradeDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
+  const tradeDate = new Date()
+    .toLocaleString("sv-SE")
+    .replace("T", " ")
+    .slice(0, 19)
+    .replace(/-/g, "/");
 
   await supabase
     .from("bookings")
