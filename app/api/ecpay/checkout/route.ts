@@ -124,7 +124,20 @@ export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "";
   const returnUrl = `${baseUrl}/api/ecpay/callback`;
 
-  // 綠界 AIO 必填欄位（缺一不可，且皆須出現在表單與 CheckMacValue 計算）
+  // 綠界 AIO 必填 10 欄位（缺一不可，表單與 CheckMacValue 計算皆須包含）
+  const ECPAY_AIO_REQUIRED_KEYS = [
+    "MerchantID",
+    "MerchantTradeNo",
+    "MerchantTradeDate",
+    "PaymentType",
+    "TotalAmount",
+    "TradeDesc",
+    "ItemName",
+    "ReturnURL",
+    "ChoosePayment",
+    "EncryptType",
+  ] as const;
+
   const params: Record<string, string> = {
     MerchantID: creds.merchantId,
     MerchantTradeNo: tradeNo,
@@ -137,17 +150,21 @@ export async function GET(request: NextRequest) {
     ChoosePayment: "ALL",
     EncryptType: "1",
   };
+
+  const missing = ECPAY_AIO_REQUIRED_KEYS.filter((k) => !params[k] || String(params[k]).trim() === "");
+  if (missing.length > 0) {
+    console.error("[ECPay checkout] 缺少必填參數:", missing);
+    return htmlErrorPage("參數錯誤", `綠界必填欄位遺漏: ${missing.join(", ")}`);
+  }
+
   params.CheckMacValue = ecpayCheckMacValue(params, creds.hashKey, creds.hashIv);
 
-  console.log("[ECPay checkout] 送出參數（已隱藏金鑰）:", {
-    MerchantID: params.MerchantID,
-    MerchantTradeNo: params.MerchantTradeNo,
-    MerchantTradeDate: params.MerchantTradeDate,
-    TotalAmount: params.TotalAmount,
-    ReturnURL: params.ReturnURL,
-    CheckMacValue: params.CheckMacValue?.slice(0, 8) + "...",
-    actionUrl: getEcpayActionUrl(),
-  });
+  const sentParamsLog: Record<string, string> = {};
+  for (const k of ECPAY_AIO_REQUIRED_KEYS) {
+    sentParamsLog[k] = params[k];
+  }
+  sentParamsLog.CheckMacValue = (params.CheckMacValue ?? "").slice(0, 8) + "...";
+  console.log("[ECPay checkout] 送出參數（10 個必填 + CheckMacValue）:", sentParamsLog, "actionUrl:", getEcpayActionUrl());
 
   const actionUrl = getEcpayActionUrl();
   const formFields = Object.entries(params)

@@ -121,33 +121,37 @@ export async function GET(request: NextRequest) {
   const returnUrl = `${baseUrl}/api/newebpay/callback/return`;
   const notifyUrl = `${baseUrl}/api/newebpay/callback`;
 
-  // MPG 2.0：TradeInfo 明文僅含必填欄位，組成 QueryString 後 AES 加密成 Hex，表單只送 MerchantID / TradeInfo / TradeSha / Version
+  // MPG 2.0：TradeInfo 明文必填欄位（精確對應藍新規格），加密前 Query String
+  const timeStamp = Math.floor(Date.now() / 1000).toString();
   const tradeInfoObj: Record<string, string> = {
     MerchantID: creds.merchantId,
     RespondType: "JSON",
-    TimeStamp: Math.floor(Date.now() / 1000).toString(),
+    TimeStamp: timeStamp,
     Version: "2.0",
     MerchantOrderNo: merchantOrderNo,
     Amt: String(amount),
-    ItemDesc: "CourseBooking",
+    ItemDesc: "Booking",
     LoginType: "0",
     ReturnURL: returnUrl,
     NotifyURL: notifyUrl,
   };
   if (userEmail) tradeInfoObj.Email = userEmail;
 
-  // 藍新不需依字母排序，依物件 key 順序組成字串
   const tradeInfoPlain = newebpayQueryString(tradeInfoObj, { sort: false });
   console.log("Raw TradeInfo:", tradeInfoPlain);
 
-  let tradeInfo: string;
+  let tradeInfoHex: string;
   try {
-    tradeInfo = newebpayAesEncrypt(tradeInfoPlain, creds.hashKey, creds.hashIv);
+    tradeInfoHex = newebpayAesEncrypt(tradeInfoPlain, creds.hashKey, creds.hashIv);
   } catch (e) {
     console.error("[NewebPay checkout] AES 加密失敗", e);
     return htmlErrorPage("加密錯誤", "TradeInfo 加密失敗，請確認 HashKey（32 字元）與 HashIV（16 字元）設定正確。");
   }
-  const tradeSha = newebpayTradeSha(tradeInfo, creds.hashKey, creds.hashIv);
+  const tradeSha = newebpayTradeSha(tradeInfoHex, creds.hashKey, creds.hashIv);
+
+  console.log("DEBUG_RAW_STR:", tradeInfoPlain);
+  console.log("DEBUG_TRADEINFO_HEX:", tradeInfoHex);
+  console.log("DEBUG_TRADESHA:", tradeSha);
 
   console.log("[NewebPay checkout] 表單僅送出四欄位: MerchantID, TradeInfo(Hex), TradeSha, Version. 內容摘要:", {
     MerchantID: creds.merchantId,
@@ -168,7 +172,7 @@ export async function GET(request: NextRequest) {
 <body>
   <form id="payment-form" method="POST" action="${escapeAttr(actionUrl)}">
     <input type="hidden" name="MerchantID" value="${escapeAttr(creds.merchantId)}" />
-    <input type="hidden" name="TradeInfo" value="${escapeAttr(tradeInfo)}" />
+    <input type="hidden" name="TradeInfo" value="${escapeAttr(tradeInfoHex)}" />
     <input type="hidden" name="TradeSha" value="${escapeAttr(tradeSha)}" />
     <input type="hidden" name="Version" value="2.0" />
   </form>
