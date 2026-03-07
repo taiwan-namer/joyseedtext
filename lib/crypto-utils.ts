@@ -1,45 +1,8 @@
 import { createHash, createCipheriv } from "crypto";
 
 // ========== 綠界 ECPay CheckMacValue ==========
-
-/**
- * 綠界 AIO CheckMacValue 生成流程（嚴格順序）：
- * 1. 參數按 Key A-Z 排序
- * 2. 組合 HashKey=...&Amt=...&...&HashIV=...
- * 3. encodeURIComponent → 轉小寫
- * 4. 空格：.replace(/%20/g, '+')
- * 5. 7 個特殊符號取代：%2d->- %5f->_ %2e->. %21->! %2a->* %28->( %29->)
- * 6. SHA256 加密 → 結果轉大寫
- */
-export function ecpayCheckMacValue(
-  params: Record<string, string>,
-  hashKey: string,
-  hashIv: string
-): string {
-  const sortedKeys = Object.keys(params)
-    .filter((k) => k !== "CheckMacValue" && params[k] !== undefined && String(params[k]).trim() !== "")
-    .sort();
-  const query = sortedKeys.map((k) => `${k}=${params[k]}`).join("&");
-  const beforeEncode = `HashKey=${hashKey}&${query}&HashIV=${hashIv}`;
-
-  let encoded = encodeURIComponent(beforeEncode).toLowerCase();
-  encoded = encoded.replace(/%20/g, "+");
-  encoded = encoded
-    .replace(/%2d/g, "-")
-    .replace(/%5f/g, "_")
-    .replace(/%2e/g, ".")
-    .replace(/%21/g, "!")
-    .replace(/%2a/g, "*")
-    .replace(/%28/g, "(")
-    .replace(/%29/g, ")");
-
-  console.log("--- ECPAY_RAW_START ---");
-  console.log(encoded);
-  console.log("--- ECPAY_RAW_END ---");
-
-  const hash = createHash("sha256").update(encoded, "utf8").digest("hex");
-  return hash.toUpperCase();
-}
+// 實作集中於 lib/ecpay/checkmac.ts，此處轉出以維持既有引用
+export { ecpayCheckMacValue } from "@/lib/ecpay/checkmac";
 
 // ========== 藍新 NewebPay MPG 2.0 ==========
 

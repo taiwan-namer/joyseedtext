@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   const tradeNo = params.get("TradeNo") ?? "";
   const merchantOrderNo = params.get("MerchantOrderNo") ?? "";
   const amt = params.get("Amt") ?? "";
-  console.log("[NewebPay callback] MerchantOrderNo:", merchantOrderNo, "Status:", status, "Amt:", amt);
+  console.log("[NewebPay callback] MerchantOrderNo:", merchantOrderNo, "Status:", status, "TradeNo:", tradeNo, "Amt:", amt);
 
   if (status !== "SUCCESS") {
     return NextResponse.json({ message: "payment not success" });

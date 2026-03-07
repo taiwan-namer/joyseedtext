@@ -1,24 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { newebpayEncryptTradeInfo, newebpayGetTradeSha } from "@/lib/crypto-utils";
 import { getAppUrl } from "@/lib/appUrl";
-
-const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/main/standard";
-const NEWEBPAY_PRODUCTION_URL = "https://core.newebpay.com/MPG/mpg_gateway";
-
-function getNewebpayCreds() {
-  const id = process.env.NEWEBPAY_MERCHANT_ID?.trim();
-  const key = process.env.NEWEBPAY_HASH_KEY?.trim();
-  const iv = process.env.NEWEBPAY_HASH_IV?.trim();
-  if (!id || !key || !iv) return null;
-  return { merchantId: id, hashKey: key, hashIv: iv };
-}
-
-function getNewebpayActionUrl(): string {
-  return (process.env.NEWEBPAY_ENV ?? "").trim().toLowerCase() === "production"
-    ? NEWEBPAY_PRODUCTION_URL
-    : NEWEBPAY_STAGE_URL;
-}
+import { getNewebpayActionUrl, getNewebpayCreds, NEWEBPAY_VERSION } from "@/lib/newebpay/config";
+import { newebpayEncryptTradeInfo, newebpayGetTradeSha } from "@/lib/newebpay/encrypt";
 
 function htmlErrorPage(title: string, message: string): NextResponse {
   const html = `<!DOCTYPE html>
@@ -58,10 +42,10 @@ function escapeAttr(s: string): string {
 
 /**
  * GET /api/newebpay/checkout?pendingId=xxx 或 ?bookingId=xxx（舊流程相容）
- * 依 pendingId 從 pending_payments 取得待付款，組藍新參數並回傳自動 POST 表單。未付款不寫入 bookings。
+ * 依 pendingId 從 pending_payments 取得待付款，組藍新參數並回傳自動 POST 表單。
+ * 所有回傳網址皆由 APP_URL 組成，不指向 /。
  */
 export async function GET(request: NextRequest) {
-  console.log("--- NewebPay Start ---");
   const pendingId = request.nextUrl.searchParams.get("pendingId");
   const bookingIdLegacy = request.nextUrl.searchParams.get("bookingId");
   if (!pendingId && !bookingIdLegacy) {
@@ -124,24 +108,25 @@ export async function GET(request: NextRequest) {
     console.error("[NewebPay checkout] 未設定 APP_URL 或 NEXT_PUBLIC_BASE_URL，無法產生回傳網址");
     return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生藍新回傳網址。");
   }
+
   const returnUrl = `${appUrl}/api/newebpay/callback/return`;
   const notifyUrl = `${appUrl}/api/newebpay/callback`;
-  const resultPageUrl = `${appUrl}/payment/newebpay/result`;
+  const clientBackUrl = `${appUrl}/member`;
 
-  // MPG 2.0：TradeInfo 明文 8 個必填欄位，固定順序，Amt 整數無小數、ItemDesc 無空格、Version 字串 2.0
   const timeStamp = Math.floor(Date.now() / 1000).toString();
   const amt = Math.round(amount);
   const rawData = [
     `MerchantID=${creds.merchantId}`,
     "RespondType=JSON",
     `TimeStamp=${timeStamp}`,
-    "Version=2.0",
+    `Version=${NEWEBPAY_VERSION}`,
     `MerchantOrderNo=${merchantOrderNo}`,
     `Amt=${amt}`,
     "ItemDesc=CourseBooking",
     "LoginType=0",
     `ReturnURL=${returnUrl}`,
     `NotifyURL=${notifyUrl}`,
+    `ClientBackURL=${clientBackUrl}`,
   ].join("&");
 
   let tradeInfoHex: string;
@@ -154,13 +139,20 @@ export async function GET(request: NextRequest) {
   const tradeSha = newebpayGetTradeSha(tradeInfoHex, creds.hashKey, creds.hashIv);
 
   const actionUrl = getNewebpayActionUrl();
+
   console.log("[NewebPay checkout] payment provider: newebpay");
-  console.log("[NewebPay checkout] APP_URL:", appUrl);
-  console.log("[NewebPay checkout] callback URL (NotifyURL):", notifyUrl);
-  console.log("[NewebPay checkout] return URL (ReturnURL):", returnUrl);
-  console.log("[NewebPay checkout] result page URL:", resultPageUrl);
-  console.log("[NewebPay checkout] MerchantOrderNo:", merchantOrderNo);
   console.log("[NewebPay checkout] actionUrl:", actionUrl);
+  console.log("[NewebPay checkout] APP_URL:", appUrl);
+  console.log("[NewebPay checkout] ReturnURL:", returnUrl);
+  console.log("[NewebPay checkout] NotifyURL:", notifyUrl);
+  console.log("[NewebPay checkout] ClientBackURL:", clientBackUrl);
+  console.log("[NewebPay checkout] MerchantID:", creds.merchantId);
+  console.log("[NewebPay checkout] Version:", NEWEBPAY_VERSION);
+  console.log("[NewebPay checkout] MerchantOrderNo:", merchantOrderNo);
+  console.log("[NewebPay checkout] Amt:", amt);
+  console.log("[NewebPay checkout] TradeInfo 長度:", tradeInfoHex.length);
+  console.log("[NewebPay checkout] TradeSha 前 8 碼:", tradeSha.slice(0, 8) + "...");
+
   const html = `<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -170,11 +162,11 @@ export async function GET(request: NextRequest) {
   <style>body{font-family:system-ui,sans-serif;max-width:480px;margin:2rem auto;padding:0 1rem;text-align:center;color:#374151;}p{margin-top:1rem;}</style>
 </head>
 <body>
-  <form method="post" action="${escapeAttr(actionUrl)}">
+  <form method="POST" action="${escapeAttr(actionUrl)}">
     <input type="hidden" name="MerchantID" value="${escapeAttr(creds.merchantId)}" />
     <input type="hidden" name="TradeInfo" value="${escapeAttr(tradeInfoHex)}" />
     <input type="hidden" name="TradeSha" value="${escapeAttr(tradeSha)}" />
-    <input type="hidden" name="Version" value="2.0" />
+    <input type="hidden" name="Version" value="${escapeAttr(NEWEBPAY_VERSION)}" />
   </form>
   <p>正在導向藍新付款頁…</p>
   <script>document.forms[0].submit();</script>
