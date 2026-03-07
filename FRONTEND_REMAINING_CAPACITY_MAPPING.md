@@ -153,3 +153,55 @@ remaining = max(0, capacity - booked)
 - 若仍不一致，可依第七節逐項檢查（同一課程/日/時段、快照時機、scheduled_slots.capacity、日期時間格式等）。
 
 以上為僅查明、未修改任何程式之對應說明。
+
+---
+
+## 九、額外查明：可能導致「無法對應庫存」的錯誤或差異
+
+### 9.1 課程來源：slug 當成 id 查詢（可能查不到 DB 課程）
+
+- **現象**：課程頁網址為 `/course/[slug]`，載入時用 **`getCourseById(slug)`** 查課程（`app/course/[slug]/page.tsx` 約 369 行）。
+- **實作**：`getCourseById` 在 DB 是用 **`classes.id`** 查詢（`app/actions/productActions.ts` 約 538 行：`.eq("id", id).single()`），不是用 slug 欄位。
+- **若 DB 設計是**：`classes.id` = UUID、另有 `slug` 欄位，則傳入 slug 時 `.eq("id", slug)` 會查不到，`fromDb` 為 null，改走 **靜態** `getCourseBySlug(slug)`。
+- **後果**：靜態課程型別 `CourseDetail` **沒有 `id` 欄位**。彈窗的條件是 `!("id" in course)` 就不呼叫 `getSlotRemainingCounts`，所以 **slotRemainingList 永遠是 []**，畫面上的「剩餘 X 人」會變成 **fallback：`remainingCapacity`**（= `(course as CourseForPublic).capacity`）；靜態課程不一定有 `capacity`，可能變成 `—` 或與後台完全無關。
+- **結論**：若實際上有用 UUID + slug，且網址是 slug，則「剩餘人數」很可能沒在對 DB 庫存，而是用靜態或 undefined，**會無法對應後台庫存**。需確認：專案裡 `classes.id` 是否等於網址的 slug，或是否有用 slug 欄位查詢。
+
+### 9.2 同一個「日期＋時段」在 class_date/class_time 與 scheduled_slots 重複（先推的贏，可能用錯名額）
+
+- **現象**：`getSlotRemainingCounts` 先依 **class_date / class_time** 推一筆（名額用 **classes.capacity**），再依 **scheduled_slots** 每筆推一筆（名額用 **scheduled_slots[].capacity** 或 class capacity）。**沒有**對「同一課程、同一日期、同一時段」去重。
+- **後果**：若同一時段同時存在於 class_date/class_time 與 scheduled_slots（例如都是 2026-03-26 12:00），`slotsWithCap` 會出現**兩筆**相同 date+time：
+  - 第一筆：capacity = 整課的 `classes.capacity`（例如 15）
+  - 第二筆：capacity = 該場次在 scheduled_slots 的 capacity（例如 5）
+- 已報名人數用同一個 key 只會算一次（例如 3 人），所以會得到：
+  - 第一筆：remaining = 15 - 3 = **12**
+  - 第二筆：remaining = 5 - 3 = **2**
+- 彈窗用 **`slotRemainingList.find(s => s.date === dateStr && s.time === selectedTime)`**，只會拿到**第一筆**，因此會顯示 **剩餘 12 人**，而不是後台若以「該場次名額 5」算出來的 **剩餘 2 人**。
+- **結論**：當該時段在「整課」與「scheduled_slots 單場」都有設定且名額不同時，**畫面上會固定顯示「整課名額」算出來的剩餘，與後台若以 scheduled_slots 名額為準的庫存會對不起來**。圖中若顯示「剩餘 2 人」而後台是 12，也可能是反過來：後台顯示的是整課、前台拿到的是第二筆（若順序或資料有變）。需確認該課程是否同時有 class_date/class_time 與 scheduled_slots，且是否有同一天同一時段。
+
+### 9.3 彈窗是快照、不會自動更新
+
+- 剩餘人數只在**打開彈窗時**呼叫一次 `getSlotRemainingCounts`；之後不輪詢、不重新請求。
+- 若在開著彈窗時，後台有人付款或完成，畫面上的「剩餘 X 人」不會變，需關閉再打開才會對齊庫存。
+
+### 9.4 小結（僅查明、未修改）
+
+- **9.1**：若 URL 是 slug 但 DB 用 UUID 當 id，會查不到 DB 課程 → 用靜態課程 → 沒有 id → 不拉 slotRemainingList → 剩餘人數與庫存無關或顯示 fallback。
+- **9.2**：同一天同一時段若同時在 class_date/class_time 與 scheduled_slots 出現且名額不同，會產生兩筆 (date, time)，畫面上只會顯示「第一筆」的剩餘（整課名額），可能與後台以「單場名額」為準的庫存不一致。
+- **9.3**：時序差異（快照）也可能造成一時對不起來。
+
+建議先確認：  
+(1) 課程是從 DB 還是靜態來（是否有 `course.id`）、(2) 該課程是否同時有 class_date/class_time 與 scheduled_slots 且重複了 2026-03-26 12:00。  
+
+---
+
+## 十、修復說明（9.2 已修正）
+
+**問題**：同一 (date, time) 在 class_date/class_time 與 scheduled_slots 重複時，會產生兩筆，彈窗 `find()` 只取第一筆（整課名額），與後台以「場次名額」為準的庫存不一致。
+
+**修正**：`app/actions/bookingActions.ts` 的 `getSlotRemainingCounts` 已改為：
+
+- 以 **Map&lt;date|time, slot&gt;** 建場次列表，同一 (date, time) 只保留一筆。
+- **先**寫入 `scheduled_slots` 的每一筆（場次名額優先）。
+- **再**若存在 `class_date` / `class_time`，僅在該 key 尚未存在時才寫入（名額用 `classes.capacity`）。
+
+因此同一時段同時出現在「整課」與「scheduled_slots」時，**以 scheduled_slots 的場次名額為準**，前台「剩餘 X 人」與後台庫存／下單邏輯一致。

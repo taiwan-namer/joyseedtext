@@ -359,13 +359,8 @@ export async function getSlotRemainingCounts(classId: string): Promise<
     };
     const classCapacity = row.capacity ?? 0;
 
-    const slotsWithCap: { date: string; time: string; capacity: number }[] = [];
-
-    if (row.class_date && row.class_time) {
-      const dateStr = String(row.class_date).slice(0, 10);
-      const timeStr = String(row.class_time).slice(0, 5);
-      slotsWithCap.push({ date: dateStr, time: timeStr, capacity: classCapacity });
-    }
+    // 同一 (date, time) 只保留一筆：優先 scheduled_slots 的場次名額，與後台庫存／下單邏輯一致
+    const slotsMap = new Map<string, { date: string; time: string; capacity: number }>();
 
     if (Array.isArray(row.scheduled_slots)) {
       for (const s of row.scheduled_slots) {
@@ -373,10 +368,21 @@ export async function getSlotRemainingCounts(classId: string): Promise<
         const timeStr = String(s?.time ?? "09:00").slice(0, 5);
         const slotCap =
           typeof s?.capacity === "number" && s.capacity >= 1 ? s.capacity : classCapacity;
-        if (dateStr && timeStr) slotsWithCap.push({ date: dateStr, time: timeStr, capacity: slotCap });
+        if (dateStr && timeStr) {
+          const key = `${dateStr}|${timeStr}`;
+          slotsMap.set(key, { date: dateStr, time: timeStr, capacity: slotCap });
+        }
       }
     }
 
+    if (row.class_date && row.class_time) {
+      const dateStr = String(row.class_date).slice(0, 10);
+      const timeStr = String(row.class_time).slice(0, 5);
+      const key = `${dateStr}|${timeStr}`;
+      if (!slotsMap.has(key)) slotsMap.set(key, { date: dateStr, time: timeStr, capacity: classCapacity });
+    }
+
+    const slotsWithCap = Array.from(slotsMap.values());
     if (slotsWithCap.length === 0) return { success: true, slots: [] };
 
     const { data: bookings, error: bookError } = await supabase
