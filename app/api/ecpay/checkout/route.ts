@@ -3,6 +3,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { ecpayCheckMacValue } from "@/lib/payment-utils";
 
 const ECPAY_STAGE_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5";
+const ECPAY_PRODUCTION_URL = "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5";
 
 function getEcpayCreds() {
   const id = process.env.ECPAY_MERCHANT_ID?.trim();
@@ -12,19 +13,61 @@ function getEcpayCreds() {
   return { merchantId: id, hashKey: key, hashIv: iv };
 }
 
+function getEcpayActionUrl(): string {
+  return (process.env.ECPAY_ENV ?? "").trim().toLowerCase() === "production"
+    ? ECPAY_PRODUCTION_URL
+    : ECPAY_STAGE_URL;
+}
+
+function htmlErrorPage(title: string, message: string): NextResponse {
+  const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <style>body{font-family:system-ui,sans-serif;max-width:480px;margin:2rem auto;padding:0 1rem;}h1{font-size:1.25rem;color:#b91c1c;}p{color:#374151;}</style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <p>${escapeHtml(message)}</p>
+</body>
+</html>`;
+  return new NextResponse(html, {
+    status: 400,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /**
  * GET /api/ecpay/checkout?bookingId=xxx
- * 依 bookingId 取得訂單，組綠界參數並回傳自動 POST 表單（前端導向此 URL 即可送出至綠界）。
+ * 依 bookingId 取得訂單，組綠界參數並回傳自動 POST 表單（Content-Type: text/html）。
  */
 export async function GET(request: NextRequest) {
   const bookingId = request.nextUrl.searchParams.get("bookingId");
   if (!bookingId) {
-    return NextResponse.json({ error: "缺少 bookingId" }, { status: 400 });
+    return htmlErrorPage("參數錯誤", "缺少 bookingId，請從結帳流程重新進入。");
   }
 
   const creds = getEcpayCreds();
   if (!creds) {
-    return NextResponse.json({ error: "綠界金流未設定（ECPAY_MERCHANT_ID / HASH_KEY / HASH_IV）" }, { status: 500 });
+    return htmlErrorPage("金流未設定", "綠界金流未設定（請設定 ECPAY_MERCHANT_ID、ECPAY_HASH_KEY、ECPAY_HASH_IV）。");
   }
 
   const supabase = createServerSupabase();
@@ -35,18 +78,18 @@ export async function GET(request: NextRequest) {
     .single();
 
   if (error || !booking) {
-    return NextResponse.json({ error: "訂單不存在" }, { status: 404 });
+    return htmlErrorPage("訂單不存在", "查無此訂單，請確認連結是否正確或重新下單。");
   }
   if (booking.payment_method !== "ecpay") {
-    return NextResponse.json({ error: "此訂單非綠界付款" }, { status: 400 });
+    return htmlErrorPage("付款方式不符", "此訂單並非綠界付款，請回到結帳頁重新選擇付款方式。");
   }
   if (booking.status !== "unpaid") {
-    return NextResponse.json({ error: "訂單狀態不允許付款" }, { status: 400 });
+    return htmlErrorPage("訂單狀態錯誤", "此訂單已付款或已關閉，無法重複付款。");
   }
 
   const amount = Math.max(0, Number(booking.order_amount) ?? 0);
   if (amount <= 0) {
-    return NextResponse.json({ error: "訂單金額異常" }, { status: 400 });
+    return htmlErrorPage("訂單金額異常", "訂單金額有誤，請聯絡客服。");
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "";
@@ -76,15 +119,25 @@ export async function GET(request: NextRequest) {
 
   params.CheckMacValue = ecpayCheckMacValue(params, creds.hashKey, creds.hashIv);
 
+  const actionUrl = getEcpayActionUrl();
+  const formFields = Object.entries(params)
+    .map(([k, v]) => `  <input type="hidden" name="${escapeAttr(k)}" value="${escapeAttr(v)}" />`)
+    .join("\n");
+
   const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>導向綠界付款</title></head>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>導向綠界付款</title>
+  <style>body{font-family:system-ui,sans-serif;max-width:480px;margin:2rem auto;padding:0 1rem;text-align:center;color:#374151;}p{margin-top:1rem;}</style>
+</head>
 <body>
-<form id="ecpayForm" method="POST" action="${ECPAY_STAGE_URL}">
-${Object.entries(params).map(([k, v]) => `  <input type="hidden" name="${k}" value="${v.replace(/"/g, "&quot;")}" />`).join("\n")}
-</form>
-<script>document.getElementById("ecpayForm").submit();</script>
-<p>正在導向綠界付款頁…</p>
+  <form id="payment-form" method="POST" action="${escapeAttr(actionUrl)}">
+${formFields}
+  </form>
+  <p>正在導向綠界付款頁…</p>
+  <script>document.getElementById("payment-form").submit();</script>
 </body>
 </html>`;
 
