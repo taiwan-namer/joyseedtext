@@ -72,9 +72,20 @@ export function getNewebpayActionUrl(): string {
     : NEWEBPAY_STAGE_URL;
 }
 
-/** 取得商店金鑰（callback 用）。與 getNewebpayConfig 同一來源。 */
+/** 取得商店金鑰（callback/result 用）。與 getNewebpayConfig 同一來源。 */
 export function getNewebpayCreds(): { merchantId: string; hashKey: string; hashIv: string } | null {
   const cfg = getNewebpayConfig();
   if (!cfg) return null;
   return { merchantId: cfg.merchantId, hashKey: cfg.hashKey, hashIv: cfg.hashIv };
+}
+
+/** 供 log 用的遮罩金鑰（與 checkout 同一 config）。 */
+export function getNewebpayCredsForLog(): { merchantId: string; hashKeyMask: string; hashIvMask: string } | null {
+  const cfg = getNewebpayConfig();
+  if (!cfg) return null;
+  return {
+    merchantId: cfg.merchantId,
+    hashKeyMask: maskKey(cfg.hashKey),
+    hashIvMask: maskKey(cfg.hashIv),
+  };
 }
