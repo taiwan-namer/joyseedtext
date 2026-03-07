@@ -1004,6 +1004,7 @@ export async function getRollcallDatesWithCounts(): Promise<
 
     if (classesError) return { success: false, error: classesError.message };
 
+    // 與 getRollcallSessionsByDate、getSlotRemainingCounts 一致：同一 (class, date, time) 以 scheduled_slots 為準，再以 class_date 補齊
     const dateToSessions = new Map<string, { key: string; capacity: number }[]>();
 
     for (const r of classesRows ?? []) {
@@ -1016,16 +1017,6 @@ export async function getRollcallDatesWithCounts(): Promise<
       };
       const classCapacity = row.capacity ?? 0;
 
-      if (row.class_date) {
-        const dateStr = String(row.class_date).slice(0, 10);
-        const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
-        const timeKey = t.length === 5 ? t : "00:00";
-        const key = `${row.id}|${dateStr}|${timeKey}`;
-        if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
-        const arr = dateToSessions.get(dateStr)!;
-        if (!arr.some((x) => x.key === key)) arr.push({ key, capacity: classCapacity });
-      }
-
       const slots = Array.isArray(row.scheduled_slots) ? row.scheduled_slots : [];
       for (const s of slots) {
         const dateStr = String(s?.date).slice(0, 10);
@@ -1037,6 +1028,16 @@ export async function getRollcallDatesWithCounts(): Promise<
         if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
         const arr = dateToSessions.get(dateStr)!;
         if (!arr.some((x) => x.key === key)) arr.push({ key, capacity: slotCap });
+      }
+
+      if (row.class_date) {
+        const dateStr = String(row.class_date).slice(0, 10);
+        const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
+        const timeKey = t.length === 5 ? t : "00:00";
+        const key = `${row.id}|${dateStr}|${timeKey}`;
+        if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
+        const arr = dateToSessions.get(dateStr)!;
+        if (!arr.some((x) => x.key === key)) arr.push({ key, capacity: classCapacity });
       }
     }
 
@@ -1112,6 +1113,7 @@ export async function getRollcallSessionsByDate(
 
     if (classesError) return { success: false, error: classesError.message };
 
+    // 與 getRollcallDatesWithCounts、getSlotRemainingCounts 一致：同一 (class, date, time) 以 scheduled_slots 為準，再以 class_date 補齊，日期總名額與場次總名額才會一致
     const sessions: RollcallSession[] = [];
     const seen = new Set<string>();
 
@@ -1125,23 +1127,6 @@ export async function getRollcallSessionsByDate(
         class_time?: string | null;
       };
       const classCapacity = row.capacity ?? 0;
-
-      if (row.class_date && String(row.class_date).slice(0, 10) === dateStr) {
-        const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
-        const timeKey = t.length === 5 ? t : "00:00";
-        const key = `${row.id}|${dateStr}|${timeKey}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          sessions.push({
-            classId: row.id,
-            title: row.title,
-            capacity: classCapacity,
-            time: timeKey,
-            slotDate: dateStr,
-            enrolledCount: 0,
-          });
-        }
-      }
 
       const slots = Array.isArray(row.scheduled_slots) ? row.scheduled_slots : [];
       for (const s of slots) {
@@ -1157,6 +1142,23 @@ export async function getRollcallSessionsByDate(
             classId: row.id,
             title: row.title,
             capacity: slotCap,
+            time: timeKey,
+            slotDate: dateStr,
+            enrolledCount: 0,
+          });
+        }
+      }
+
+      if (row.class_date && String(row.class_date).slice(0, 10) === dateStr) {
+        const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
+        const timeKey = t.length === 5 ? t : "00:00";
+        const key = `${row.id}|${dateStr}|${timeKey}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          sessions.push({
+            classId: row.id,
+            title: row.title,
+            capacity: classCapacity,
             time: timeKey,
             slotDate: dateStr,
             enrolledCount: 0,

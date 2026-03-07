@@ -306,6 +306,24 @@ export default function AdminEnrollmentPage() {
         </div>
       )}
 
+      {/* 選定日期的「已報名／總名額」與下方場次加總對應說明 */}
+      {selectedDate && !sessionsLoading && sessions.length > 0 && (() => {
+        const sumEnrolled = sessions.reduce((a, s) => a + s.enrolledCount, 0);
+        const sumCapacity = sessions.reduce((a, s) => a + s.capacity, 0);
+        const dateOpt = dateSelectOptions.find((o) => o.value === selectedDate);
+        const matches = dateOpt && dateOpt.enrolledCount === sumEnrolled && dateOpt.totalCapacity === sumCapacity;
+        return (
+          <p className="text-sm text-gray-500 -mt-1 mb-1">
+            本日共 <strong className="text-gray-700">{sessions.length}</strong> 個場次，已報名 <strong className="text-gray-700">{sumEnrolled}</strong> / 總名額 <strong className="text-gray-700">{sumCapacity}</strong>
+            {dateOpt && (
+              matches
+                ? "（與上方日期選單一致）"
+                : "（與上方選單不同請回報）"
+            )}
+          </p>
+        );
+      })()}
+
       {/* 當日課程與報名進度 Accordion */}
       <div className="space-y-3">
         {sessionsLoading ? (
