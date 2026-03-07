@@ -22,21 +22,24 @@ export async function POST(request: NextRequest) {
   console.log("[ECPay callback] route hit (ReturnURL)");
 
   const formData = await request.formData();
-  const params: Record<string, string> = {};
+  const paramsRaw: Record<string, string> = {};
   formData.forEach((value, key) => {
     const raw = typeof value === "string" ? value : value instanceof File ? value.name : String(value);
-    params[key] = raw.trim();
+    paramsRaw[key] = raw;
   });
+  const paramsTrimmed: Record<string, string> = {};
+  for (const k of Object.keys(paramsRaw)) {
+    paramsTrimmed[k] = paramsRaw[k].trim();
+  }
 
-  const receivedCheckMac = params.CheckMacValue ?? "";
-  const merchantTradeNoRaw = params.MerchantTradeNo ?? "";
-  const merchantTradeNo = merchantTradeNoRaw.trim();
-  const rtnCode = params.RtnCode ?? "";
-  const tradeAmt = params.TradeAmt ?? "";
-  const tradeNo = params.TradeNo ?? "";
+  const receivedCheckMac = paramsRaw.CheckMacValue ?? "";
+  const merchantTradeNo = paramsTrimmed.MerchantTradeNo ?? "";
+  const rtnCode = paramsTrimmed.RtnCode ?? "";
+  const tradeAmt = paramsTrimmed.TradeAmt ?? "";
+  const tradeNo = paramsTrimmed.TradeNo ?? "";
 
-  console.log("[ECPay callback] raw parsed body keys:", Object.keys(params).sort());
-  console.log("[ECPay callback] MerchantTradeNo (raw length):", merchantTradeNoRaw.length, "(trimmed):", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
+  console.log("[ECPay callback] raw parsed body keys:", Object.keys(paramsRaw).sort());
+  console.log("[ECPay callback] MerchantTradeNo:", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
   console.log("[ECPay callback] received CheckMacValue (前 12 字元):", receivedCheckMac.slice(0, 12) + "...");
 
   const creds = getEcpayCreds();
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse("0|綠界金流未設定", { status: 500, headers: PLAIN_HEADERS });
   }
 
-  const generatedCheckMac = ecpayCheckMacValueFromReceived(params, creds.hashKey, creds.hashIv);
+  const generatedCheckMac = ecpayCheckMacValueFromReceived(paramsRaw, creds.hashKey, creds.hashIv);
   const checkMacValid = receivedCheckMac.toUpperCase() === generatedCheckMac;
 
   console.log("[ECPay callback] generated CheckMacValue (前 12 字元):", generatedCheckMac.slice(0, 12) + "...");

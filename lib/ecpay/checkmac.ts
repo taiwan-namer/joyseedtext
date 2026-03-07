@@ -102,13 +102,9 @@ export function ecpayCheckMacValueFromReceived(
 ): string {
   const sortedKeys = Object.keys(params)
     .filter((k) => k !== "CheckMacValue")
-    .filter((k) => {
-      const v = params[k];
-      return v !== undefined && v !== null && String(v).trim() !== "";
-    })
     .sort();
 
-  const queryStringBeforeWrap = sortedKeys.map((k) => `${k}=${params[k]}`).join("&");
+  const queryStringBeforeWrap = sortedKeys.map((k) => `${k}=${params[k] ?? ""}`).join("&");
   const stringBeforeEncode = `HashKey=${hashKey}&${queryStringBeforeWrap}&HashIV=${hashIv}`;
 
   const encoded = encodeURIComponent(stringBeforeEncode);
