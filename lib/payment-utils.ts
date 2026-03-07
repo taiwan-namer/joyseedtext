@@ -3,10 +3,9 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from "crypt
 // ========== 綠界 ECPay ==========
 
 /**
- * 綠界 CheckMacValue（SHA256）。依全方位金流附錄檢查碼機制：
- * (1) 參數依 key A-Z 排序，key=value 用 & 串接（value 用原始值，不先 encode）
- * (2) 最前加 HashKey=金鑰&、最後加 &HashIV=IV
- * (3) 整段 URL encode 後依綠界轉換表替換字元，轉小寫 → SHA256 → 轉大寫
+ * 綠界 CheckMacValue（SHA256）。依官方 Checksum 公式：
+ * SHA256(URLEncode(HashKey + Data + HashIV)) → 轉小寫 → SHA256 → 轉大寫。
+ * Data = 參數依 key A-Z 排序，key=value 用 & 串接（原始值，不先 encode）；不加 HashKey= / HashIV= 前綴。
  */
 export function ecpayCheckMacValue(
   params: Record<string, string>,
@@ -17,18 +16,9 @@ export function ecpayCheckMacValue(
     .filter((k) => k !== "CheckMacValue" && params[k] !== undefined && String(params[k]).trim() !== "")
     .sort();
   const query = sortedKeys.map((k) => `${k}=${params[k]}`).join("&");
-  const beforeHash = `HashKey=${hashKey}&${query}&HashIV=${hashIv}`;
-  let encoded = encodeURIComponent(beforeHash).replace(/%20/g, "+");
-  encoded = encoded
-    .replace(/%2d/gi, "-")
-    .replace(/%5f/gi, "_")
-    .replace(/%2e/gi, ".")
-    .replace(/%21/gi, "!")
-    .replace(/%2a/gi, "*")
-    .replace(/%28/gi, "(")
-    .replace(/%29/gi, ")");
-  const lower = encoded.toLowerCase();
-  return createHash("sha256").update(lower, "utf8").digest("hex").toUpperCase();
+  const beforeHash = hashKey + query + hashIv;
+  const encoded = encodeURIComponent(beforeHash).replace(/%20/g, "+").toLowerCase();
+  return createHash("sha256").update(encoded, "utf8").digest("hex").toUpperCase();
 }
 
 /**
