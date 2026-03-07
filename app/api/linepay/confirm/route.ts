@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { getLinePaySandboxCredentials, confirmLinePayPayment } from "@/lib/linepay";
+import { getLinePaySandboxCredentials, validateLinePayCredentials, confirmLinePayPayment } from "@/lib/linepay";
+import { logPaymentApi } from "@/lib/paymentLogs";
 
 /**
  * LINE Pay 使用者完成授權後會導向此 confirmUrl，並帶上 transactionId、orderId（= 我們的 booking id）。
@@ -75,12 +76,34 @@ export async function GET(request: NextRequest) {
     return redirectFail("LINE Pay 未設定（請設定 .env 或後台金流）");
   }
 
+  const validation = validateLinePayCredentials(creds);
+  if (!validation.ok) {
+    return redirectFail(validation.error);
+  }
+
+  const requestBody = { amount, currency: "TWD" as const };
   const confirmRes = await confirmLinePayPayment({
     channelId: creds.channelId,
     channelSecret: creds.channelSecret,
     transactionId,
     amount,
     currency: "TWD",
+  });
+
+  await logPaymentApi(supabase, {
+    merchant_id: booking.merchant_id,
+    order_id: orderId,
+    transaction_id: transactionId,
+    api_type: "confirm",
+    request_body: JSON.stringify(requestBody),
+    response_body: JSON.stringify({
+      success: confirmRes.success,
+      returnCode: confirmRes.returnCode,
+      returnMessage: confirmRes.returnMessage,
+      info: confirmRes.success ? confirmRes.info : undefined,
+    }),
+    return_code: confirmRes.returnCode,
+    return_message: confirmRes.returnMessage,
   });
 
   if (!confirmRes.success) {

@@ -5,7 +5,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { getFrontendSettings } from "@/app/actions/frontendSettingsActions";
-import { getLinePaySandboxCredentials, requestLinePayPayment } from "@/lib/linepay";
+import { getLinePaySandboxCredentials, validateLinePayCredentials, requestLinePayPayment } from "@/lib/linepay";
+import { logPaymentApi } from "@/lib/paymentLogs";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -154,6 +155,10 @@ export async function createBooking(
       if (!creds) {
         return { success: false, error: "LINE Pay 未設定，請設定 .env 的 LINE_PAY_CHANNEL_ID / LINE_PAY_CHANNEL_SECRET 或後台金流設定" };
       }
+      const validation = validateLinePayCredentials(creds);
+      if (!validation.ok) {
+        return { success: false, error: validation.error };
+      }
       const baseUrl = (typeof process.env.NEXT_PUBLIC_BASE_URL === "string" && process.env.NEXT_PUBLIC_BASE_URL.trim()) || "";
       if (!baseUrl) {
         return { success: false, error: "未設定 NEXT_PUBLIC_BASE_URL，無法建立 LINE Pay 導向網址" };
@@ -167,19 +172,34 @@ export async function createBooking(
       const slugForUrl = (courseSlug && String(courseSlug).trim()) || "course";
       const confirmUrl = `${baseUrl}/api/linepay/confirm`;
       const cancelUrl = `${baseUrl}/course/${slugForUrl}/checkout?error=payment_cancelled`;
+      const requestBody = {
+        amount,
+        orderId,
+        packages: [{ id: "1", amount, products: [{ id: "1", name: productName, quantity: 1, price: amount }] }],
+        redirectUrls: { confirmUrl, cancelUrl },
+      };
       const linePayRes = await requestLinePayPayment({
         channelId: creds.channelId,
         channelSecret: creds.channelSecret,
         amount,
         orderId,
-        packages: [
-          {
-            id: "1",
-            amount,
-            products: [{ id: "1", name: productName, quantity: 1, price: amount }],
-          },
-        ],
+        packages: requestBody.packages,
         redirectUrls: { confirmUrl, cancelUrl },
+      });
+      await logPaymentApi(supabase, {
+        merchant_id: merchantId,
+        order_id: orderId,
+        transaction_id: linePayRes.success ? linePayRes.info.transactionId : null,
+        api_type: "request",
+        request_body: JSON.stringify(requestBody),
+        response_body: JSON.stringify({
+          success: linePayRes.success,
+          returnCode: linePayRes.returnCode,
+          returnMessage: linePayRes.returnMessage,
+          info: linePayRes.success ? linePayRes.info : undefined,
+        }),
+        return_code: linePayRes.returnCode,
+        return_message: linePayRes.returnMessage,
       });
       if (!linePayRes.success) {
         return { success: false, error: linePayRes.returnMessage || "LINE Pay 請求失敗" };

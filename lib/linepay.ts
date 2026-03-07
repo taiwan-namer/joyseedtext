@@ -21,11 +21,27 @@ export function generateSignature(
   return signature;
 }
 
+/** LINE Pay API 請求逾時（15 秒） */
+const LINE_PAY_REQUEST_TIMEOUT_MS = 15000;
+
 /** 從 store_settings.frontend_settings.linePayApi 解析出的 Line Pay 金鑰（可存成 JSON 字串） */
 export type LinePayCredentials = {
   channelId: string;
   channelSecret: string;
 };
+
+/**
+ * 檢查 LINE Pay 金鑰格式。
+ * Channel Secret 通常為 32 字元，允許 28–36 字元。
+ * 若長度不符則回傳錯誤，呼叫方應直接攔截，避免跳轉至 LINE 頁面。
+ */
+export function validateLinePayCredentials(creds: LinePayCredentials): { ok: true } | { ok: false; error: string } {
+  const len = creds.channelSecret?.length ?? 0;
+  if (len < 28 || len > 36) {
+    return { ok: false, error: `LINE_PAY_CHANNEL_SECRET 長度異常 (${len})，請確認設定正確（預期 32 字元）` };
+  }
+  return { ok: true };
+}
 
 /**
  * 從前台設定的 linePayApi 欄位解析 Line Pay Channel ID 與 Secret。
@@ -120,8 +136,12 @@ export async function requestLinePayPayment(
   const baseUrl = getLinePayBaseUrl();
   const url = `${baseUrl}${uri}`;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), LINE_PAY_REQUEST_TIMEOUT_MS);
+
   const res = await fetch(url, {
     method: "POST",
+    signal: controller.signal,
     headers: {
       "Content-Type": "application/json",
       "X-LINE-ChannelId": channelId,
@@ -131,6 +151,7 @@ export async function requestLinePayPayment(
     body,
   });
 
+  clearTimeout(timeoutId);
   const text = await res.text();
 
   // transactionId 可能為 19 位數，超過 JS safe integer，以字串處理
@@ -182,10 +203,10 @@ export type ConfirmLinePayPaymentResult =
   | { success: true; info: Record<string, unknown>; returnCode: string; returnMessage: string }
   | { success: false; returnCode: string; returnMessage: string };
 
-/**
- * 呼叫 LINE Pay V3 Confirm API，驗證並確認該筆交易（Sandbox 環境）。
- */
-export async function confirmLinePayPayment(
+/** LINE Pay 錯誤碼 1172：交易已完成（可視為成功） */
+const LINE_PAY_CODE_ALREADY_COMPLETED = "1172";
+
+async function confirmLinePayPaymentOnce(
   params: ConfirmLinePayPaymentParams
 ): Promise<ConfirmLinePayPaymentResult> {
   const { channelId, channelSecret, transactionId, amount, currency = "TWD" } = params;
@@ -198,8 +219,12 @@ export async function confirmLinePayPayment(
   const baseUrl = getLinePayBaseUrl();
   const url = `${baseUrl}${uri}`;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), LINE_PAY_REQUEST_TIMEOUT_MS);
+
   const res = await fetch(url, {
     method: "POST",
+    signal: controller.signal,
     headers: {
       "Content-Type": "application/json",
       "X-LINE-ChannelId": channelId,
@@ -209,6 +234,7 @@ export async function confirmLinePayPayment(
     body,
   });
 
+  clearTimeout(timeoutId);
   const text = await res.text();
   const raw = (() => {
     try {
@@ -221,10 +247,51 @@ export async function confirmLinePayPayment(
   const returnCode = String(raw.returnCode ?? "");
   const returnMessage = String(raw.returnMessage ?? "-");
 
-  if (returnCode !== "0000") {
-    return { success: false, returnCode, returnMessage };
+  if (returnCode === "0000") {
+    const info = (raw.info as Record<string, unknown>) ?? {};
+    return { success: true, info, returnCode, returnMessage };
+  }
+  if (returnCode === LINE_PAY_CODE_ALREADY_COMPLETED) {
+    const info = (raw.info as Record<string, unknown>) ?? {};
+    return { success: true, info, returnCode, returnMessage };
+  }
+  return { success: false, returnCode, returnMessage };
+}
+
+/**
+ * 呼叫 LINE Pay V3 Confirm API，驗證並確認該筆交易（Sandbox 環境）。
+ * 含 15 秒逾時、多重重試（網路波動或逾時時重試 1 次）、錯誤碼 1172 視為成功。
+ */
+export async function confirmLinePayPayment(
+  params: ConfirmLinePayPaymentParams
+): Promise<ConfirmLinePayPaymentResult> {
+  const toFail = (msg: string): ConfirmLinePayPaymentResult =>
+    ({ success: false, returnCode: "9000", returnMessage: msg });
+
+  let result: ConfirmLinePayPaymentResult;
+  try {
+    result = await confirmLinePayPaymentOnce(params);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "連線失敗";
+    const isRetryable = msg.toLowerCase().includes("abort") || msg.toLowerCase().includes("timeout") || msg.toLowerCase().includes("network");
+    if (!isRetryable) return toFail(msg);
+    try {
+      result = await confirmLinePayPaymentOnce(params);
+    } catch {
+      return toFail("網路逾時或連線失敗，請稍後再試");
+    }
   }
 
-  const info = (raw.info as Record<string, unknown>) ?? {};
-  return { success: true, info, returnCode, returnMessage };
+  if (result.success) return result;
+
+  const isRetryable =
+    result.returnCode === "9000" || result.returnMessage?.toLowerCase().includes("timeout") || result.returnMessage?.toLowerCase().includes("network");
+  if (!isRetryable) return result;
+
+  try {
+    result = await confirmLinePayPaymentOnce(params);
+  } catch {
+    return toFail("網路逾時或連線失敗，請稍後再試");
+  }
+  return result;
 }
