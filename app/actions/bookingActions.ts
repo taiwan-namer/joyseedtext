@@ -196,6 +196,91 @@ export async function createBooking(
   }
 }
 
+/** 單一場次的剩餘名額（與下單 RPC 邏輯一致：依該場次已報名數與場次名額計算） */
+export type SlotRemaining = { date: string; time: string; capacity: number; remaining: number };
+
+/**
+ * 取得指定課程各場次的剩餘名額，供前台「選擇日期與時間」彈窗顯示，與訂單庫存連動。
+ * 不計入 status = cancelled 的訂單。
+ */
+export async function getSlotRemainingCounts(classId: string): Promise<
+  | { success: true; slots: SlotRemaining[] }
+  | { success: false; error: string }
+> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+
+    const supabase = createServerSupabase();
+    const { data: classRow, error: classError } = await supabase
+      .from("classes")
+      .select("capacity, scheduled_slots, class_date, class_time")
+      .eq("id", classId)
+      .eq("merchant_id", merchantId)
+      .single();
+
+    if (classError || !classRow) return { success: false, error: "課程不存在" };
+
+    const row = classRow as {
+      capacity?: number | null;
+      scheduled_slots?: { date?: string; time?: string; capacity?: number }[] | null;
+      class_date?: string | null;
+      class_time?: string | null;
+    };
+    const classCapacity = row.capacity ?? 0;
+
+    const slotsWithCap: { date: string; time: string; capacity: number }[] = [];
+
+    if (row.class_date && row.class_time) {
+      const dateStr = String(row.class_date).slice(0, 10);
+      const timeStr = String(row.class_time).slice(0, 5);
+      slotsWithCap.push({ date: dateStr, time: timeStr, capacity: classCapacity });
+    }
+
+    if (Array.isArray(row.scheduled_slots)) {
+      for (const s of row.scheduled_slots) {
+        const dateStr = String(s?.date ?? "").slice(0, 10);
+        const timeStr = String(s?.time ?? "09:00").slice(0, 5);
+        const slotCap =
+          typeof s?.capacity === "number" && s.capacity >= 1 ? s.capacity : classCapacity;
+        if (dateStr && timeStr) slotsWithCap.push({ date: dateStr, time: timeStr, capacity: slotCap });
+      }
+    }
+
+    if (slotsWithCap.length === 0) return { success: true, slots: [] };
+
+    const { data: bookings, error: bookError } = await supabase
+      .from("bookings")
+      .select("slot_date, slot_time")
+      .eq("class_id", classId)
+      .eq("merchant_id", merchantId)
+      .not("status", "eq", "cancelled");
+
+    if (bookError) return { success: false, error: bookError.message };
+
+    const countMap = new Map<string, number>();
+    for (const b of bookings ?? []) {
+      const br = b as { slot_date?: string | null; slot_time?: string | null };
+      const d = br.slot_date ? String(br.slot_date).slice(0, 10) : "";
+      const t = br.slot_time ? String(br.slot_time).slice(0, 5) : "";
+      const key = `${d}|${t}`;
+      countMap.set(key, (countMap.get(key) ?? 0) + 1);
+    }
+
+    const slots: SlotRemaining[] = slotsWithCap.map(({ date, time, capacity }) => {
+      const key = `${date}|${time}`;
+      const booked = countMap.get(key) ?? 0;
+      const remaining = Math.max(0, capacity - booked);
+      return { date, time, capacity, remaining };
+    });
+
+    return { success: true, slots };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "取得剩餘名額失敗";
+    return { success: false, error: msg };
+  }
+}
+
 /**
  * 後台：將訂單狀態更新為「已付款」（多租戶：僅允許該 merchant_id）。僅當 status 為 unpaid 時可操作。
  */
