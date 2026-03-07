@@ -74,11 +74,12 @@ export async function GET(request: NextRequest) {
   const supabase = createServerSupabase();
   let amount: number;
   let merchantOrderNo: string;
+  let userEmail = "";
 
   if (pendingId) {
     const { data: pending, error } = await supabase
       .from("pending_payments")
-      .select("order_amount, gateway_key")
+      .select("order_amount, gateway_key, member_email")
       .eq("id", pendingId)
       .eq("payment_method", "newebpay")
       .single();
@@ -87,13 +88,14 @@ export async function GET(request: NextRequest) {
     }
     amount = Math.max(0, Number((pending as { order_amount?: number }).order_amount) ?? 0);
     merchantOrderNo = String((pending as { gateway_key?: string }).gateway_key ?? "").slice(0, 30);
+    userEmail = String((pending as { member_email?: string }).member_email ?? "").trim();
     if (amount <= 0 || !merchantOrderNo) {
       return htmlErrorPage("資料異常", "待付款金額或編號有誤，請重新下單。");
     }
   } else {
     const { data: booking, error } = await supabase
       .from("bookings")
-      .select("id, order_amount, status")
+      .select("id, order_amount, status, member_email")
       .eq("id", bookingIdLegacy)
       .single();
     if (error || !booking) {
@@ -103,10 +105,11 @@ export async function GET(request: NextRequest) {
       return htmlErrorPage("訂單狀態錯誤", "此訂單已付款或已關閉，無法重複付款。");
     }
     amount = Math.max(0, Number((booking as { order_amount?: number }).order_amount) ?? 0);
+    userEmail = String((booking as { member_email?: string }).member_email ?? "").trim();
     if (amount <= 0) {
       return htmlErrorPage("訂單金額異常", "訂單金額有誤，請聯絡客服。");
     }
-    merchantOrderNo = String(bookingIdLegacy).replace(/-/g, "").slice(0, 30);
+    merchantOrderNo = "NB" + Date.now().toString();
     await supabase
       .from("bookings")
       .update({ payment_method: "newebpay", newebpay_merchant_order_no: merchantOrderNo })
@@ -118,17 +121,19 @@ export async function GET(request: NextRequest) {
   const returnUrl = `${baseUrl}/api/newebpay/callback/return`;
   const notifyUrl = `${baseUrl}/api/newebpay/callback`;
 
-  const tradeInfoObj = {
+  const tradeInfoObj: Record<string, string | number> = {
     MerchantID: creds.merchantId,
     RespondType: "JSON",
-    TimeStamp: String(Math.floor(Date.now() / 1000)),
+    TimeStamp: Math.floor(Date.now() / 1000),
     Version: "2.0",
     MerchantOrderNo: merchantOrderNo,
     Amt: amount,
-    ItemDesc: "課程報名",
+    ItemDesc: "Course Booking",
     ReturnURL: returnUrl,
     NotifyURL: notifyUrl,
+    LoginType: 0,
   };
+  if (userEmail) tradeInfoObj.Email = userEmail;
 
   const tradeInfoPlain = newebpayQueryString(tradeInfoObj);
   let tradeInfo: string;
@@ -140,9 +145,6 @@ export async function GET(request: NextRequest) {
   }
   const tradeSha = newebpayTradeSha(tradeInfo, creds.hashKey, creds.hashIv);
 
-  console.log("DEBUG_ORIGINAL_STR:", tradeInfoPlain);
-  console.log("DEBUG_AES_RESULT:", tradeInfo);
-  console.log("DEBUG_SHA_RESULT:", tradeSha);
   console.log("[NewebPay checkout] 送出參數（已隱藏金鑰）:", {
     MerchantID: creds.merchantId,
     MerchantOrderNo: merchantOrderNo,

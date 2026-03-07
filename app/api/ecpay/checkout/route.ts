@@ -74,11 +74,9 @@ export async function GET(request: NextRequest) {
   const supabase = createServerSupabase();
   let amount: number;
   let tradeNo: string;
-  const tradeDate = new Date()
-    .toLocaleString("sv-SE")
-    .replace("T", " ")
-    .slice(0, 19)
-    .replace(/-/g, "/");
+  const now = new Date();
+  const twTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const MerchantTradeDate = twTime.toISOString().slice(0, 19).replace("T", " ").replace(/-/g, "/");
 
   if (pendingId) {
     const { data: pending, error } = await supabase
@@ -112,8 +110,9 @@ export async function GET(request: NextRequest) {
       return htmlErrorPage("訂單金額異常", "訂單金額有誤，請聯絡客服。");
     }
     tradeNo = (
-      Date.now().toString().slice(-10) +
-      String(bookingIdLegacy).replace(/-/g, "").slice(0, 10)
+      "EC" +
+      Date.now().toString().slice(-8) +
+      Math.random().toString(36).slice(-4).toUpperCase()
     ).slice(0, 20);
     await supabase
       .from("bookings")
@@ -128,13 +127,13 @@ export async function GET(request: NextRequest) {
   const params: Record<string, string> = {
     MerchantID: creds.merchantId,
     MerchantTradeNo: tradeNo,
-    MerchantTradeDate: tradeDate,
+    MerchantTradeDate: MerchantTradeDate,
     PaymentType: "aio",
     TotalAmount: String(amount),
     TradeDesc: "課程報名",
     ItemName: "課程報名",
     ReturnURL: returnUrl,
-    ChoosePayment: "Credit",
+    ChoosePayment: "ALL",
     EncryptType: "1",
   };
 

@@ -93,9 +93,13 @@ async function createPendingPayment(
   const { paymentMethod } = params;
   let gatewayKey: string | null = null;
   if (paymentMethod === "ecpay") {
-    gatewayKey = (Date.now().toString().slice(-10) + Math.random().toString(36).slice(2, 10)).slice(0, 20);
+    gatewayKey = (
+      "EC" +
+      Date.now().toString().slice(-8) +
+      Math.random().toString(36).slice(-4).toUpperCase()
+    ).slice(0, 20);
   } else if (paymentMethod === "newebpay") {
-    gatewayKey = (Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/\./g, "").slice(0, 30);
+    gatewayKey = "NB" + Date.now().toString();
   }
 
   const slotDateParsed =
