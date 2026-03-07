@@ -1004,11 +1004,11 @@ export async function getRollcallDatesWithCounts(): Promise<
       const row = r as {
         id: string;
         capacity: number | null;
-        scheduled_slots?: { date: string; time: string }[] | null;
+        scheduled_slots?: { date: string; time: string; capacity?: number }[] | null;
         class_date?: string | null;
         class_time?: string | null;
       };
-      const capacity = row.capacity ?? 0;
+      const classCapacity = row.capacity ?? 0;
 
       if (row.class_date) {
         const dateStr = String(row.class_date).slice(0, 10);
@@ -1017,7 +1017,7 @@ export async function getRollcallDatesWithCounts(): Promise<
         const key = `${row.id}|${dateStr}|${timeKey}`;
         if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
         const arr = dateToSessions.get(dateStr)!;
-        if (!arr.some((x) => x.key === key)) arr.push({ key, capacity });
+        if (!arr.some((x) => x.key === key)) arr.push({ key, capacity: classCapacity });
       }
 
       const slots = Array.isArray(row.scheduled_slots) ? row.scheduled_slots : [];
@@ -1025,10 +1025,14 @@ export async function getRollcallDatesWithCounts(): Promise<
         const dateStr = String(s?.date).slice(0, 10);
         const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
         const timeKey = time.length === 5 ? time : "00:00";
+        const slotCap =
+          typeof (s as { capacity?: number }).capacity === "number" && (s as { capacity?: number }).capacity >= 1
+            ? (s as { capacity?: number }).capacity!
+            : classCapacity;
         const key = `${row.id}|${dateStr}|${timeKey}`;
         if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
         const arr = dateToSessions.get(dateStr)!;
-        if (!arr.some((x) => x.key === key)) arr.push({ key, capacity });
+        if (!arr.some((x) => x.key === key)) arr.push({ key, capacity: slotCap });
       }
     }
 
@@ -1112,11 +1116,11 @@ export async function getRollcallSessionsByDate(
         id: string;
         title: string | null;
         capacity: number | null;
-        scheduled_slots?: { date: string; time: string }[] | null;
+        scheduled_slots?: { date: string; time: string; capacity?: number }[] | null;
         class_date?: string | null;
         class_time?: string | null;
       };
-      const capacity = row.capacity ?? 0;
+      const classCapacity = row.capacity ?? 0;
 
       if (row.class_date && String(row.class_date).slice(0, 10) === dateStr) {
         const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
@@ -1127,7 +1131,7 @@ export async function getRollcallSessionsByDate(
           sessions.push({
             classId: row.id,
             title: row.title,
-            capacity,
+            capacity: classCapacity,
             time: timeKey,
             slotDate: dateStr,
             enrolledCount: 0,
@@ -1140,13 +1144,17 @@ export async function getRollcallSessionsByDate(
         if (String(s?.date).slice(0, 10) !== dateStr) continue;
         const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
         const timeKey = time.length === 5 ? time : "00:00";
+        const slotCap =
+          typeof (s as { capacity?: number }).capacity === "number" && (s as { capacity?: number }).capacity >= 1
+            ? (s as { capacity?: number }).capacity!
+            : classCapacity;
         const key = `${row.id}|${dateStr}|${timeKey}`;
         if (!seen.has(key)) {
           seen.add(key);
           sessions.push({
             classId: row.id,
             title: row.title,
-            capacity,
+            capacity: slotCap,
             time: timeKey,
             slotDate: dateStr,
             enrolledCount: 0,
