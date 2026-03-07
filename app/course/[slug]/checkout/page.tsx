@@ -102,8 +102,11 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const err = searchParams.get("error");
+    const msg = searchParams.get("message");
     if (err === "payment_cancelled") {
       setSubmitError("您已取消 LINE Pay 付款，可重新選擇付款方式或稍後再試。");
+    } else if (err === "linepay_confirm") {
+      setSubmitError(msg ? decodeURIComponent(msg) : "支付失敗，請重新嘗試。");
     }
   }, [searchParams]);
 

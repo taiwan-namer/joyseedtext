@@ -120,14 +120,6 @@ export async function requestLinePayPayment(
   const baseUrl = getLinePayBaseUrl();
   const url = `${baseUrl}${uri}`;
 
-  // 僅在後端執行，不暴露 Secret；僅用於除錯
-  console.log("[LINE Pay Request]", {
-    orderId,
-    nonce,
-    signaturePreview: signature.slice(0, 5) + "...",
-    url,
-  });
-
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -140,7 +132,6 @@ export async function requestLinePayPayment(
   });
 
   const text = await res.text();
-  console.log("[LINE Pay Response]", { status: res.status, raw: text });
 
   // transactionId 可能為 19 位數，超過 JS safe integer，以字串處理
   const raw = (() => {

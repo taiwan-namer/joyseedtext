@@ -167,7 +167,6 @@ export async function createBooking(
       const slugForUrl = (courseSlug && String(courseSlug).trim()) || "course";
       const confirmUrl = `${baseUrl}/api/linepay/confirm`;
       const cancelUrl = `${baseUrl}/course/${slugForUrl}/checkout?error=payment_cancelled`;
-      console.log("[LINE Pay redirectUrls]", { confirmUrl, cancelUrl });
       const linePayRes = await requestLinePayPayment({
         channelId: creds.channelId,
         channelSecret: creds.channelSecret,
