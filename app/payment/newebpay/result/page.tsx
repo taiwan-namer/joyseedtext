@@ -9,9 +9,11 @@ type ResultStatus = "paid" | "unpaid" | "not_found" | "error";
 async function getBookingStatus(
   merchantOrderNo: string | null,
   bookingId: string | null,
-  hasError: boolean
+  hasError: boolean,
+  statePending: boolean
 ): Promise<ResultStatus> {
   if (hasError) return "error";
+  if (statePending) return "unpaid";
   const supabase = createServerSupabase();
   if (bookingId && bookingId.trim() !== "") {
     const { data, error } = await supabase
@@ -60,9 +62,11 @@ export default async function NewebpayResultPage({
     (typeof params.orderNo === "string" ? params.orderNo : null);
   const bookingId = typeof params.bookingId === "string" ? params.bookingId : null;
   const errorParam = typeof params.error === "string" ? params.error : null;
+  const stateParam = typeof params.state === "string" ? params.state : null;
   const hasError = errorParam === "return" || !!errorParam;
-  console.log("[NewebPay result page] searchParams keys:", Object.keys(params), "orderNo/MerchantOrderNo:", merchantOrderNo ?? "(empty)", "bookingId:", bookingId ?? "(empty)");
-  const status = await getBookingStatus(merchantOrderNo, bookingId, hasError);
+  const statePending = stateParam === "pending";
+  console.log("[NewebPay result page] searchParams keys:", Object.keys(params), "orderNo/MerchantOrderNo:", merchantOrderNo ?? "(empty)", "bookingId:", bookingId ?? "(empty)", "state:", stateParam);
+  const status = await getBookingStatus(merchantOrderNo, bookingId, hasError, statePending);
   console.log("[NewebPay result page] DB order status:", status);
 
   return (

@@ -5,24 +5,15 @@ import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
 
-function maskForLog(obj: Record<string, unknown>, maxLen = 80): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const s = v === undefined || v === null ? "" : String(v);
-    out[k] = s.length > maxLen ? s.slice(0, maxLen) + "..." : s;
-  }
-  return out;
-}
-
 /**
  * 藍新背景通知（NotifyURL）。
- * 依實際 content-type 解析；解密後依 Status / TradeStatus 判定成功。
+ * 完整 log 原始 payload；解密後依 Status / TradeStatus 判定成功並更新訂單。
  */
 export async function POST(request: NextRequest) {
   console.log("[NewebPay callback] route hit (NotifyURL)");
 
   const contentType = request.headers.get("content-type") ?? "";
-  console.log("[NewebPay callback] raw request content-type:", contentType);
+  console.log("[NewebPay callback] request content-type:", contentType);
 
   let rawBody: string;
   try {
@@ -33,20 +24,24 @@ export async function POST(request: NextRequest) {
   }
 
   console.log("[NewebPay callback] raw body length:", rawBody.length);
-  console.log("[NewebPay callback] raw body preview (前 200 字元):", rawBody.slice(0, 200));
+  console.log("[NewebPay callback] raw body text (full):", rawBody);
 
   const parsedKeys: string[] = [];
-  const parsedObject: Record<string, unknown> = {};
-  let tradeInfoEnc: string = "";
-  let tradeShaReceived: string = "";
+  const parsedObject: Record<string, string> = {};
+  let tradeInfoEnc = "";
+  let tradeShaReceived = "";
 
   if (contentType.includes("application/json")) {
     try {
       const body = JSON.parse(rawBody) as Record<string, unknown>;
-      for (const k of Object.keys(body)) parsedKeys.push(k);
-      for (const [k, v] of Object.entries(body)) parsedObject[k] = v;
-      tradeInfoEnc = typeof body.TradeInfo === "string" ? body.TradeInfo : "";
-      tradeShaReceived = typeof body.TradeSha === "string" ? body.TradeSha : "";
+      for (const k of Object.keys(body)) {
+        parsedKeys.push(k);
+        const v = body[k];
+        const s = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v).slice(0, 200) : String(v);
+        parsedObject[k] = s;
+      }
+      tradeInfoEnc = typeof body.TradeInfo === "string" ? body.TradeInfo : (body.tradeinfo as string) ?? "";
+      tradeShaReceived = typeof body.TradeSha === "string" ? body.TradeSha : (body.tradesha as string) ?? "";
       if (!tradeInfoEnc && body.Result && typeof body.Result === "object") {
         const r = body.Result as Record<string, unknown>;
         if (typeof r.TradeInfo === "string") tradeInfoEnc = r.TradeInfo;
@@ -57,8 +52,6 @@ export async function POST(request: NextRequest) {
         if (typeof d.TradeInfo === "string") tradeInfoEnc = d.TradeInfo;
         if (typeof d.TradeSha === "string") tradeShaReceived = d.TradeSha;
       }
-      console.log("[NewebPay callback] parsed as JSON, keys:", parsedKeys);
-      console.log("[NewebPay callback] parsed object (masked):", maskForLog(parsedObject));
     } catch (e) {
       console.error("[NewebPay callback] JSON parse 失敗，改試 form", e);
       const params = new URLSearchParams(rawBody);
@@ -68,8 +61,6 @@ export async function POST(request: NextRequest) {
       });
       tradeInfoEnc = params.get("TradeInfo") ?? params.get("tradeinfo") ?? "";
       tradeShaReceived = params.get("TradeSha") ?? params.get("tradesha") ?? "";
-      console.log("[NewebPay callback] parsed as form (fallback), keys:", parsedKeys);
-      console.log("[NewebPay callback] parsed object (masked):", maskForLog(parsedObject));
     }
   } else {
     const params = new URLSearchParams(rawBody);
@@ -79,12 +70,15 @@ export async function POST(request: NextRequest) {
     });
     tradeInfoEnc = params.get("TradeInfo") ?? params.get("tradeinfo") ?? "";
     tradeShaReceived = params.get("TradeSha") ?? params.get("tradesha") ?? "";
-    console.log("[NewebPay callback] parsed as form, keys:", parsedKeys);
-    console.log("[NewebPay callback] parsed object (masked):", maskForLog(parsedObject));
   }
 
-  console.log("[NewebPay callback] actual encrypted field used for decrypt: TradeInfo, length:", tradeInfoEnc.length);
-  console.log("[NewebPay callback] TradeSha length:", tradeShaReceived.length);
+  console.log("[NewebPay callback] parsed form keys:", parsedKeys);
+  console.log("[NewebPay callback] parsed form object (each key -> value length):", Object.fromEntries(parsedKeys.map((k) => [k, (parsedObject[k] ?? "").length])));
+
+  const getStr = (key: string): string => (parsedObject[key] ?? parsedObject[key.toLowerCase()] ?? "").trim();
+  console.log("[NewebPay callback] from raw payload (plain): Status:", getStr("Status"), "TradeStatus:", getStr("TradeStatus"), "Message:", getStr("Message"), "Result:", getStr("Result").slice(0, 100), "MerchantOrderNo:", getStr("MerchantOrderNo"), "OrderNo:", getStr("OrderNo"), "TradeNo:", getStr("TradeNo"), "Amt:", getStr("Amt"));
+
+  console.log("[NewebPay callback] field used for decrypt: TradeInfo, length:", tradeInfoEnc.length, "preview (前 32 字):", tradeInfoEnc.slice(0, 32));
 
   const credsForLog = getNewebpayCredsForLog();
   if (credsForLog) {
@@ -93,7 +87,7 @@ export async function POST(request: NextRequest) {
 
   const creds = getNewebpayCreds();
   if (!creds) {
-    console.error("[NewebPay callback] 藍新金流未設定（缺少 NEWEBPAY_MERCHANT_ID / HASH_KEY / HASH_IV）");
+    console.error("[NewebPay callback] 藍新金流未設定");
     return NextResponse.json({ error: "藍新金流未設定" }, { status: 500 });
   }
 
@@ -129,23 +123,24 @@ export async function POST(request: NextRequest) {
   console.log("[NewebPay callback] decrypted payload (full):", decryptedObj);
   console.log("[NewebPay callback] decrypted raw (前 300 字元):", decrypted.slice(0, 300));
 
-  const statusVal = params.get("Status") ?? params.get("status") ?? "";
-  const tradeStatus = params.get("TradeStatus") ?? "";
-  const message = params.get("Message") ?? params.get("message") ?? "";
-  const tradeNo = params.get("TradeNo") ?? "";
-  const merchantOrderNoRaw = params.get("MerchantOrderNo") ?? "";
-  const merchantOrderNo = merchantOrderNoRaw.trim();
-  const amt = params.get("Amt") ?? "";
+  const getDec = (key: string): string => (params.get(key) ?? params.get(key.toLowerCase()) ?? "").trim();
+  const statusVal = getDec("Status");
+  const tradeStatus = getDec("TradeStatus");
+  const message = getDec("Message");
+  const tradeNo = getDec("TradeNo");
+  const merchantOrderNo = getDec("MerchantOrderNo") || getStr("MerchantOrderNo") || getStr("OrderNo");
+  const amt = getDec("Amt");
+  const responseCode = getDec("ResponseCode");
 
-  console.log("[NewebPay callback] Status:", statusVal, "TradeStatus:", tradeStatus, "Message:", message);
-  console.log("[NewebPay callback] MerchantOrderNo:", merchantOrderNo, "TradeNo:", tradeNo, "Amt:", amt);
+  console.log("[NewebPay callback] after decrypt: Status:", statusVal, "TradeStatus:", tradeStatus, "Message:", message, "MerchantOrderNo:", merchantOrderNo, "TradeNo:", tradeNo, "Amt:", amt, "ResponseCode:", responseCode);
 
   const isSuccess =
     statusVal.toUpperCase() === "SUCCESS" ||
-    tradeStatus === "1";
+    tradeStatus === "1" ||
+    String(responseCode).toUpperCase() === "SUCCESS";
 
   if (!isSuccess) {
-    console.log("[NewebPay callback] 非 SUCCESS (Status!==SUCCESS 且 TradeStatus!==1)，仍回 200 避免重試");
+    console.log("[NewebPay callback] 非成功 (Status:", statusVal, "TradeStatus:", tradeStatus, "ResponseCode:", responseCode, ") 仍回 200");
     return NextResponse.json({ message: "payment not success" });
   }
 
@@ -158,7 +153,7 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (!booking) {
-    console.log("[NewebPay callback] 無 unpaid booking 對應 newebpay_merchant_order_no:", JSON.stringify(merchantOrderNo), "→ 改查 pending_payments");
+    console.log("[NewebPay callback] 無 unpaid booking, MerchantOrderNo:", JSON.stringify(merchantOrderNo), "→ 改查 pending_payments");
   }
 
   if (!fetchError && booking) {
@@ -176,7 +171,7 @@ export async function POST(request: NextRequest) {
       console.error("[NewebPay callback] 更新訂單失敗", result.error);
       return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
     }
-    console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id, "DB update result: ok");
+    console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
   } else {
     const { data: pending, error: pendingErr } = await supabase
       .from("pending_payments")
@@ -198,7 +193,7 @@ export async function POST(request: NextRequest) {
             .from("bookings")
             .update({ newebpay_merchant_order_no: merchantOrderNo, newebpay_trade_no: tradeNo })
             .eq("id", res.booking_id);
-          console.log("[NewebPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id, "DB update result: ok");
+          console.log("[NewebPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id);
         }
       }
     } else {
