@@ -114,25 +114,52 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "解密失敗" }, { status: 400 });
   }
 
-  const params = new URLSearchParams(decrypted);
+  let decryptedObj: Record<string, string> = {};
   const decryptedKeys: string[] = [];
-  params.forEach((_, key) => decryptedKeys.push(key));
-  const decryptedObj: Record<string, string> = {};
-  params.forEach((value, key) => {
-    decryptedObj[key] = value;
-  });
+  if (decrypted.trim().startsWith("{")) {
+    try {
+      const j = JSON.parse(decrypted) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(j)) {
+        decryptedKeys.push(k);
+        decryptedObj[k] = v === undefined || v === null ? "" : String(v);
+      }
+      console.log("[NewebPay callback] decrypted 為 JSON，已解析");
+    } catch {
+      // 非 JSON 則當 query string 處理
+    }
+  }
+  if (decryptedKeys.length === 0) {
+    const params = new URLSearchParams(decrypted);
+    params.forEach((_, key) => decryptedKeys.push(key));
+    params.forEach((value, key) => {
+      decryptedObj[key] = value;
+    });
+  }
   console.log("[NewebPay callback] decrypted payload keys:", decryptedKeys.sort());
   console.log("[NewebPay callback] decrypted payload (full):", decryptedObj);
   console.log("[NewebPay callback] decrypted raw (前 300 字元):", decrypted.slice(0, 300));
 
-  const getDec = (key: string): string => (params.get(key) ?? params.get(key.toLowerCase()) ?? "").trim();
-  const statusVal = getDec("Status");
-  const tradeStatus = getDec("TradeStatus");
-  const message = getDec("Message");
-  const tradeNo = getDec("TradeNo");
-  const merchantOrderNo = getDec("MerchantOrderNo") || getStr("MerchantOrderNo") || getStr("OrderNo");
-  const amt = getDec("Amt");
-  const responseCode = getDec("ResponseCode");
+  const getDecByKey = (targetKey: string): string => {
+    const lower = targetKey.toLowerCase();
+    for (const [k, v] of Object.entries(decryptedObj)) {
+      if (k.toLowerCase() === lower) return (v ?? "").trim();
+    }
+    return "";
+  };
+  const statusVal = getDecByKey("Status");
+  const tradeStatus = getDecByKey("TradeStatus");
+  const message = getDecByKey("Message");
+  const tradeNo = getDecByKey("TradeNo");
+  const merchantOrderNoFromDec =
+    getDecByKey("MerchantOrderNo") ||
+    getDecByKey("merchant_order_no") ||
+    (decrypted.match(/"MerchantOrderNo"\s*:\s*"([^"]+)"/) ?? decrypted.match(/MerchantOrderNo=([^&]+)/))?.[1]?.trim() ||
+    (decrypted.match(/"merchant_order_no"\s*:\s*"([^"]+)"/) ?? decrypted.match(/merchant_order_no=([^&]+)/))?.[1]?.trim();
+  const merchantOrderNo = merchantOrderNoFromDec || getStr("MerchantOrderNo") || getStr("OrderNo");
+  const amt = getDecByKey("Amt");
+  const responseCode = getDecByKey("ResponseCode");
+  const returnUrlVal = getDecByKey("ReturnURL");
+  const notifyUrlVal = getDecByKey("NotifyURL");
 
   const rawSuccess = rawJsonBody && (rawJsonBody.success === true || String(rawJsonBody.Status ?? "").toUpperCase() === "SUCCESS");
   const rawPayStatus = rawJsonBody?.data && typeof rawJsonBody.data === "object"
@@ -141,13 +168,13 @@ export async function POST(request: NextRequest) {
   const rawStatusSuccess = rawPayStatus === "SUCCESS" || (rawJsonBody && String(rawJsonBody.Status ?? "").toUpperCase() === "SUCCESS");
 
   console.log("[NewebPay callback] after decrypt: Status:", statusVal, "TradeStatus:", tradeStatus, "Message:", message, "MerchantOrderNo:", merchantOrderNo, "TradeNo:", tradeNo, "Amt:", amt, "ResponseCode:", responseCode);
+  console.log("[NewebPay callback] ReturnURL/NotifyURL from decrypt:", !!returnUrlVal, !!notifyUrlVal);
   console.log("[NewebPay callback] from raw JSON: success:", rawJsonBody?.success, "Status:", rawJsonBody?.Status, "data.payStatus:", rawPayStatus || "(none)");
 
   const hasDecryptedStatus = statusVal !== "" || tradeStatus !== "" || responseCode !== "";
-  const hasReturnOrNotify =
-    (decryptedObj["ReturnURL"] !== undefined && decryptedObj["ReturnURL"] !== "") ||
-    (decryptedObj["NotifyURL"] !== undefined && decryptedObj["NotifyURL"] !== "");
-  const looksLikeOurRequest = !!merchantOrderNo && hasReturnOrNotify;
+  const hasReturnOrNotify = returnUrlVal !== "" || notifyUrlVal !== "" || /ReturnURL=|NotifyURL=/i.test(decrypted);
+  const hasAmtWeSent = /Amt=\d+/.test(decrypted);
+  const looksLikeOurRequest = !!merchantOrderNo && (hasReturnOrNotify || hasAmtWeSent);
 
   const isSuccess =
     statusVal.toUpperCase() === "SUCCESS" ||
@@ -157,12 +184,14 @@ export async function POST(request: NextRequest) {
     rawStatusSuccess ||
     (looksLikeOurRequest && !hasDecryptedStatus);
 
+  console.log("[NewebPay callback] looksLikeOurRequest:", looksLikeOurRequest, "hasReturnOrNotify:", hasReturnOrNotify, "hasAmtWeSent:", hasAmtWeSent, "hasDecryptedStatus:", hasDecryptedStatus);
+
   if (looksLikeOurRequest && !hasDecryptedStatus) {
-    console.log("[NewebPay callback] 解密內容為我們送出的請求（含 ReturnURL/NotifyURL、無 Status），視為 NotifyURL 回呼即付款完成，判定成功");
+    console.log("[NewebPay callback] 解密內容為我們送出的請求（含 ReturnURL/NotifyURL 或 Amt、無 Status），視為 NotifyURL 回呼即付款完成，判定成功");
   }
 
   if (!isSuccess) {
-    console.log("[NewebPay callback] 非成功 (decrypt Status:", statusVal, "TradeStatus:", tradeStatus, "raw success:", rawSuccess, "rawPayStatus:", rawPayStatus, ") 仍回 200");
+    console.log("[NewebPay callback] 非成功 (decrypt Status:", statusVal, "TradeStatus:", tradeStatus, "raw success:", rawSuccess, "rawPayStatus:", rawPayStatus, "looksLikeOurRequest:", looksLikeOurRequest, ") 仍回 200");
     return NextResponse.json({ message: "payment not success" });
   }
 
