@@ -289,10 +289,7 @@ export async function createBooking(
       }
     }
 
-    // 僅「現場付(card)／ATM(transfer)」寫入 bookings；LINE Pay／綠界／藍新絕不在此建立訂單
-    if (pm === "linepay" || pm === "ecpay" || pm === "newebpay") {
-      return { success: false, error: "請重新選擇付款方式（信用卡／ATM／現場付）後再送出。" };
-    }
+    // 僅「現場付(card)／ATM(transfer)」寫入 bookings；若前端未正確傳入付款方式則不建立訂單
     if (paymentMethod !== "card" && paymentMethod !== "transfer") {
       return { success: false, error: "請選擇付款方式（信用卡／ATM／現場付）後再送出。" };
     }
