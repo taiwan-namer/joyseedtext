@@ -27,7 +27,9 @@ export default async function EcpayResultPage({
 }) {
   const [params, settings] = await Promise.all([searchParams, getStoreSettings()]);
   const merchantTradeNo = typeof params.MerchantTradeNo === "string" ? params.MerchantTradeNo : null;
+  console.log("[ECPay result page] searchParams keys:", Object.keys(params), "MerchantTradeNo:", merchantTradeNo ?? "(empty)");
   const status = await getBookingStatus(merchantTradeNo);
+  console.log("[ECPay result page] DB order status:", status);
 
   return (
     <div className="min-h-screen flex flex-col bg-page">

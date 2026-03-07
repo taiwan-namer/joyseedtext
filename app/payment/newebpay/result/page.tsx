@@ -46,11 +46,15 @@ export default async function NewebpayResultPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [params, settings] = await Promise.all([searchParams, getStoreSettings()]);
-  const merchantOrderNo = typeof params.MerchantOrderNo === "string" ? params.MerchantOrderNo : null;
+  const merchantOrderNo =
+    (typeof params.MerchantOrderNo === "string" ? params.MerchantOrderNo : null) ??
+    (typeof params.orderNo === "string" ? params.orderNo : null);
   const bookingId = typeof params.bookingId === "string" ? params.bookingId : null;
   const errorParam = typeof params.error === "string" ? params.error : null;
   const hasError = errorParam === "return" || !!errorParam;
+  console.log("[NewebPay result page] searchParams keys:", Object.keys(params), "orderNo/MerchantOrderNo:", merchantOrderNo ?? "(empty)", "bookingId:", bookingId ?? "(empty)");
   const status = await getBookingStatus(merchantOrderNo, bookingId, hasError);
+  console.log("[NewebPay result page] DB order status:", status);
 
   return (
     <div className="min-h-screen flex flex-col bg-page">

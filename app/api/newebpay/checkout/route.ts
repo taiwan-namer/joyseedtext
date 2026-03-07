@@ -111,9 +111,9 @@ export async function GET(request: NextRequest) {
     return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生藍新回傳網址。");
   }
 
-  const returnUrl = `${appUrl}/api/newebpay/callback/return`;
+  const returnUrl = `${appUrl}/api/newebpay/result`;
   const notifyUrl = `${appUrl}/api/newebpay/callback`;
-  const clientBackUrl = `${appUrl}/member`;
+  const clientBackUrl = `${appUrl}/api/newebpay/back`;
 
   const timeStamp = Math.floor(Date.now() / 1000).toString();
   const amt = Math.round(amount);
@@ -140,6 +140,11 @@ export async function GET(request: NextRequest) {
   }
   const tradeSha = newebpayGetTradeSha(tradeInfoHex, config.hashKey, config.hashIv);
 
+  console.log("[NewebPay checkout] ReturnURL:", returnUrl);
+  console.log("[NewebPay checkout] NotifyURL:", notifyUrl);
+  console.log("[NewebPay checkout] ClientBackURL:", clientBackUrl);
+  console.log("[NewebPay checkout] MerchantOrderNo:", merchantOrderNo);
+  console.log("[NewebPay checkout] actionUrl:", config.actionUrl);
   console.log("[NewebPay checkout config]", {
     actionUrl: config.actionUrl,
     environment: config.isProduction ? "production" : "stage",

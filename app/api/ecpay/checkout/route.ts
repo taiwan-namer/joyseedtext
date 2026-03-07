@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
     return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生綠界回傳網址。");
   }
   const returnUrl = `${appUrl}/api/ecpay/callback`;
-  const orderResultUrl = `${appUrl}/payment/ecpay/result`;
+  const orderResultUrl = `${appUrl}/api/ecpay/result`;
   const clientBackUrl = `${appUrl}/member`;
 
   const ecpayParams: Record<string, string> = {
@@ -157,6 +157,10 @@ export async function GET(request: NextRequest) {
   const actionUrl = getEcpayActionUrl();
   console.log("[ECPay checkout] payment provider: ecpay");
   console.log("[ECPay checkout] APP_URL:", appUrl);
+  console.log("[ECPay checkout] MerchantTradeNo:", tradeNo);
+  console.log("[ECPay checkout] ReturnURL:", returnUrl);
+  console.log("[ECPay checkout] OrderResultURL:", orderResultUrl);
+  console.log("[ECPay checkout] ClientBackURL:", clientBackUrl);
   console.log("[ECPay checkout] actionUrl:", actionUrl);
   console.log(
     "[ECPay checkout] submittedFormFields:",

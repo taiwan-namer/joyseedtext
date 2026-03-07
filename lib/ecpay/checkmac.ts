@@ -89,3 +89,35 @@ export function ecpayCheckMacValue(
 
   return finalCheckMacValue;
 }
+
+/**
+ * 依綠界「回傳的完整參數」重新計算 CheckMacValue（用於 callback / result 驗簽）。
+ * 使用「收到的所有欄位」排除 CheckMacValue 與空值，依 key A-Z 排序，其餘流程同 ecpayCheckMacValue。
+ * 綠界回傳參數與下單參數不同，必須用收到的 payload 驗簽。
+ */
+export function ecpayCheckMacValueFromReceived(
+  params: Record<string, string>,
+  hashKey: string,
+  hashIv: string
+): string {
+  const sortedKeys = Object.keys(params)
+    .filter((k) => k !== "CheckMacValue")
+    .filter((k) => {
+      const v = params[k];
+      return v !== undefined && v !== null && String(v).trim() !== "";
+    })
+    .sort();
+
+  const queryStringBeforeWrap = sortedKeys.map((k) => `${k}=${params[k]}`).join("&");
+  const stringBeforeEncode = `HashKey=${hashKey}&${queryStringBeforeWrap}&HashIV=${hashIv}`;
+
+  const encoded = encodeURIComponent(stringBeforeEncode);
+  let normalizedString = encoded;
+  for (const [from, to] of ECPAY_REPLACE) {
+    normalizedString = normalizedString.split(from).join(to);
+  }
+  normalizedString = normalizedString.toLowerCase();
+
+  const hash = createHash("sha256").update(normalizedString, "utf8").digest("hex");
+  return hash.toUpperCase();
+}

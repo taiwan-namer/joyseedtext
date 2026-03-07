@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { ecpayVerifyCheckMacValue } from "@/lib/payment-utils";
+import { ecpayCheckMacValueFromReceived } from "@/lib/ecpay/checkmac";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 
 function getEcpayCreds() {
@@ -11,27 +11,32 @@ function getEcpayCreds() {
   return { hashKey: key, hashIv: iv };
 }
 
-/**
- * 綠界以 POST 背景通知付款結果，驗證 CheckMacValue 後更新訂單為 paid 並寫入 ecpay_trade_no。
- * 回傳 1|OK 綠界才會視為成功。
- */
 const PLAIN_OK = "1|OK";
 const PLAIN_HEADERS = { "Content-Type": "text/plain; charset=utf-8" };
 
+/**
+ * 綠界以 POST 背景通知付款結果（ReturnURL）。
+ * 以「綠界回傳的完整參數」驗證 CheckMacValue，成功則更新訂單並回傳 1|OK。
+ */
 export async function POST(request: NextRequest) {
   console.log("[ECPay callback] route hit (ReturnURL)");
+
   const formData = await request.formData();
   const params: Record<string, string> = {};
   formData.forEach((value, key) => {
-    params[key] = typeof value === "string" ? value : value instanceof File ? value.name : String(value);
+    const raw = typeof value === "string" ? value : value instanceof File ? value.name : String(value);
+    params[key] = raw.trim();
   });
 
+  const receivedCheckMac = params.CheckMacValue ?? "";
   const merchantTradeNo = params.MerchantTradeNo ?? "";
   const rtnCode = params.RtnCode ?? "";
   const tradeAmt = params.TradeAmt ?? "";
   const tradeNo = params.TradeNo ?? "";
 
+  console.log("[ECPay callback] raw parsed body keys:", Object.keys(params).sort());
   console.log("[ECPay callback] MerchantTradeNo:", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
+  console.log("[ECPay callback] received CheckMacValue (前 12 字元):", receivedCheckMac.slice(0, 12) + "...");
 
   const creds = getEcpayCreds();
   if (!creds) {
@@ -39,8 +44,12 @@ export async function POST(request: NextRequest) {
     return new NextResponse("0|綠界金流未設定", { status: 500, headers: PLAIN_HEADERS });
   }
 
-  const checkMacValid = ecpayVerifyCheckMacValue(params, creds.hashKey, creds.hashIv);
-  console.log("[ECPay callback] CheckMacValue 驗證:", checkMacValid ? "成功" : "失敗");
+  const generatedCheckMac = ecpayCheckMacValueFromReceived(params, creds.hashKey, creds.hashIv);
+  const checkMacValid = receivedCheckMac.toUpperCase() === generatedCheckMac;
+
+  console.log("[ECPay callback] generated CheckMacValue (前 12 字元):", generatedCheckMac.slice(0, 12) + "...");
+  console.log("[ECPay callback] verify result:", checkMacValid ? "成功" : "失敗");
+
   if (!checkMacValid) {
     return new NextResponse("0|CheckMacValue 驗證失敗", { status: 400, headers: PLAIN_HEADERS });
   }
@@ -72,14 +81,13 @@ export async function POST(request: NextRequest) {
 
   if (bookingRow) {
     const result = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
-      status: "paid",
       ecpay_trade_no: tradeNo,
     });
     if (!result.ok) {
       console.error("[ECPay callback] 更新訂單失敗", result.error);
       return new NextResponse("0|更新訂單失敗", { status: 500, headers: PLAIN_HEADERS });
     }
-    console.log("[ECPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
+    console.log("[ECPay callback] 訂單已更新為 paid bookingId:", bookingRow.id, "update result: ok");
   } else {
     const { data: pending, error: pendingErr } = await supabase
       .from("pending_payments")
@@ -108,7 +116,7 @@ export async function POST(request: NextRequest) {
       .from("bookings")
       .update({ ecpay_trade_no: tradeNo })
       .eq("id", res.booking_id);
-    console.log("[ECPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id);
+    console.log("[ECPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id, "update result: ok");
   }
 
   revalidatePath("/member");
