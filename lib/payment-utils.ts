@@ -37,13 +37,15 @@ export function ecpayVerifyCheckMacValue(
 // ========== 藍新 NewebPay ==========
 
 /**
- * 藍新 AES 加密（AES-256-CBC，PKCS7 padding）。
- * HashKey 為 32 字元、HashIV 為 16 字元；加密後轉 hex 或 base64，此處依官方慣例用 AES 加密後再以 hex 輸出。
- * 實際為：將 TradeInfo 字串（key=value&）加密，結果為二進位，再轉成 hex 字串。
+ * 藍新 TradeInfo AES 加密（AES-256-CBC，PKCS7 padding）。
+ * HashKey 32 字元、HashIV 16 字元；明文 key=value& 加密後以 bin2hex（十六進位）輸出。
  */
 export function newebpayAesEncrypt(plainText: string, hashKey: string, hashIv: string): string {
   const key = Buffer.from(hashKey, "utf8");
   const iv = Buffer.from(hashIv, "utf8");
+  if (key.length !== 32 || iv.length !== 16) {
+    throw new Error(`NewebPay AES: HashKey 須 32 bytes、HashIV 須 16 bytes，目前 key=${key.length} iv=${iv.length}`);
+  }
   const cipher = createCipheriv("aes-256-cbc", key, iv);
   cipher.setAutoPadding(true);
   const enc = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
@@ -63,15 +65,15 @@ export function newebpayAesDecrypt(encryptedHex: string, hashKey: string, hashIv
 }
 
 /**
- * 藍新 TradeSha：SHA256(HashKey + TradeInfo + HashIV)，結果轉大寫 hex。
+ * 藍新 TradeSha（MPG 2.0）：SHA256("HashKey=" + HashKey + "&" + TradeInfo密文 + "&HashIV=" + HashIV)，結果轉大寫 hex。
  */
-export function newebpayTradeSha(tradeInfo: string, hashKey: string, hashIv: string): string {
-  const str = hashKey + tradeInfo + hashIv;
-  return createHash("sha256").update(str).digest("hex").toUpperCase();
+export function newebpayTradeSha(tradeInfoEncryptedHex: string, hashKey: string, hashIv: string): string {
+  const str = `HashKey=${hashKey}&${tradeInfoEncryptedHex}&HashIV=${hashIv}`;
+  return createHash("sha256").update(str, "utf8").digest("hex").toUpperCase();
 }
 
 /**
- * 將物件轉成 key=value& 字串（key 依 A-Z 排序），用於藍新 TradeInfo 明文。
+ * 藍新 TradeInfo 明文：key=value&，key 依 A-Z 排序。必填：MerchantID, RespondType, TimeStamp, Version, MerchantOrderNo, Amt, ItemDesc。
  */
 export function newebpayQueryString(obj: Record<string, string | number | undefined>): string {
   const keys = Object.keys(obj).filter((k) => obj[k] !== undefined && obj[k] !== "").sort();

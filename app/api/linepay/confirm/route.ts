@@ -51,9 +51,8 @@ export async function GET(request: NextRequest) {
 
   if (!bookingError && booking && (booking as { status?: string }).status === "unpaid" && (booking as { payment_method?: string }).payment_method === "linepay") {
     merchantId = (booking as { merchant_id: string }).merchant_id;
-    amount = typeof (booking as { order_amount?: number }).order_amount === "number" && (booking as { order_amount?: number }).order_amount >= 0
-      ? (booking as { order_amount: number }).order_amount
-      : 0;
+    const orderAmt = (booking as { order_amount?: number }).order_amount;
+    amount = typeof orderAmt === "number" && orderAmt >= 0 ? orderAmt : 0;
     classIdForFail = (booking as { class_id?: string }).class_id;
     if (amount <= 0) {
       return redirectFail("訂單金額異常");

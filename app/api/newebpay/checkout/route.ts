@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesEncrypt, newebpayTradeSha, newebpayQueryString } from "@/lib/payment-utils";
 
-const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/mpg_gateway";
+const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/main/standard";
 const NEWEBPAY_PRODUCTION_URL = "https://core.newebpay.com/MPG/mpg_gateway";
 
 function getNewebpayCreds() {
@@ -131,18 +131,24 @@ export async function GET(request: NextRequest) {
   };
 
   const tradeInfoPlain = newebpayQueryString(tradeInfoObj);
-  const tradeInfo = newebpayAesEncrypt(tradeInfoPlain, creds.hashKey, creds.hashIv);
+  let tradeInfo: string;
+  try {
+    tradeInfo = newebpayAesEncrypt(tradeInfoPlain, creds.hashKey, creds.hashIv);
+  } catch (e) {
+    console.error("[NewebPay checkout] AES 加密失敗", e);
+    return htmlErrorPage("加密錯誤", "TradeInfo 加密失敗，請確認 HashKey（32 字元）與 HashIV（16 字元）設定正確。");
+  }
   const tradeSha = newebpayTradeSha(tradeInfo, creds.hashKey, creds.hashIv);
 
+  console.log("DEBUG_ORIGINAL_STR:", tradeInfoPlain);
+  console.log("DEBUG_AES_RESULT:", tradeInfo);
+  console.log("DEBUG_SHA_RESULT:", tradeSha);
   console.log("[NewebPay checkout] 送出參數（已隱藏金鑰）:", {
     MerchantID: creds.merchantId,
     MerchantOrderNo: merchantOrderNo,
     Amt: amount,
     ReturnURL: returnUrl,
     NotifyURL: notifyUrl,
-    TradeInfoPlain: tradeInfoPlain,
-    TradeInfoLength: tradeInfo.length,
-    TradeSha: tradeSha?.slice(0, 8) + "...",
     actionUrl: getNewebpayActionUrl(),
   });
 
