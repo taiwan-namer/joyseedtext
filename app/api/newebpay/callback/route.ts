@@ -3,13 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
-
-function getNewebpayCreds() {
-  const key = process.env.NEWEBPAY_HASH_KEY?.trim();
-  const iv = process.env.NEWEBPAY_HASH_IV?.trim();
-  if (!key || !iv) return null;
-  return { hashKey: key, hashIv: iv };
-}
+import { getNewebpayCreds } from "@/lib/newebpay/config";
 
 /**
  * 藍新以 POST 背景通知（NotifyURL），Body 為 JSON: { TradeInfo, TradeSha }。
@@ -29,7 +23,7 @@ export async function POST(request: NextRequest) {
 
   const creds = getNewebpayCreds();
   if (!creds) {
-    console.error("[NewebPay callback] 藍新金流未設定");
+    console.error("[NewebPay callback] 藍新金流未設定（缺少 NEWEBPAY_MERCHANT_ID / HASH_KEY / HASH_IV）");
     return NextResponse.json({ error: "藍新金流未設定" }, { status: 500 });
   }
 

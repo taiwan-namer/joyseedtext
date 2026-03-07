@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 import { getAppUrl } from "@/lib/appUrl";
-
-function getNewebpayCreds() {
-  const key = process.env.NEWEBPAY_HASH_KEY?.trim();
-  const iv = process.env.NEWEBPAY_HASH_IV?.trim();
-  if (!key || !iv) return null;
-  return { hashKey: key, hashIv: iv };
-}
+import { getNewebpayCreds } from "@/lib/newebpay/config";
 
 /**
  * 藍新付款完成後導回商店（ReturnURL）。接收 POST 表單 TradeInfo / TradeSha，

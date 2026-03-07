@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { ecpayCheckMacValue } from "@/lib/crypto-utils";
+import { ecpayCheckMacValue, ECPAY_SIGN_KEYS } from "@/lib/ecpay/checkmac";
 import { getAppUrl } from "@/lib/appUrl";
 
 const ECPAY_STAGE_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5";
@@ -131,22 +131,7 @@ export async function GET(request: NextRequest) {
   const orderResultUrl = `${appUrl}/payment/ecpay/result`;
   const clientBackUrl = `${appUrl}/member`;
 
-  const ECPAY_AIO_REQUIRED_KEYS = [
-    "MerchantID",
-    "MerchantTradeNo",
-    "MerchantTradeDate",
-    "PaymentType",
-    "TotalAmount",
-    "TradeDesc",
-    "ItemName",
-    "ReturnURL",
-    "OrderResultURL",
-    "ClientBackURL",
-    "ChoosePayment",
-    "EncryptType",
-  ] as const;
-
-  const params: Record<string, string> = {
+  const ecpayParams: Record<string, string> = {
     MerchantID: creds.merchantId,
     MerchantTradeNo: tradeNo,
     MerchantTradeDate: MerchantTradeDate,
@@ -161,30 +146,25 @@ export async function GET(request: NextRequest) {
     EncryptType: "1",
   };
 
-  const missing = ECPAY_AIO_REQUIRED_KEYS.filter((k) => !params[k] || String(params[k]).trim() === "");
+  const missing = ECPAY_SIGN_KEYS.filter((k) => !ecpayParams[k] || String(ecpayParams[k]).trim() === "");
   if (missing.length > 0) {
     console.error("[ECPay checkout] 缺少必填參數:", missing);
     return htmlErrorPage("參數錯誤", `綠界必填欄位遺漏: ${missing.join(", ")}`);
   }
 
-  params.CheckMacValue = ecpayCheckMacValue(params, creds.hashKey, creds.hashIv);
+  ecpayParams.CheckMacValue = ecpayCheckMacValue(ecpayParams, creds.hashKey, creds.hashIv, { debug: true });
 
-  const sentParamsLog: Record<string, string> = {};
-  for (const k of ECPAY_AIO_REQUIRED_KEYS) {
-    sentParamsLog[k] = params[k];
-  }
-  sentParamsLog.CheckMacValue = (params.CheckMacValue ?? "").slice(0, 8) + "...";
   const actionUrl = getEcpayActionUrl();
   console.log("[ECPay checkout] payment provider: ecpay");
   console.log("[ECPay checkout] APP_URL:", appUrl);
-  console.log("[ECPay checkout] callback URL (ReturnURL):", returnUrl);
-  console.log("[ECPay checkout] result URL (OrderResultURL):", orderResultUrl);
-  console.log("[ECPay checkout] client back URL (ClientBackURL):", clientBackUrl);
-  console.log("[ECPay checkout] MerchantTradeNo:", tradeNo);
   console.log("[ECPay checkout] actionUrl:", actionUrl);
-  console.log("[ECPay checkout] 送出參數（含 CheckMacValue 前 8 字元）:", sentParamsLog);
+  console.log(
+    "[ECPay checkout] submittedFormFields:",
+    ECPAY_SIGN_KEYS.map((k) => `${k}=${ecpayParams[k]?.slice?.(0, 40) ?? ecpayParams[k]}${(ecpayParams[k]?.length ?? 0) > 40 ? "..." : ""}`)
+  );
+  console.log("[ECPay checkout] CheckMacValue (前 8 字元):", (ecpayParams.CheckMacValue ?? "").slice(0, 8) + "...");
 
-  const formFields = Object.entries(params)
+  const formFields = Object.entries(ecpayParams)
     .map(([k, v]) => `  <input type="hidden" name="${escapeAttr(k)}" value="${escapeAttr(v)}" />`)
     .join("\n");
 
