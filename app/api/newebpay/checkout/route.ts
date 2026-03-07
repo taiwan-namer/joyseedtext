@@ -80,9 +80,6 @@ export async function GET(request: NextRequest) {
   if (error || !booking) {
     return htmlErrorPage("訂單不存在", "查無此訂單，請確認連結是否正確或重新下單。");
   }
-  if (booking.payment_method !== "newebpay") {
-    return htmlErrorPage("付款方式不符", "此訂單並非藍新付款，請回到結帳頁重新選擇付款方式。");
-  }
   if (booking.status !== "unpaid") {
     return htmlErrorPage("訂單狀態錯誤", "此訂單已付款或已關閉，無法重複付款。");
   }
@@ -99,7 +96,7 @@ export async function GET(request: NextRequest) {
   const merchantOrderNo = bookingId.replace(/-/g, "").slice(0, 30);
   await supabase
     .from("bookings")
-    .update({ newebpay_merchant_order_no: merchantOrderNo })
+    .update({ payment_method: "newebpay", newebpay_merchant_order_no: merchantOrderNo })
     .eq("id", bookingId)
     .eq("status", "unpaid");
 

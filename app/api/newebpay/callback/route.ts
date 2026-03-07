@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
+import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 
 function getNewebpayCreds() {
   const key = process.env.NEWEBPAY_HASH_KEY?.trim();
@@ -53,25 +54,34 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServerSupabase();
-  const { data, error } = await supabase
+  const { data: booking, error: fetchError } = await supabase
     .from("bookings")
-    .update({
-      status: "paid",
-      newebpay_trade_no: tradeNo,
-    })
+    .select("id, class_id, merchant_id, slot_date, slot_time")
     .eq("newebpay_merchant_order_no", merchantOrderNo)
     .eq("status", "unpaid")
-    .select("id")
     .maybeSingle();
 
-  if (error) {
-    console.error("[NewebPay callback] 更新訂單失敗:", error);
+  if (fetchError || !booking) {
+    return NextResponse.json({ message: "OK" });
+  }
+
+  const bookingRow = {
+    id: booking.id,
+    class_id: booking.class_id ?? "",
+    merchant_id: booking.merchant_id,
+    slot_date: booking.slot_date ?? null,
+    slot_time: booking.slot_time ?? null,
+  };
+  const result = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
+    status: "paid",
+    newebpay_trade_no: tradeNo,
+  });
+
+  if (!result.ok) {
+    console.error("[NewebPay callback]", result.error);
     return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
   }
 
-  if (data) {
-    revalidatePath("/member");
-  }
-
+  revalidatePath("/member");
   return NextResponse.json({ message: "OK" });
 }

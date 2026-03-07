@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getLinePaySandboxCredentials, validateLinePayCredentials, confirmLinePayPayment } from "@/lib/linepay";
 import { logPaymentApi } from "@/lib/paymentLogs";
+import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 
 /**
  * LINE Pay 使用者完成授權後會導向此 confirmUrl，並帶上 transactionId、orderId（= 我們的 booking id）。
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
-    .select("id, merchant_id, class_id, order_amount, status, payment_method")
+    .select("id, merchant_id, class_id, order_amount, status, payment_method, slot_date, slot_time")
     .eq("id", orderId)
     .single();
 
@@ -112,25 +113,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(failUrl);
   }
 
-  const updatePayload: { status: "paid"; line_pay_transaction_id: string } = {
+  const bookingRow = {
+    id: orderId,
+    class_id: (booking as { class_id?: string }).class_id ?? "",
+    merchant_id: booking.merchant_id,
+    slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
+    slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
+  };
+  const updateResult = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
     status: "paid",
     line_pay_transaction_id: transactionId,
-  };
-  const { data: updateData, error: updateError } = await supabase
-    .from("bookings")
-    .update(updatePayload)
-    .eq("id", orderId)
-    .eq("merchant_id", booking.merchant_id)
-    .eq("status", "unpaid")
-    .select("id")
-    .maybeSingle();
+  });
 
-  if (updateError) {
-    console.error("[LINE Pay Confirm] 更新訂單失敗:", updateError.message, updateError);
-    return redirectFail("更新訂單狀態失敗", updateError.message);
-  }
-  if (!updateData) {
-    return redirectFail("更新訂單狀態失敗", "無符合條件的訂單（可能已被更新）");
+  if (!updateResult.ok) {
+    console.error("[LINE Pay Confirm]", updateResult.error);
+    return redirectFail("更新訂單狀態失敗", updateResult.error);
   }
 
   revalidatePath("/member");

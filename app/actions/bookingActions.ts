@@ -294,7 +294,7 @@ export async function getSlotRemainingCounts(classId: string): Promise<
       .select("slot_date, slot_time")
       .eq("class_id", classId)
       .eq("merchant_id", merchantId)
-      .not("status", "eq", "cancelled");
+      .in("status", ["paid", "completed"]);
 
     if (bookError) return { success: false, error: bookError.message };
 

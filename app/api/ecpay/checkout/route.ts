@@ -80,9 +80,6 @@ export async function GET(request: NextRequest) {
   if (error || !booking) {
     return htmlErrorPage("訂單不存在", "查無此訂單，請確認連結是否正確或重新下單。");
   }
-  if (booking.payment_method !== "ecpay") {
-    return htmlErrorPage("付款方式不符", "此訂單並非綠界付款，請回到結帳頁重新選擇付款方式。");
-  }
   if (booking.status !== "unpaid") {
     return htmlErrorPage("訂單狀態錯誤", "此訂單已付款或已關閉，無法重複付款。");
   }
@@ -100,7 +97,7 @@ export async function GET(request: NextRequest) {
 
   await supabase
     .from("bookings")
-    .update({ ecpay_merchant_trade_no: tradeNo })
+    .update({ payment_method: "ecpay", ecpay_merchant_trade_no: tradeNo })
     .eq("id", bookingId)
     .eq("status", "unpaid");
 
