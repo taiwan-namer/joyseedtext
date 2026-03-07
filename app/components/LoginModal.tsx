@@ -61,11 +61,12 @@ export default function LoginModal({
     setOauthLoading(true);
     try {
       onBeforeGoogleRedirect?.();
-      const supabase = createClient();
       const origin = typeof location !== "undefined" ? location.origin : "";
-      const redirectTo = returnTo
-        ? `${origin}/auth/callback?next=${encodeURIComponent(returnTo)}`
-        : `${origin}/auth/callback`;
+      if (returnTo && typeof document !== "undefined") {
+        document.cookie = `auth_return_to=${encodeURIComponent(returnTo)}; path=/; max-age=600; SameSite=Lax`;
+      }
+      const supabase = createClient();
+      const redirectTo = `${origin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo },

@@ -4,6 +4,8 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { getFrontendSettings } from "@/app/actions/frontendSettingsActions";
+import { getLinePaySandboxCredentials, requestLinePayPayment } from "@/lib/linepay";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -87,9 +89,13 @@ export async function createBooking(
   addonIndices?: number[] | null,
   paymentMethod?: PaymentMethodForBooking | null,
   /** 結帳頁顯示的總金額，寫入訂單供會員中心顯示與結帳頁一致 */
-  totalAmount?: number | null
+  totalAmount?: number | null,
+  /** LINE Pay 用：課程名稱（顯示於 LINE Pay 商品包） */
+  courseTitle?: string | null,
+  /** LINE Pay 用：課程 slug（用於 cancelUrl 導回結帳頁） */
+  courseSlug?: string | null
 ): Promise<
-  | { success: true; bookingId: string }
+  | { success: true; bookingId: string; paymentUrl?: string }
   | { success: false; error: string }
 > {
   try {
@@ -140,7 +146,50 @@ export async function createBooking(
       return { success: false, error: (result?.error as string) ?? "下單失敗" };
     }
 
-    return { success: true, bookingId: String(result.booking_id) };
+    const bookingId = String(result.booking_id);
+
+    if (pm === "linepay") {
+      const settings = await getFrontendSettings();
+      const creds = getLinePaySandboxCredentials(settings.linePayApi);
+      if (!creds) {
+        return { success: false, error: "LINE Pay 未設定，請設定 .env 的 LINE_PAY_CHANNEL_ID / LINE_PAY_CHANNEL_SECRET 或後台金流設定" };
+      }
+      const baseUrl = (typeof process.env.NEXT_PUBLIC_BASE_URL === "string" && process.env.NEXT_PUBLIC_BASE_URL.trim()) || "";
+      if (!baseUrl) {
+        return { success: false, error: "未設定 NEXT_PUBLIC_BASE_URL，無法建立 LINE Pay 導向網址" };
+      }
+      const amount = orderAmount ?? 0;
+      if (amount <= 0) {
+        return { success: false, error: "LINE Pay 付款金額必須大於 0" };
+      }
+      const orderId = bookingId;
+      const productName = (courseTitle && String(courseTitle).trim()) || "課程報名";
+      const slugForUrl = (courseSlug && String(courseSlug).trim()) || "course";
+      const confirmUrl = `${baseUrl}/api/linepay/confirm`;
+      const cancelUrl = `${baseUrl}/course/${slugForUrl}/checkout?error=payment_cancelled`;
+      console.log("[LINE Pay redirectUrls]", { confirmUrl, cancelUrl });
+      const linePayRes = await requestLinePayPayment({
+        channelId: creds.channelId,
+        channelSecret: creds.channelSecret,
+        amount,
+        orderId,
+        packages: [
+          {
+            id: "1",
+            amount,
+            products: [{ id: "1", name: productName, quantity: 1, price: amount }],
+          },
+        ],
+        redirectUrls: { confirmUrl, cancelUrl },
+      });
+      if (!linePayRes.success) {
+        return { success: false, error: linePayRes.returnMessage || "LINE Pay 請求失敗" };
+      }
+      const paymentUrl = linePayRes.info.paymentUrl?.web ?? undefined;
+      return { success: true, bookingId, paymentUrl };
+    }
+
+    return { success: true, bookingId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "下單失敗";
     return { success: false, error: msg };

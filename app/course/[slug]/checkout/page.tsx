@@ -64,6 +64,8 @@ export default function CheckoutPage() {
   const [completingPending, setCompletingPending] = useState(false);
   const [triggerSubmitAfterLogin, setTriggerSubmitAfterLogin] = useState(false);
   const [submitAfterLoginReady, setSubmitAfterLoginReady] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [successBookingId, setSuccessBookingId] = useState<string | null>(null);
   const hasHandledPendingRef = useRef(false);
 
   useEffect(() => {
@@ -97,6 +99,13 @@ export default function CheckoutPage() {
       setAtmBankAccount(data.atmBankAccount ?? "");
     });
   }, []);
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (err === "payment_cancelled") {
+      setSubmitError("您已取消 LINE Pay 付款，可重新選擇付款方式或稍後再試。");
+    }
+  }, [searchParams]);
 
   /** 登入返回後：若有暫存的報名資料且與目前網址一致，自動完成報名（無痛註冊購買） */
   useEffect(() => {
@@ -157,14 +166,23 @@ export default function CheckoutPage() {
             pending.childAge.trim() || null,
             Array.isArray(pending.addonIndices) && pending.addonIndices.length > 0 ? pending.addonIndices : undefined,
             pending.paymentMethod,
-            pending.total
+            pending.total,
+            course.title ?? null,
+            slug ?? null
           );
           if (!bookRes.success) {
             setSubmitError(bookRes.error);
             setCompletingPending(false);
             return;
           }
-          router.push(`/booking/success?bookingId=${encodeURIComponent(bookRes.bookingId)}`);
+          if (bookRes.paymentUrl) {
+            console.log("跳轉至 LINE Pay:", bookRes.paymentUrl);
+            window.location.href = bookRes.paymentUrl;
+            return;
+          }
+          setSuccessBookingId(bookRes.bookingId);
+          setIsSuccessModalOpen(true);
+          setCompletingPending(false);
         } catch (e) {
           setSubmitError(e instanceof Error ? e.message : "完成報名時發生錯誤");
           setCompletingPending(false);
@@ -385,14 +403,23 @@ export default function CheckoutPage() {
         childAge.trim() || null,
         addonIndicesFromUrl.length > 0 ? addonIndicesFromUrl : undefined,
         paymentMethod,
-        totalFromUrl
+        totalFromUrl,
+        course.title ?? null,
+        slug ?? null
       );
       if (!bookRes.success) {
         setSubmitError(bookRes.error);
         setSubmitLoading(false);
         return;
       }
-      router.push(`/booking/success?bookingId=${encodeURIComponent(bookRes.bookingId)}`);
+      if (bookRes.paymentUrl) {
+        console.log("跳轉至 LINE Pay:", bookRes.paymentUrl);
+        window.location.href = bookRes.paymentUrl;
+        return;
+      }
+      setSuccessBookingId(bookRes.bookingId);
+      setIsSuccessModalOpen(true);
+      setSubmitLoading(false);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "送出失敗，請稍後再試");
       setSubmitLoading(false);
@@ -432,6 +459,27 @@ export default function CheckoutPage() {
           setTriggerSubmitAfterLogin(true);
         }}
       />
+
+      {/* 預約已送出彈窗：僅在無支付網址（ATM／現場等）時顯示，有 paymentUrl 時直接跳轉 LINE Pay 不顯示 */}
+      {isSuccessModalOpen && successBookingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="success-modal-title">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
+            <h2 id="success-modal-title" className="text-lg font-bold text-gray-900 mb-2">預約已送出</h2>
+            <p className="text-gray-600 text-sm mb-6">請依所選付款方式完成付款，或至會員中心查看訂單。</p>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSuccessModalOpen(false);
+                setSuccessBookingId(null);
+                router.push(`/booking/success?bookingId=${encodeURIComponent(successBookingId)}`);
+              }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 rounded-lg transition-colors"
+            >
+              查看訂單
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         {slotInvalid && (
