@@ -19,7 +19,7 @@ import type { CourseDetail } from "../../course-data";
 
 type CourseForDisplay = CourseForPublic | CourseDetail;
 
-type PaymentMethod = "card" | "linepay" | "transfer";
+type PaymentMethod = "card" | "linepay" | "transfer" | "ecpay" | "newebpay";
 
 const CHECKOUT_PENDING_KEY = "checkout_pending";
 
@@ -326,11 +326,13 @@ export default function CheckoutPage() {
   };
 
   const buttonText =
-    paymentMethod === "card"
+    paymentMethod === "card" || paymentMethod === "ecpay"
       ? "前往付款"
       : paymentMethod === "linepay"
         ? "使用 Line Pay 付款"
-        : "確認預約並取得帳號";
+        : paymentMethod === "newebpay"
+          ? "前往 ATM 付款"
+          : "確認預約並取得帳號";
 
   const handleSubmit = async () => {
     setSubmitError(null);
@@ -416,7 +418,6 @@ export default function CheckoutPage() {
         return;
       }
       if (bookRes.paymentUrl) {
-        console.log("跳轉至 LINE Pay:", bookRes.paymentUrl);
         window.location.href = bookRes.paymentUrl;
         return;
       }
@@ -673,6 +674,58 @@ export default function CheckoutPage() {
                   />
                   <span className="font-medium text-gray-900">
                     線上刷卡 (第三方金流)
+                  </span>
+                </label>
+                <label
+                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                    paymentMethod === "ecpay"
+                      ? "border-orange-500 bg-orange-50/50"
+                      : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="ecpay"
+                    checked={paymentMethod === "ecpay"}
+                    onChange={() => setPaymentMethod("ecpay")}
+                    className="sr-only"
+                  />
+                  <CreditCard
+                    className={`w-6 h-6 shrink-0 ${
+                      paymentMethod === "ecpay"
+                        ? "text-orange-500"
+                        : "text-gray-400"
+                    }`}
+                  />
+                  <span className="font-medium text-gray-900">
+                    信用卡 (綠界)
+                  </span>
+                </label>
+                <label
+                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                    paymentMethod === "newebpay"
+                      ? "border-orange-500 bg-orange-50/50"
+                      : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="newebpay"
+                    checked={paymentMethod === "newebpay"}
+                    onChange={() => setPaymentMethod("newebpay")}
+                    className="sr-only"
+                  />
+                  <Building
+                    className={`w-6 h-6 shrink-0 ${
+                      paymentMethod === "newebpay"
+                        ? "text-orange-500"
+                        : "text-gray-400"
+                    }`}
+                  />
+                  <span className="font-medium text-gray-900">
+                    ATM (藍新)
                   </span>
                 </label>
                 <label

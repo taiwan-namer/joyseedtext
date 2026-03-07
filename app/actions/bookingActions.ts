@@ -74,8 +74,8 @@ async function isSlotAllowed(
  * 透過 RPC 在同一交易內：檢查名額 → 新增訂單(upcoming) → capacity - 1。
  * 下單前會檢查所選 slot 是否在課程的 scheduled_slots／class_date+class_time 內，避免點錯或竄改網址。
  */
-/** 結帳頁傳入的付款方式；存進 DB 為 atm | card | linepay（transfer → atm） */
-export type PaymentMethodForBooking = "card" | "linepay" | "transfer";
+/** 結帳頁傳入的付款方式；存進 DB 為 atm | card | linepay | ecpay | newebpay（transfer → atm） */
+export type PaymentMethodForBooking = "card" | "linepay" | "transfer" | "ecpay" | "newebpay";
 
 export async function createBooking(
   classId: string,
@@ -117,7 +117,18 @@ export async function createBooking(
       }
     }
 
-    const pm = paymentMethod === "transfer" ? "atm" : paymentMethod === "linepay" ? "linepay" : paymentMethod === "card" ? "card" : "atm";
+    const pm =
+      paymentMethod === "transfer"
+        ? "atm"
+        : paymentMethod === "linepay"
+          ? "linepay"
+          : paymentMethod === "card"
+            ? "card"
+            : paymentMethod === "ecpay"
+              ? "ecpay"
+              : paymentMethod === "newebpay"
+                ? "newebpay"
+                : "atm";
 
     const orderAmount =
       typeof totalAmount === "number" && !Number.isNaN(totalAmount) && totalAmount >= 0
@@ -205,6 +216,16 @@ export async function createBooking(
         return { success: false, error: linePayRes.returnMessage || "LINE Pay 請求失敗" };
       }
       const paymentUrl = linePayRes.info.paymentUrl?.web ?? undefined;
+      return { success: true, bookingId, paymentUrl };
+    }
+
+    if (pm === "ecpay" || pm === "newebpay") {
+      const baseUrl = (typeof process.env.NEXT_PUBLIC_BASE_URL === "string" && process.env.NEXT_PUBLIC_BASE_URL.trim()) || "";
+      if (!baseUrl) {
+        return { success: false, error: "未設定 NEXT_PUBLIC_BASE_URL，無法導向金流" };
+      }
+      const path = pm === "ecpay" ? "/api/ecpay/checkout" : "/api/newebpay/checkout";
+      const paymentUrl = `${baseUrl}${path}?bookingId=${encodeURIComponent(bookingId)}`;
       return { success: true, bookingId, paymentUrl };
     }
 
