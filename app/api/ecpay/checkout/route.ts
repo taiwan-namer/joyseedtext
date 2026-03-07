@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ecpayCheckMacValue } from "@/lib/crypto-utils";
+import { getAppUrl } from "@/lib/appUrl";
 
 const ECPAY_STAGE_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5";
 const ECPAY_PRODUCTION_URL = "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5";
@@ -121,10 +122,15 @@ export async function GET(request: NextRequest) {
       .eq("status", "unpaid");
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "";
-  const returnUrl = `${baseUrl}/api/ecpay/callback`;
+  const appUrl = getAppUrl();
+  if (!appUrl) {
+    console.error("[ECPay checkout] 未設定 APP_URL 或 NEXT_PUBLIC_BASE_URL，無法產生回傳網址");
+    return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生綠界回傳網址。");
+  }
+  const returnUrl = `${appUrl}/api/ecpay/callback`;
+  const orderResultUrl = `${appUrl}/payment/ecpay/result`;
+  const clientBackUrl = `${appUrl}/member`;
 
-  // 綠界 AIO 必填 10 欄位（缺一不可，表單與 CheckMacValue 計算皆須包含）
   const ECPAY_AIO_REQUIRED_KEYS = [
     "MerchantID",
     "MerchantTradeNo",
@@ -134,6 +140,8 @@ export async function GET(request: NextRequest) {
     "TradeDesc",
     "ItemName",
     "ReturnURL",
+    "OrderResultURL",
+    "ClientBackURL",
     "ChoosePayment",
     "EncryptType",
   ] as const;
@@ -147,6 +155,8 @@ export async function GET(request: NextRequest) {
     TradeDesc: "Course_Booking",
     ItemName: "課程預約",
     ReturnURL: returnUrl,
+    OrderResultURL: orderResultUrl,
+    ClientBackURL: clientBackUrl,
     ChoosePayment: "ALL",
     EncryptType: "1",
   };
@@ -164,9 +174,16 @@ export async function GET(request: NextRequest) {
     sentParamsLog[k] = params[k];
   }
   sentParamsLog.CheckMacValue = (params.CheckMacValue ?? "").slice(0, 8) + "...";
-  console.log("[ECPay checkout] 送出參數（10 個必填 + CheckMacValue）:", sentParamsLog, "actionUrl:", getEcpayActionUrl());
-
   const actionUrl = getEcpayActionUrl();
+  console.log("[ECPay checkout] payment provider: ecpay");
+  console.log("[ECPay checkout] APP_URL:", appUrl);
+  console.log("[ECPay checkout] callback URL (ReturnURL):", returnUrl);
+  console.log("[ECPay checkout] result URL (OrderResultURL):", orderResultUrl);
+  console.log("[ECPay checkout] client back URL (ClientBackURL):", clientBackUrl);
+  console.log("[ECPay checkout] MerchantTradeNo:", tradeNo);
+  console.log("[ECPay checkout] actionUrl:", actionUrl);
+  console.log("[ECPay checkout] 送出參數（含 CheckMacValue 前 8 字元）:", sentParamsLog);
+
   const formFields = Object.entries(params)
     .map(([k, v]) => `  <input type="hidden" name="${escapeAttr(k)}" value="${escapeAttr(v)}" />`)
     .join("\n");

@@ -16,6 +16,7 @@ function getNewebpayCreds() {
  * 解密 TradeInfo 後驗證 TradeSha，成功則更新訂單為 paid 並寫入 newebpay_trade_no。
  */
 export async function POST(request: NextRequest) {
+  console.log("[NewebPay callback] route hit (NotifyURL)");
   let body: { TradeInfo?: string; TradeSha?: string };
   try {
     body = await request.json();
@@ -28,11 +29,14 @@ export async function POST(request: NextRequest) {
 
   const creds = getNewebpayCreds();
   if (!creds) {
+    console.error("[NewebPay callback] 藍新金流未設定");
     return NextResponse.json({ error: "藍新金流未設定" }, { status: 500 });
   }
 
   const expectedSha = newebpayTradeSha(tradeInfoEnc, creds.hashKey, creds.hashIv);
-  if (tradeShaReceived.toUpperCase() !== expectedSha) {
+  const shaValid = tradeShaReceived.toUpperCase() === expectedSha;
+  console.log("[NewebPay callback] TradeSha 驗證:", shaValid ? "成功" : "失敗");
+  if (!shaValid) {
     return NextResponse.json({ error: "TradeSha 驗證失敗" }, { status: 400 });
   }
 
@@ -48,6 +52,8 @@ export async function POST(request: NextRequest) {
   const status = params.get("Status");
   const tradeNo = params.get("TradeNo") ?? "";
   const merchantOrderNo = params.get("MerchantOrderNo") ?? "";
+  const amt = params.get("Amt") ?? "";
+  console.log("[NewebPay callback] MerchantOrderNo:", merchantOrderNo, "Status:", status, "Amt:", amt);
 
   if (status !== "SUCCESS") {
     return NextResponse.json({ message: "payment not success" });
@@ -74,9 +80,10 @@ export async function POST(request: NextRequest) {
       newebpay_trade_no: tradeNo,
     });
     if (!result.ok) {
-      console.error("[NewebPay callback]", result.error);
+      console.error("[NewebPay callback] 更新訂單失敗", result.error);
       return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
     }
+    console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
   } else {
     const { data: pending, error: pendingErr } = await supabase
       .from("pending_payments")
@@ -96,6 +103,7 @@ export async function POST(request: NextRequest) {
             .from("bookings")
             .update({ newebpay_trade_no: tradeNo })
             .eq("id", res.booking_id);
+          console.log("[NewebPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id);
         }
       }
     }

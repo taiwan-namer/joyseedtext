@@ -4,12 +4,14 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getLinePaySandboxCredentials, validateLinePayCredentials, confirmLinePayPayment } from "@/lib/linepay";
 import { logPaymentApi } from "@/lib/paymentLogs";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
+import { getAppUrl } from "@/lib/appUrl";
 
 /**
  * LINE Pay 使用者完成授權後會導向此 confirmUrl，並帶上 transactionId、orderId（= 我們的 booking id）。
  * 流程：從 URL 取得 transactionId / orderId → 呼叫 LINE Pay Confirm API →
  * 使用 Supabase Service Role 將對應訂單 status 更新為 paid、寫入 line_pay_transaction_id → 導向報名成功頁。
  * 訂單 ID 可從 orderId、bookingId、id 任一 query 參數讀取。
+ * 失敗時導向結帳頁（不導向首頁 /）。
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -18,15 +20,16 @@ export async function GET(request: NextRequest) {
     searchParams.get("orderId") || searchParams.get("bookingId") || searchParams.get("id");
   const orderId = typeof orderIdRaw === "string" ? orderIdRaw.trim() : "";
 
-  const baseUrl =
-    (typeof process.env.NEXT_PUBLIC_BASE_URL === "string" && process.env.NEXT_PUBLIC_BASE_URL.trim()) || "";
-  const redirectFail = (msg: string, detail?: string) => {
+  const appUrl = getAppUrl();
+  const checkoutFailPath = "/course/course/checkout";
+  const redirectFail = (msg: string, detail?: string, slug?: string) => {
     const params = new URLSearchParams({ error: "linepay_confirm", message: msg });
     if (detail) params.set("detail", detail);
-    return NextResponse.redirect(`${baseUrl || "/"}?${params.toString()}`);
+    const path = `${appUrl || ""}/course/${slug ?? "course"}/checkout?${params.toString()}`;
+    return NextResponse.redirect(path);
   };
   const redirectNoId = () =>
-    NextResponse.redirect(`${baseUrl || "/"}?error=no_id_provided`);
+    NextResponse.redirect(`${appUrl || ""}${checkoutFailPath}?error=no_id_provided`);
 
   if (!orderId) {
     return redirectNoId();
@@ -107,8 +110,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!confirmRes.success) {
-      const failUrl = `${baseUrl}/course/${classIdForFail ?? "course"}/checkout?error=linepay_confirm&message=${encodeURIComponent("支付失敗，請重新嘗試")}`;
-      return NextResponse.redirect(failUrl);
+      return redirectFail("支付失敗，請重新嘗試", undefined, classIdForFail ?? "course");
     }
 
     const bookingRow = {
@@ -194,7 +196,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!confirmRes.success) {
-      return NextResponse.redirect(`${baseUrl}/?error=linepay_confirm&message=${encodeURIComponent("支付失敗")}`);
+      return redirectFail("支付失敗");
     }
 
     const { data: rpcResult, error: rpcErr } = await supabase.rpc("create_booking_from_pending", {
@@ -217,6 +219,6 @@ export async function GET(request: NextRequest) {
 
   revalidatePath("/member");
 
-  const successUrl = `${baseUrl}/booking/success?bookingId=${encodeURIComponent(finalBookingId)}`;
+  const successUrl = `${appUrl || ""}/booking/success?bookingId=${encodeURIComponent(finalBookingId)}`;
   return NextResponse.redirect(successUrl);
 }

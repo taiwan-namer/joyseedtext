@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayEncryptTradeInfo, newebpayGetTradeSha } from "@/lib/crypto-utils";
+import { getAppUrl } from "@/lib/appUrl";
 
 const NEWEBPAY_STAGE_URL = "https://ccore.newebpay.com/MPG/main/standard";
 const NEWEBPAY_PRODUCTION_URL = "https://core.newebpay.com/MPG/mpg_gateway";
@@ -118,9 +119,14 @@ export async function GET(request: NextRequest) {
       .eq("status", "unpaid");
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "";
-  const returnUrl = `${baseUrl}/api/newebpay/callback/return`;
-  const notifyUrl = `${baseUrl}/api/newebpay/callback`;
+  const appUrl = getAppUrl();
+  if (!appUrl) {
+    console.error("[NewebPay checkout] 未設定 APP_URL 或 NEXT_PUBLIC_BASE_URL，無法產生回傳網址");
+    return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生藍新回傳網址。");
+  }
+  const returnUrl = `${appUrl}/api/newebpay/callback/return`;
+  const notifyUrl = `${appUrl}/api/newebpay/callback`;
+  const resultPageUrl = `${appUrl}/payment/newebpay/result`;
 
   // MPG 2.0：TradeInfo 明文 8 個必填欄位，固定順序，Amt 整數無小數、ItemDesc 無空格、Version 字串 2.0
   const timeStamp = Math.floor(Date.now() / 1000).toString();
@@ -147,12 +153,14 @@ export async function GET(request: NextRequest) {
   }
   const tradeSha = newebpayGetTradeSha(tradeInfoHex, creds.hashKey, creds.hashIv);
 
-  console.log("--- NEWEBPAY_FINAL_CHECK ---");
-  console.log("RawData:", rawData);
-  console.log("TradeInfoHex:", tradeInfoHex);
-  console.log("TradeSha:", tradeSha);
-
   const actionUrl = getNewebpayActionUrl();
+  console.log("[NewebPay checkout] payment provider: newebpay");
+  console.log("[NewebPay checkout] APP_URL:", appUrl);
+  console.log("[NewebPay checkout] callback URL (NotifyURL):", notifyUrl);
+  console.log("[NewebPay checkout] return URL (ReturnURL):", returnUrl);
+  console.log("[NewebPay checkout] result page URL:", resultPageUrl);
+  console.log("[NewebPay checkout] MerchantOrderNo:", merchantOrderNo);
+  console.log("[NewebPay checkout] actionUrl:", actionUrl);
   const html = `<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
