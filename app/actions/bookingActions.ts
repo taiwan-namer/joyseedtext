@@ -806,14 +806,6 @@ export async function getAdminBookings(): Promise<
   }
 }
 
-/** 點名簿用：單一課程資訊 */
-export type ClassForEnrollment = {
-  id: string;
-  title: string | null;
-  capacity: number | null;
-  scheduled_slots: { date: string; time: string }[] | null;
-};
-
 /** 點名簿用：訂單 + 家長／小朋友／聯絡方式，與訂單管理相同，皆直接來自 bookings 表 */
 export type BookingWithMember = {
   id: string;
@@ -854,82 +846,6 @@ function parseAddonIndicesFromDb(v: unknown): number[] | null {
 }
 
 /** 點名簿用：一門課 + 其報名名單 */
-export type CourseEnrollmentItem = {
-  class: ClassForEnrollment;
-  bookings: BookingWithMember[];
-};
-
-/**
- * 後台報名進度查詢（點名簿）：撈取店家所有課程與每門課的訂單。
- * 家長姓名、聯絡電話等與訂單管理相同，皆直接從 bookings 表取得（不查 members）。
- */
-export async function getEnrollmentByCourse(): Promise<
-  | { success: true; data: CourseEnrollmentItem[] }
-  | { success: false; error: string }
-> {
-  try {
-    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    if (!merchantId) return { success: false, error: "未設定店家" };
-
-    const supabase = createServerSupabase();
-
-    const { data: classesRows, error: classesError } = await supabase
-      .from("classes")
-      .select("id, title, capacity, scheduled_slots")
-      .eq("merchant_id", merchantId)
-      .order("id", { ascending: true });
-
-    if (classesError) return { success: false, error: classesError.message };
-    const classesList = (classesRows ?? []) as { id: string; title: string | null; capacity: number | null; scheduled_slots: unknown }[];
-    const classIds = classesList.map((c) => c.id);
-    if (classIds.length === 0) return { success: true, data: [] };
-
-    const { data: bookingsRows, error: bookingsError } = await supabase
-      .from("bookings")
-      .select("id, member_email, parent_name, parent_phone, kid_name, kid_age, allergy_or_special_note, addon_indices, class_id, status, created_at")
-      .eq("merchant_id", merchantId)
-      .in("class_id", classIds)
-      .order("created_at", { ascending: false });
-
-    if (bookingsError) return { success: false, error: bookingsError.message };
-
-    const bookingsByClassId = new Map<string, BookingWithMember[]>();
-    for (const r of bookingsRows ?? []) {
-      const row = r as Record<string, unknown>;
-      const cid = String(row.class_id ?? "");
-      const b: BookingWithMember = {
-        id: String(row.id),
-        member_email: String(row.member_email),
-        parent_name: row.parent_name != null ? String(row.parent_name).trim() || null : null,
-        kid_name: row.kid_name != null ? String(row.kid_name).trim() || null : null,
-        kid_age: row.kid_age != null ? String(row.kid_age).trim() || null : null,
-        allergy_or_special_note: row.allergy_or_special_note != null ? String(row.allergy_or_special_note).trim() || null : null,
-        contact_phone: row.parent_phone != null ? String(row.parent_phone).trim() || null : null,
-        addon_indices: parseAddonIndicesFromDb(row.addon_indices),
-        status: String(row.status),
-        created_at: String(row.created_at),
-      };
-      if (!bookingsByClassId.has(cid)) bookingsByClassId.set(cid, []);
-      bookingsByClassId.get(cid)!.push(b);
-    }
-
-    const data: CourseEnrollmentItem[] = classesList.map((cls) => ({
-      class: {
-        id: cls.id,
-        title: cls.title,
-        capacity: cls.capacity,
-        scheduled_slots: Array.isArray(cls.scheduled_slots) ? (cls.scheduled_slots as { date: string; time: string }[]) : null,
-      },
-      bookings: bookingsByClassId.get(cls.id) ?? [],
-    }));
-
-    return { success: true, data };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "取得報名資料失敗";
-    return { success: false, error: msg };
-  }
-}
-
 /** 點名簿（依日期）：單一場次 = 同 class 同日期同時間 */
 export type RollcallSession = {
   classId: string;
@@ -939,44 +855,6 @@ export type RollcallSession = {
   slotDate: string;
   enrolledCount: number;
 };
-
-/**
- * 動態日期選單：撈取當前店家所有有開課的日期（從 scheduled_slots 與 class_date 萃取），去重、排序。
- */
-export async function getRollcallDates(): Promise<
-  | { success: true; data: string[] }
-  | { success: false; error: string }
-> {
-  try {
-    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    if (!merchantId) return { success: false, error: "未設定店家" };
-
-    const supabase = createServerSupabase();
-    const { data: rows, error } = await supabase
-      .from("classes")
-      .select("scheduled_slots, class_date")
-      .eq("merchant_id", merchantId);
-
-    if (error) return { success: false, error: error.message };
-
-    const dateSet = new Set<string>();
-    for (const r of rows ?? []) {
-      const row = r as { scheduled_slots?: unknown; class_date?: string | null };
-      if (row.class_date) dateSet.add(String(row.class_date).slice(0, 10));
-      const slots = row.scheduled_slots;
-      if (Array.isArray(slots)) {
-        for (const s of slots as { date?: string }[]) {
-          if (s?.date) dateSet.add(String(s.date).slice(0, 10));
-        }
-      }
-    }
-    const dates = Array.from(dateSet).sort();
-    return { success: true, data: dates };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "取得日期失敗";
-    return { success: false, error: msg };
-  }
-}
 
 /** 日期選單用：每個日期的已報名數與總名額（當日所有場次加總） */
 export type RollcallDateWithCounts = {
