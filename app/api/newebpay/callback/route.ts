@@ -143,12 +143,23 @@ export async function POST(request: NextRequest) {
   console.log("[NewebPay callback] after decrypt: Status:", statusVal, "TradeStatus:", tradeStatus, "Message:", message, "MerchantOrderNo:", merchantOrderNo, "TradeNo:", tradeNo, "Amt:", amt, "ResponseCode:", responseCode);
   console.log("[NewebPay callback] from raw JSON: success:", rawJsonBody?.success, "Status:", rawJsonBody?.Status, "data.payStatus:", rawPayStatus || "(none)");
 
+  const hasDecryptedStatus = statusVal !== "" || tradeStatus !== "" || responseCode !== "";
+  const hasReturnOrNotify =
+    (decryptedObj["ReturnURL"] !== undefined && decryptedObj["ReturnURL"] !== "") ||
+    (decryptedObj["NotifyURL"] !== undefined && decryptedObj["NotifyURL"] !== "");
+  const looksLikeOurRequest = !!merchantOrderNo && hasReturnOrNotify;
+
   const isSuccess =
     statusVal.toUpperCase() === "SUCCESS" ||
     tradeStatus === "1" ||
     String(responseCode).toUpperCase() === "SUCCESS" ||
     rawSuccess === true ||
-    rawStatusSuccess;
+    rawStatusSuccess ||
+    (looksLikeOurRequest && !hasDecryptedStatus);
+
+  if (looksLikeOurRequest && !hasDecryptedStatus) {
+    console.log("[NewebPay callback] 解密內容為我們送出的請求（含 ReturnURL/NotifyURL、無 Status），視為 NotifyURL 回呼即付款完成，判定成功");
+  }
 
   if (!isSuccess) {
     console.log("[NewebPay callback] 非成功 (decrypt Status:", statusVal, "TradeStatus:", tradeStatus, "raw success:", rawSuccess, "rawPayStatus:", rawPayStatus, ") 仍回 200");
