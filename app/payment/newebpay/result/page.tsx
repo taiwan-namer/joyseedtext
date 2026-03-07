@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getStoreSettings } from "@/app/actions/storeSettingsActions";
 import { HeaderMember } from "@/app/components/HeaderMember";
@@ -13,7 +14,7 @@ async function getBookingStatus(
   statePending: boolean
 ): Promise<ResultStatus> {
   if (hasError) return "error";
-  if (statePending) return "unpaid";
+  if (statePending && !merchantOrderNo && !bookingId) return "unpaid";
   const supabase = createServerSupabase();
   if (bookingId && bookingId.trim() !== "") {
     const { data, error } = await supabase
@@ -56,8 +57,8 @@ export default async function NewebpayResultPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [params, settings] = await Promise.all([searchParams, getStoreSettings()]);
-  const merchantOrderNo =
+  const [params, settings, cookieStore] = await Promise.all([searchParams, getStoreSettings(), cookies()]);
+  let merchantOrderNo =
     (typeof params.MerchantOrderNo === "string" ? params.MerchantOrderNo : null) ??
     (typeof params.orderNo === "string" ? params.orderNo : null);
   const bookingId = typeof params.bookingId === "string" ? params.bookingId : null;
@@ -65,6 +66,16 @@ export default async function NewebpayResultPage({
   const stateParam = typeof params.state === "string" ? params.state : null;
   const hasError = errorParam === "return" || !!errorParam;
   const statePending = stateParam === "pending";
+  if (statePending && !merchantOrderNo) {
+    const fromCookie = cookieStore.get("newebpay_order_no")?.value;
+    if (fromCookie) {
+      try {
+        merchantOrderNo = decodeURIComponent(fromCookie);
+      } catch {
+        merchantOrderNo = fromCookie;
+      }
+    }
+  }
   console.log("[NewebPay result page] searchParams keys:", Object.keys(params), "orderNo/MerchantOrderNo:", merchantOrderNo ?? "(empty)", "bookingId:", bookingId ?? "(empty)", "state:", stateParam);
   const status = await getBookingStatus(merchantOrderNo, bookingId, hasError, statePending);
   console.log("[NewebPay result page] DB order status:", status);

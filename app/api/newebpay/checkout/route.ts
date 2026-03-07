@@ -184,7 +184,11 @@ export async function GET(request: NextRequest) {
 </body>
 </html>`;
 
+  const cookieValue = `newebpay_order_no=${encodeURIComponent(merchantOrderNo)}; Path=/; Max-Age=3600; SameSite=Lax`;
   return new NextResponse(html, {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": cookieValue,
+    },
   });
 }
