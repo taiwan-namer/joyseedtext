@@ -203,32 +203,43 @@ export async function POST(request: NextRequest) {
   const supabase = createServerSupabase();
   const { data: booking, error: fetchError } = await supabase
     .from("bookings")
-    .select("id, class_id, merchant_id, slot_date, slot_time")
+    .select("id, class_id, merchant_id, slot_date, slot_time, status")
     .eq("newebpay_merchant_order_no", merchantOrderNo)
-    .eq("status", "unpaid")
     .maybeSingle();
 
-  if (!booking) {
-    console.log("[NewebPay callback] 無 unpaid booking, MerchantOrderNo:", JSON.stringify(merchantOrderNo), "→ 改查 pending_payments");
+  if (!fetchError && booking) {
+    const status = (booking as { status?: string }).status ?? "";
+    if (status === "paid" || status === "completed") {
+      console.log("[NewebPay callback] 訂單已為 paid/completed，冪等直接回 200 bookingId:", (booking as { id: string }).id);
+      revalidatePath("/member");
+      return NextResponse.json({ message: "OK" });
+    }
+    if (status === "unpaid") {
+      const bookingRow = {
+        id: (booking as { id: string }).id,
+        class_id: (booking as { class_id?: string }).class_id ?? "",
+        merchant_id: (booking as { merchant_id: string }).merchant_id,
+        slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
+        slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
+      };
+      const result = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
+        newebpay_trade_no: tradeNo,
+      });
+      if (!result.ok) {
+        console.error("[NewebPay callback] 更新訂單失敗", result.error);
+        return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
+      }
+      console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
+      revalidatePath("/member");
+      return NextResponse.json({ message: "OK" });
+    }
   }
 
-  if (!fetchError && booking) {
-    const bookingRow = {
-      id: (booking as { id: string }).id,
-      class_id: (booking as { class_id?: string }).class_id ?? "",
-      merchant_id: (booking as { merchant_id: string }).merchant_id,
-      slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
-      slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
-    };
-    const result = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
-      newebpay_trade_no: tradeNo,
-    });
-    if (!result.ok) {
-      console.error("[NewebPay callback] 更新訂單失敗", result.error);
-      return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
-    }
-    console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
-  } else {
+  if (!booking) {
+    console.log("[NewebPay callback] 無 booking, MerchantOrderNo:", JSON.stringify(merchantOrderNo), "→ 改查 pending_payments");
+  }
+
+  {
     const { data: pending, error: pendingErr } = await supabase
       .from("pending_payments")
       .select("id")

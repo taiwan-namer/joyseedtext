@@ -206,9 +206,25 @@ export async function GET(request: NextRequest) {
       console.error("[LINE Pay Confirm] create_booking_from_pending", rpcErr);
       return redirectFail("建立訂單失敗", rpcErr.message);
     }
-    const res = rpcResult as { ok?: boolean; booking_id?: string } | null;
+    const res = rpcResult as { ok?: boolean; booking_id?: string; error?: string } | null;
     if (!res?.ok || !res.booking_id) {
-      return redirectFail("建立訂單失敗");
+      const errorMsg = res?.error ?? "";
+      const isPendingNotFound = errorMsg.includes("pending") || errorMsg.includes("不存在");
+      if (isPendingNotFound) {
+        const { data: existingBooking } = await supabase
+          .from("bookings")
+          .select("id")
+          .eq("line_pay_transaction_id", transactionId)
+          .eq("merchant_id", merchantId)
+          .maybeSingle();
+        if (existingBooking && (existingBooking as { id: string }).id) {
+          console.log("[LINE Pay Confirm] pending 已不存在，依 transactionId 找到已建立訂單，冪等導向 success bookingId:", (existingBooking as { id: string }).id);
+          revalidatePath("/member");
+          const successUrl = `${appUrl || ""}/booking/success?bookingId=${encodeURIComponent((existingBooking as { id: string }).id)}`;
+          return NextResponse.redirect(successUrl);
+        }
+      }
+      return redirectFail("建立訂單失敗", errorMsg || undefined);
     }
     finalBookingId = res.booking_id;
     await supabase

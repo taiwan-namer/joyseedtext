@@ -68,22 +68,28 @@ export async function POST(request: NextRequest) {
 
   const { data: booking, error: fetchError } = await supabase
     .from("bookings")
-    .select("id, class_id, merchant_id, slot_date, slot_time")
+    .select("id, class_id, merchant_id, slot_date, slot_time, status")
     .eq("ecpay_merchant_trade_no", merchantTradeNo)
-    .eq("status", "unpaid")
     .maybeSingle();
-  if (!booking) {
-    console.log("[ECPay callback] 無 unpaid booking 對應 ecpay_merchant_trade_no:", JSON.stringify(merchantTradeNo), "→ 改查 pending_payments");
-  }
 
   if (!fetchError && booking) {
-    bookingRow = {
-      id: (booking as { id: string }).id,
-      class_id: (booking as { class_id?: string }).class_id ?? "",
-      merchant_id: (booking as { merchant_id: string }).merchant_id,
-      slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
-      slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
-    };
+    const status = (booking as { status?: string }).status ?? "";
+    if (status === "paid" || status === "completed") {
+      console.log("[ECPay callback] 訂單已為 paid/completed，冪等直接回 1|OK bookingId:", (booking as { id: string }).id);
+      revalidatePath("/member");
+      return new NextResponse(PLAIN_OK, { headers: PLAIN_HEADERS });
+    }
+    if (status === "unpaid") {
+      bookingRow = {
+        id: (booking as { id: string }).id,
+        class_id: (booking as { class_id?: string }).class_id ?? "",
+        merchant_id: (booking as { merchant_id: string }).merchant_id,
+        slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
+        slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
+      };
+    }
+  } else if (!booking) {
+    console.log("[ECPay callback] 無 booking 對應 ecpay_merchant_trade_no:", JSON.stringify(merchantTradeNo), "→ 改查 pending_payments");
   }
 
   if (bookingRow) {
