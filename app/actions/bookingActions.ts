@@ -98,9 +98,9 @@ async function createPendingPayment(
       "EC" +
       Date.now().toString().slice(-8) +
       Math.random().toString(36).slice(-4).toUpperCase()
-    ).slice(0, 20);
+    ).slice(0, 20).trim();
   } else if (paymentMethod === "newebpay") {
-    gatewayKey = "NB" + Date.now().toString();
+    gatewayKey = ("NB" + Date.now().toString()).trim();
   }
 
   const slotDateParsed =
@@ -124,7 +124,7 @@ async function createPendingPayment(
       addon_indices: Array.isArray(params.addonIndices) && params.addonIndices.length > 0 ? params.addonIndices : null,
       order_amount: params.orderAmount,
       payment_method: paymentMethod,
-      gateway_key: gatewayKey,
+      gateway_key: gatewayKey?.trim() ?? null,
     })
     .select("id")
     .single();

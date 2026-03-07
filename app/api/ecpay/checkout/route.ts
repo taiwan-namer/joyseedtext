@@ -90,10 +90,11 @@ export async function GET(request: NextRequest) {
       return htmlErrorPage("待付款不存在", "查無此筆待付款，請從結帳頁重新選擇綠界付款。");
     }
     amount = Math.max(0, Number((pending as { order_amount?: number }).order_amount) ?? 0);
-    tradeNo = String((pending as { gateway_key?: string }).gateway_key ?? "").slice(0, 20);
+    tradeNo = String((pending as { gateway_key?: string }).gateway_key ?? "").trim().slice(0, 20);
     if (amount <= 0 || !tradeNo) {
-      return htmlErrorPage("資料異常", "待付款金額或編號有誤，請重新下單。");
+      return htmlErrorPage("資料異常", "待付款金額或編號有誤，請重新下單。（gateway_key 為空時請從結帳頁重新選擇綠界付款）");
     }
+    console.log("[ECPay checkout] pending flow gateway_key from DB:", JSON.stringify(tradeNo), "length:", tradeNo.length);
   } else {
     const { data: booking, error } = await supabase
       .from("bookings")

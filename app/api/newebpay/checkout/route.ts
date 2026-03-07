@@ -77,10 +77,11 @@ export async function GET(request: NextRequest) {
       return htmlErrorPage("待付款不存在", "查無此筆待付款，請從結帳頁重新選擇藍新付款。");
     }
     amount = Math.max(0, Number((pending as { order_amount?: number }).order_amount) ?? 0);
-    merchantOrderNo = String((pending as { gateway_key?: string }).gateway_key ?? "").slice(0, 30);
+    merchantOrderNo = String((pending as { gateway_key?: string }).gateway_key ?? "").trim().slice(0, 30);
     if (amount <= 0 || !merchantOrderNo) {
-      return htmlErrorPage("資料異常", "待付款金額或編號有誤，請重新下單。");
+      return htmlErrorPage("資料異常", "待付款金額或編號有誤，請重新下單。（gateway_key 為空時請從結帳頁重新選擇藍新付款）");
     }
+    console.log("[NewebPay checkout] pending flow gateway_key from DB:", JSON.stringify(merchantOrderNo), "length:", merchantOrderNo.length);
   } else {
     const { data: booking, error } = await supabase
       .from("bookings")
@@ -111,6 +112,7 @@ export async function GET(request: NextRequest) {
     return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生藍新回傳網址。");
   }
 
+  // ReturnURL 必須指向 API route，不可指向 /payment/newebpay/result page（POST 會觸發 500）
   const returnUrl = `${appUrl}/api/newebpay/result`;
   const notifyUrl = `${appUrl}/api/newebpay/callback`;
   const clientBackUrl = `${appUrl}/api/newebpay/back`;

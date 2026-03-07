@@ -26,16 +26,25 @@ async function getBookingStatus(
     }
   }
   if (merchantOrderNo && merchantOrderNo.trim() !== "") {
+    const trimmed = merchantOrderNo.trim();
     const { data, error } = await supabase
       .from("bookings")
       .select("status")
-      .eq("newebpay_merchant_order_no", merchantOrderNo.trim())
+      .eq("newebpay_merchant_order_no", trimmed)
       .maybeSingle();
     if (!error && data) {
       const status = (data as { status?: string }).status ?? "";
       if (status === "paid" || status === "completed") return "paid";
       return "unpaid";
     }
+    // 使用者可能先到結果頁，callback 尚未建立/更新訂單；用 pending_payments 判斷
+    const { data: pending } = await supabase
+      .from("pending_payments")
+      .select("id")
+      .eq("payment_method", "newebpay")
+      .eq("gateway_key", trimmed)
+      .maybeSingle();
+    if (pending) return "unpaid";
   }
   return "not_found";
 }

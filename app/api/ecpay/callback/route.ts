@@ -29,13 +29,14 @@ export async function POST(request: NextRequest) {
   });
 
   const receivedCheckMac = params.CheckMacValue ?? "";
-  const merchantTradeNo = params.MerchantTradeNo ?? "";
+  const merchantTradeNoRaw = params.MerchantTradeNo ?? "";
+  const merchantTradeNo = merchantTradeNoRaw.trim();
   const rtnCode = params.RtnCode ?? "";
   const tradeAmt = params.TradeAmt ?? "";
   const tradeNo = params.TradeNo ?? "";
 
   console.log("[ECPay callback] raw parsed body keys:", Object.keys(params).sort());
-  console.log("[ECPay callback] MerchantTradeNo:", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
+  console.log("[ECPay callback] MerchantTradeNo (raw length):", merchantTradeNoRaw.length, "(trimmed):", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
   console.log("[ECPay callback] received CheckMacValue (前 12 字元):", receivedCheckMac.slice(0, 12) + "...");
 
   const creds = getEcpayCreds();
@@ -68,6 +69,9 @@ export async function POST(request: NextRequest) {
     .eq("ecpay_merchant_trade_no", merchantTradeNo)
     .eq("status", "unpaid")
     .maybeSingle();
+  if (!booking) {
+    console.log("[ECPay callback] 無 unpaid booking 對應 ecpay_merchant_trade_no:", JSON.stringify(merchantTradeNo), "→ 改查 pending_payments");
+  }
 
   if (!fetchError && booking) {
     bookingRow = {
@@ -95,6 +99,8 @@ export async function POST(request: NextRequest) {
       .eq("payment_method", "ecpay")
       .eq("gateway_key", merchantTradeNo)
       .maybeSingle();
+
+    console.log("[ECPay callback] pending lookup gateway_key (trimmed):", JSON.stringify(merchantTradeNo), "length:", merchantTradeNo.length, "pending found:", !!pending, "pendingErr:", pendingErr?.message ?? null);
 
     if (pendingErr || !pending) {
       console.log("[ECPay callback] 無對應 pending 仍回傳 1|OK");
