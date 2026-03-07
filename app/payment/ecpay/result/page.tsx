@@ -9,15 +9,30 @@ type ResultStatus = "paid" | "unpaid" | "not_found";
 async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultStatus> {
   if (!merchantTradeNo || merchantTradeNo.trim() === "") return "not_found";
   const supabase = createServerSupabase();
-  const { data, error } = await supabase
+  const trimmed = merchantTradeNo.trim();
+
+  const { data: booking, error } = await supabase
     .from("bookings")
     .select("status")
-    .eq("ecpay_merchant_trade_no", merchantTradeNo.trim())
+    .eq("ecpay_merchant_trade_no", trimmed)
     .maybeSingle();
-  if (error || !data) return "not_found";
-  const status = (data as { status?: string }).status ?? "";
-  if (status === "paid" || status === "completed") return "paid";
-  return "unpaid";
+
+  if (!error && booking) {
+    const status = (booking as { status?: string }).status ?? "";
+    if (status === "paid" || status === "completed") return "paid";
+    return "unpaid";
+  }
+
+  // 使用者可能先到結果頁，callback 尚未建立/更新訂單；用 pending_payments 判斷是否為剛付款的單
+  const { data: pending } = await supabase
+    .from("pending_payments")
+    .select("id")
+    .eq("payment_method", "ecpay")
+    .eq("gateway_key", trimmed)
+    .maybeSingle();
+
+  if (pending) return "unpaid";
+  return "not_found";
 }
 
 export default async function EcpayResultPage({

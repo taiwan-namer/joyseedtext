@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     }
     await supabase
       .from("bookings")
-      .update({ ecpay_trade_no: tradeNo })
+      .update({ ecpay_merchant_trade_no: merchantTradeNo, ecpay_trade_no: tradeNo })
       .eq("id", res.booking_id);
     console.log("[ECPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id, "update result: ok");
   }
