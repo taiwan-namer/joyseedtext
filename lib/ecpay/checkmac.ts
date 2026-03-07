@@ -55,7 +55,7 @@ export function ecpayCheckMacValue(
   hashIv: string,
   options?: EcpayCheckMacOptions
 ): string {
-  const debug = options?.debug ?? process.env.NODE_ENV !== "production" || process.env.ECPAY_DEBUG_CHECKMAC === "1";
+  const debug = options?.debug ?? (process.env.NODE_ENV !== "production" || process.env.ECPAY_DEBUG_CHECKMAC === "1");
 
   const sortedKeys = ECPAY_SIGN_KEYS.filter((k) => {
     const v = params[k];
