@@ -70,9 +70,71 @@ async function isSlotAllowed(
 }
 
 /**
- * 下單並扣除庫存（多租戶：merchant_id 強制來自 NEXT_PUBLIC_CLIENT_ID）。
- * 透過 RPC 在同一交易內：檢查名額 → 新增訂單(upcoming) → capacity - 1。
- * 下單前會檢查所選 slot 是否在課程的 scheduled_slots／class_date+class_time 內，避免點錯或竄改網址。
+ * 建立「待付款」紀錄（僅用於 LINE Pay／綠界／藍新）。不寫入 bookings，付款成功後由 callback 從此建立 paid 訂單。
+ */
+async function createPendingPayment(
+  supabase: ReturnType<typeof createServerSupabase>,
+  params: {
+    merchantId: string;
+    memberEmail: string;
+    classId: string;
+    parentName: string | null;
+    parentPhone: string | null;
+    slotDate: string | null;
+    slotTime: string | null;
+    allergyNote: string | null;
+    kidName: string | null;
+    kidAge: string | null;
+    addonIndices: number[] | null;
+    orderAmount: number | null;
+    paymentMethod: "linepay" | "ecpay" | "newebpay";
+  }
+): Promise<{ success: true; pendingId: string; gatewayKey: string | null } | { success: false; error: string }> {
+  const { paymentMethod } = params;
+  let gatewayKey: string | null = null;
+  if (paymentMethod === "ecpay") {
+    gatewayKey = (Date.now().toString().slice(-10) + Math.random().toString(36).slice(2, 10)).slice(0, 20);
+  } else if (paymentMethod === "newebpay") {
+    gatewayKey = (Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/\./g, "").slice(0, 30);
+  }
+
+  const slotDateParsed =
+    params.slotDate && /^\d{4}-\d{2}-\d{2}$/.test(params.slotDate) ? params.slotDate : null;
+  const slotTimeParsed =
+    params.slotTime && /^\d{2}:\d{2}$/.test(params.slotTime) ? params.slotTime : null;
+
+  const { data: row, error } = await supabase
+    .from("pending_payments")
+    .insert({
+      merchant_id: params.merchantId,
+      member_email: params.memberEmail,
+      parent_name: params.parentName,
+      parent_phone: params.parentPhone,
+      class_id: params.classId,
+      slot_date: slotDateParsed,
+      slot_time: slotTimeParsed,
+      allergy_or_special_note: params.allergyNote,
+      kid_name: params.kidName,
+      kid_age: params.kidAge,
+      addon_indices: Array.isArray(params.addonIndices) && params.addonIndices.length > 0 ? params.addonIndices : null,
+      order_amount: params.orderAmount,
+      payment_method: paymentMethod,
+      gateway_key: gatewayKey,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { success: false, error: error.message };
+  const pendingId = String((row as { id: string }).id);
+  if (paymentMethod === "linepay") {
+    await supabase.from("pending_payments").update({ gateway_key: pendingId }).eq("id", pendingId);
+  }
+  return { success: true, pendingId, gatewayKey };
+}
+
+/**
+ * 下單（多租戶：merchant_id 強制來自 NEXT_PUBLIC_CLIENT_ID）。
+ * 僅「ATM／現場付(card)」會立即寫入 bookings；LINE Pay／綠界／藍新改為寫入 pending_payments，付款成功後才建立訂單。
  */
 /** 結帳頁傳入的付款方式；存進 DB 為 atm | card | linepay | ecpay | newebpay（transfer → atm） */
 export type PaymentMethodForBooking = "card" | "linepay" | "transfer" | "ecpay" | "newebpay";
@@ -135,6 +197,94 @@ export async function createBooking(
         ? Math.round(totalAmount)
         : null;
 
+    const baseUrl = (typeof process.env.NEXT_PUBLIC_BASE_URL === "string" && process.env.NEXT_PUBLIC_BASE_URL.trim()) || "";
+
+    if (pm === "linepay" || pm === "ecpay" || pm === "newebpay") {
+      const pending = await createPendingPayment(supabase, {
+        merchantId,
+        memberEmail: email,
+        classId,
+        parentName: (parentName ?? "").trim() || null,
+        parentPhone: (parentPhone ?? "").trim() || null,
+        slotDate: slotDate && /^\d{4}-\d{2}-\d{2}$/.test(slotDate) ? slotDate : null,
+        slotTime: slotTime && /^\d{2}:\d{2}$/.test(slotTime) ? slotTime : null,
+        allergyNote: (allergyOrSpecialNote ?? "").trim() || null,
+        kidName: (kidName ?? "").trim() || null,
+        kidAge: (kidAge ?? "").trim() || null,
+        addonIndices: Array.isArray(addonIndices) && addonIndices.length > 0 ? addonIndices : null,
+        orderAmount,
+        paymentMethod: pm,
+      });
+      if (!pending.success) return { success: false, error: pending.error };
+
+      if (pm === "linepay") {
+        const settings = await getFrontendSettings();
+        const creds = getLinePaySandboxCredentials(settings.linePayApi);
+        if (!creds) {
+          return { success: false, error: "LINE Pay 未設定，請設定 .env 的 LINE_PAY_CHANNEL_ID / LINE_PAY_CHANNEL_SECRET 或後台金流設定" };
+        }
+        const validation = validateLinePayCredentials(creds);
+        if (!validation.ok) {
+          return { success: false, error: validation.error };
+        }
+        if (!baseUrl) {
+          return { success: false, error: "未設定 NEXT_PUBLIC_BASE_URL，無法建立 LINE Pay 導向網址" };
+        }
+        const amount = orderAmount ?? 0;
+        if (amount <= 0) {
+          return { success: false, error: "LINE Pay 付款金額必須大於 0" };
+        }
+        const orderId = pending.pendingId;
+        const productName = (courseTitle && String(courseTitle).trim()) || "課程報名";
+        const slugForUrl = (courseSlug && String(courseSlug).trim()) || "course";
+        const confirmUrl = `${baseUrl}/api/linepay/confirm`;
+        const cancelUrl = `${baseUrl}/course/${slugForUrl}/checkout?error=payment_cancelled`;
+        const requestBody = {
+          amount,
+          orderId,
+          packages: [{ id: "1", amount, products: [{ id: "1", name: productName, quantity: 1, price: amount }] }],
+          redirectUrls: { confirmUrl, cancelUrl },
+        };
+        const linePayRes = await requestLinePayPayment({
+          channelId: creds.channelId,
+          channelSecret: creds.channelSecret,
+          amount,
+          orderId,
+          packages: requestBody.packages,
+          redirectUrls: { confirmUrl, cancelUrl },
+        });
+        await logPaymentApi(supabase, {
+          merchant_id: merchantId,
+          order_id: orderId,
+          transaction_id: linePayRes.success ? linePayRes.info.transactionId : null,
+          api_type: "request",
+          request_body: JSON.stringify(requestBody),
+          response_body: JSON.stringify({
+            success: linePayRes.success,
+            returnCode: linePayRes.returnCode,
+            returnMessage: linePayRes.returnMessage,
+            info: linePayRes.success ? linePayRes.info : undefined,
+          }),
+          return_code: linePayRes.returnCode,
+          return_message: linePayRes.returnMessage,
+        });
+        if (!linePayRes.success) {
+          return { success: false, error: linePayRes.returnMessage || "LINE Pay 請求失敗" };
+        }
+        const paymentUrl = linePayRes.info.paymentUrl?.web ?? undefined;
+        return { success: true, bookingId: "", paymentUrl };
+      }
+
+      if (pm === "ecpay" || pm === "newebpay") {
+        if (!baseUrl) {
+          return { success: false, error: "未設定 NEXT_PUBLIC_BASE_URL，無法導向金流" };
+        }
+        const path = pm === "ecpay" ? "/api/ecpay/checkout" : "/api/newebpay/checkout";
+        const paymentUrl = `${baseUrl}${path}?pendingId=${encodeURIComponent(pending.pendingId)}`;
+        return { success: true, bookingId: "", paymentUrl };
+      }
+    }
+
     const { data, error } = await supabase.rpc("create_booking_and_decrement_capacity", {
       p_merchant_id: merchantId,
       p_member_email: email,
@@ -159,76 +309,6 @@ export async function createBooking(
     }
 
     const bookingId = String(result.booking_id);
-
-    if (pm === "linepay") {
-      const settings = await getFrontendSettings();
-      const creds = getLinePaySandboxCredentials(settings.linePayApi);
-      if (!creds) {
-        return { success: false, error: "LINE Pay 未設定，請設定 .env 的 LINE_PAY_CHANNEL_ID / LINE_PAY_CHANNEL_SECRET 或後台金流設定" };
-      }
-      const validation = validateLinePayCredentials(creds);
-      if (!validation.ok) {
-        return { success: false, error: validation.error };
-      }
-      const baseUrl = (typeof process.env.NEXT_PUBLIC_BASE_URL === "string" && process.env.NEXT_PUBLIC_BASE_URL.trim()) || "";
-      if (!baseUrl) {
-        return { success: false, error: "未設定 NEXT_PUBLIC_BASE_URL，無法建立 LINE Pay 導向網址" };
-      }
-      const amount = orderAmount ?? 0;
-      if (amount <= 0) {
-        return { success: false, error: "LINE Pay 付款金額必須大於 0" };
-      }
-      const orderId = bookingId;
-      const productName = (courseTitle && String(courseTitle).trim()) || "課程報名";
-      const slugForUrl = (courseSlug && String(courseSlug).trim()) || "course";
-      const confirmUrl = `${baseUrl}/api/linepay/confirm`;
-      const cancelUrl = `${baseUrl}/course/${slugForUrl}/checkout?error=payment_cancelled`;
-      const requestBody = {
-        amount,
-        orderId,
-        packages: [{ id: "1", amount, products: [{ id: "1", name: productName, quantity: 1, price: amount }] }],
-        redirectUrls: { confirmUrl, cancelUrl },
-      };
-      const linePayRes = await requestLinePayPayment({
-        channelId: creds.channelId,
-        channelSecret: creds.channelSecret,
-        amount,
-        orderId,
-        packages: requestBody.packages,
-        redirectUrls: { confirmUrl, cancelUrl },
-      });
-      await logPaymentApi(supabase, {
-        merchant_id: merchantId,
-        order_id: orderId,
-        transaction_id: linePayRes.success ? linePayRes.info.transactionId : null,
-        api_type: "request",
-        request_body: JSON.stringify(requestBody),
-        response_body: JSON.stringify({
-          success: linePayRes.success,
-          returnCode: linePayRes.returnCode,
-          returnMessage: linePayRes.returnMessage,
-          info: linePayRes.success ? linePayRes.info : undefined,
-        }),
-        return_code: linePayRes.returnCode,
-        return_message: linePayRes.returnMessage,
-      });
-      if (!linePayRes.success) {
-        return { success: false, error: linePayRes.returnMessage || "LINE Pay 請求失敗" };
-      }
-      const paymentUrl = linePayRes.info.paymentUrl?.web ?? undefined;
-      return { success: true, bookingId, paymentUrl };
-    }
-
-    if (pm === "ecpay" || pm === "newebpay") {
-      const baseUrl = (typeof process.env.NEXT_PUBLIC_BASE_URL === "string" && process.env.NEXT_PUBLIC_BASE_URL.trim()) || "";
-      if (!baseUrl) {
-        return { success: false, error: "未設定 NEXT_PUBLIC_BASE_URL，無法導向金流" };
-      }
-      const path = pm === "ecpay" ? "/api/ecpay/checkout" : "/api/newebpay/checkout";
-      const paymentUrl = `${baseUrl}${path}?bookingId=${encodeURIComponent(bookingId)}`;
-      return { success: true, bookingId, paymentUrl };
-    }
-
     return { success: true, bookingId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "下單失敗";
@@ -615,7 +695,8 @@ export async function getMyBookings(): Promise<
 }
 
 /**
- * 後台訂單管理：撈取該 merchant 的訂單。顯示：已付款、完成課程、以及「ATM 未付款」；其他未付款（如 LINE Pay／綠界／藍新未完成）不顯示。
+ * 後台訂單管理：撈取該 merchant 的全部訂單（與會員中心、資料庫筆數一致）。
+ * 含未付款（ATM／LINE Pay／綠界／藍新）、已付款、完成課程、已取消。
  */
 export async function getAdminBookings(): Promise<
   | { success: true; data: BookingWithClass[] }
@@ -644,7 +725,6 @@ export async function getAdminBookings(): Promise<
         classes ( title, image_url, price, addon_prices )
       `)
       .eq("merchant_id", merchantId)
-      .or("status.in.(paid,completed),and(status.eq.unpaid,payment_method.eq.atm)")
       .order("created_at", { ascending: false });
 
     if (error) return { success: false, error: error.message };
@@ -1102,7 +1182,8 @@ export async function getRollcallSessionsByDate(
 }
 
 /**
- * 某場次點名簿：依 class_id + slot_date + slot_time 從 bookings 撈訂單，並帶回該課程的價格與 addon_prices 供顯示加購明細。
+ * 某場次點名簿：依 class_id + slot_date + slot_time 從 bookings 撈該場次「全部」訂單（含未付款），
+ * 與訂單管理、會員中心筆數一致。已報名／總名額仍僅計 paid/completed。
  */
 export async function getBookingsForSession(
   classId: string,
@@ -1164,7 +1245,6 @@ export async function getBookingsForSession(
       .eq("class_id", classId)
       .eq("slot_date", dateStr)
       .eq("slot_time", timeStr)
-      .in("status", ["paid", "completed"])
       .order("created_at", { ascending: true });
 
     if (bookingsError) return { success: false, error: bookingsError.message };

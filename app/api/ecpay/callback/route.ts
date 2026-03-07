@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServerSupabase();
+  let bookingRow: { id: string; class_id: string; merchant_id: string; slot_date: string | null; slot_time: string | null } | null = null;
+
   const { data: booking, error: fetchError } = await supabase
     .from("bookings")
     .select("id, class_id, merchant_id, slot_date, slot_time")
@@ -47,25 +49,52 @@ export async function POST(request: NextRequest) {
     .eq("status", "unpaid")
     .maybeSingle();
 
-  if (fetchError || !booking) {
-    return new NextResponse("1|OK");
+  if (!fetchError && booking) {
+    bookingRow = {
+      id: (booking as { id: string }).id,
+      class_id: (booking as { class_id?: string }).class_id ?? "",
+      merchant_id: (booking as { merchant_id: string }).merchant_id,
+      slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
+      slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
+    };
   }
 
-  const bookingRow = {
-    id: booking.id,
-    class_id: booking.class_id ?? "",
-    merchant_id: booking.merchant_id,
-    slot_date: booking.slot_date ?? null,
-    slot_time: booking.slot_time ?? null,
-  };
-  const result = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
-    status: "paid",
-    ecpay_trade_no: tradeNo,
-  });
+  if (bookingRow) {
+    const result = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
+      status: "paid",
+      ecpay_trade_no: tradeNo,
+    });
+    if (!result.ok) {
+      console.error("[ECPay callback]", result.error);
+      return new NextResponse("0|更新訂單失敗", { status: 500 });
+    }
+  } else {
+    const { data: pending, error: pendingErr } = await supabase
+      .from("pending_payments")
+      .select("id")
+      .eq("payment_method", "ecpay")
+      .eq("gateway_key", merchantTradeNo)
+      .maybeSingle();
 
-  if (!result.ok) {
-    console.error("[ECPay callback]", result.error);
-    return new NextResponse("0|更新訂單失敗", { status: 500 });
+    if (pendingErr || !pending) {
+      return new NextResponse("1|OK");
+    }
+
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc("create_booking_from_pending", {
+      p_pending_id: (pending as { id: string }).id,
+    });
+    if (rpcErr) {
+      console.error("[ECPay callback] create_booking_from_pending", rpcErr);
+      return new NextResponse("0|建立訂單失敗", { status: 500 });
+    }
+    const res = rpcResult as { ok?: boolean; booking_id?: string } | null;
+    if (!res?.ok || !res.booking_id) {
+      return new NextResponse("1|OK");
+    }
+    await supabase
+      .from("bookings")
+      .update({ ecpay_trade_no: tradeNo })
+      .eq("id", res.booking_id);
   }
 
   revalidatePath("/member");

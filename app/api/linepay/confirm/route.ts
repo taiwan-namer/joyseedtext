@@ -44,94 +44,180 @@ export async function GET(request: NextRequest) {
     .eq("id", orderId)
     .single();
 
-  if (bookingError || !booking) {
-    return redirectFail("訂單不存在", bookingError?.message ?? "");
-  }
+  let merchantId: string;
+  let amount: number;
+  let finalBookingId: string;
+  let classIdForFail: string | undefined;
 
-  if (booking.status !== "unpaid" || booking.payment_method !== "linepay") {
-    return redirectFail("訂單狀態不允許確認付款", `status=${booking.status} payment_method=${booking.payment_method}`);
-  }
+  if (!bookingError && booking && (booking as { status?: string }).status === "unpaid" && (booking as { payment_method?: string }).payment_method === "linepay") {
+    merchantId = (booking as { merchant_id: string }).merchant_id;
+    amount = typeof (booking as { order_amount?: number }).order_amount === "number" && (booking as { order_amount?: number }).order_amount >= 0
+      ? (booking as { order_amount: number }).order_amount
+      : 0;
+    classIdForFail = (booking as { class_id?: string }).class_id;
+    if (amount <= 0) {
+      return redirectFail("訂單金額異常");
+    }
 
-  const amount = typeof booking.order_amount === "number" && booking.order_amount >= 0
-    ? booking.order_amount
-    : 0;
-  if (amount <= 0) {
-    return redirectFail("訂單金額異常");
-  }
+    const { data: settingsRow, error: settingsError } = await supabase
+      .from("store_settings")
+      .select("frontend_settings")
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
 
-  const { data: settingsRow, error: settingsError } = await supabase
-    .from("store_settings")
-    .select("frontend_settings")
-    .eq("merchant_id", booking.merchant_id)
-    .maybeSingle();
+    if (settingsError || !settingsRow?.frontend_settings) {
+      return redirectFail("店家金流未設定");
+    }
 
-  if (settingsError || !settingsRow?.frontend_settings) {
-    return redirectFail("店家金流未設定");
-  }
+    const raw = settingsRow.frontend_settings as Record<string, unknown>;
+    const linePayApi = typeof raw.linePayApi === "string" ? raw.linePayApi : null;
+    const creds = getLinePaySandboxCredentials(linePayApi);
 
-  const raw = settingsRow.frontend_settings as Record<string, unknown>;
-  const linePayApi = typeof raw.linePayApi === "string" ? raw.linePayApi : null;
-  const creds = getLinePaySandboxCredentials(linePayApi);
+    if (!creds) {
+      return redirectFail("LINE Pay 未設定（請設定 .env 或後台金流）");
+    }
 
-  if (!creds) {
-    return redirectFail("LINE Pay 未設定（請設定 .env 或後台金流）");
-  }
+    const validation = validateLinePayCredentials(creds);
+    if (!validation.ok) {
+      return redirectFail(validation.error);
+    }
 
-  const validation = validateLinePayCredentials(creds);
-  if (!validation.ok) {
-    return redirectFail(validation.error);
-  }
+    const requestBody = { amount, currency: "TWD" as const };
+    const confirmRes = await confirmLinePayPayment({
+      channelId: creds.channelId,
+      channelSecret: creds.channelSecret,
+      transactionId,
+      amount,
+      currency: "TWD",
+    });
 
-  const requestBody = { amount, currency: "TWD" as const };
-  const confirmRes = await confirmLinePayPayment({
-    channelId: creds.channelId,
-    channelSecret: creds.channelSecret,
-    transactionId,
-    amount,
-    currency: "TWD",
-  });
+    await logPaymentApi(supabase, {
+      merchant_id: merchantId,
+      order_id: orderId,
+      transaction_id: transactionId,
+      api_type: "confirm",
+      request_body: JSON.stringify(requestBody),
+      response_body: JSON.stringify({
+        success: confirmRes.success,
+        returnCode: confirmRes.returnCode,
+        returnMessage: confirmRes.returnMessage,
+        info: confirmRes.success ? confirmRes.info : undefined,
+      }),
+      return_code: confirmRes.returnCode,
+      return_message: confirmRes.returnMessage,
+    });
 
-  await logPaymentApi(supabase, {
-    merchant_id: booking.merchant_id,
-    order_id: orderId,
-    transaction_id: transactionId,
-    api_type: "confirm",
-    request_body: JSON.stringify(requestBody),
-    response_body: JSON.stringify({
-      success: confirmRes.success,
-      returnCode: confirmRes.returnCode,
-      returnMessage: confirmRes.returnMessage,
-      info: confirmRes.success ? confirmRes.info : undefined,
-    }),
-    return_code: confirmRes.returnCode,
-    return_message: confirmRes.returnMessage,
-  });
+    if (!confirmRes.success) {
+      const failUrl = `${baseUrl}/course/${classIdForFail ?? "course"}/checkout?error=linepay_confirm&message=${encodeURIComponent("支付失敗，請重新嘗試")}`;
+      return NextResponse.redirect(failUrl);
+    }
 
-  if (!confirmRes.success) {
-    const slug = (booking as { class_id?: string }).class_id || "course";
-    const failUrl = `${baseUrl}/course/${slug}/checkout?error=linepay_confirm&message=${encodeURIComponent("支付失敗，請重新嘗試")}`;
-    return NextResponse.redirect(failUrl);
-  }
+    const bookingRow = {
+      id: orderId,
+      class_id: (booking as { class_id?: string }).class_id ?? "",
+      merchant_id: merchantId,
+      slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
+      slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
+    };
+    const updateResult = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
+      status: "paid",
+      line_pay_transaction_id: transactionId,
+    });
 
-  const bookingRow = {
-    id: orderId,
-    class_id: (booking as { class_id?: string }).class_id ?? "",
-    merchant_id: booking.merchant_id,
-    slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
-    slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
-  };
-  const updateResult = await ensureCapacityAndMarkPaid(supabase, bookingRow, {
-    status: "paid",
-    line_pay_transaction_id: transactionId,
-  });
+    if (!updateResult.ok) {
+      console.error("[LINE Pay Confirm]", updateResult.error);
+      return redirectFail("更新訂單狀態失敗", updateResult.error);
+    }
 
-  if (!updateResult.ok) {
-    console.error("[LINE Pay Confirm]", updateResult.error);
-    return redirectFail("更新訂單狀態失敗", updateResult.error);
+    finalBookingId = orderId;
+  } else {
+    const { data: pending, error: pendingErr } = await supabase
+      .from("pending_payments")
+      .select("id, merchant_id, order_amount")
+      .eq("id", orderId)
+      .eq("payment_method", "linepay")
+      .maybeSingle();
+
+    if (pendingErr || !pending) {
+      return redirectFail("訂單或待付款不存在", pendingErr?.message ?? "");
+    }
+
+    merchantId = (pending as { merchant_id: string }).merchant_id;
+    amount = Math.max(0, Number((pending as { order_amount?: number }).order_amount) ?? 0);
+    if (amount <= 0) {
+      return redirectFail("訂單金額異常");
+    }
+
+    const { data: settingsRow, error: settingsError } = await supabase
+      .from("store_settings")
+      .select("frontend_settings")
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
+
+    if (settingsError || !settingsRow?.frontend_settings) {
+      return redirectFail("店家金流未設定");
+    }
+
+    const raw = settingsRow.frontend_settings as Record<string, unknown>;
+    const linePayApi = typeof raw.linePayApi === "string" ? raw.linePayApi : null;
+    const creds = getLinePaySandboxCredentials(linePayApi);
+
+    if (!creds) {
+      return redirectFail("LINE Pay 未設定（請設定 .env 或後台金流）");
+    }
+
+    const validation = validateLinePayCredentials(creds);
+    if (!validation.ok) {
+      return redirectFail(validation.error);
+    }
+
+    const confirmRes = await confirmLinePayPayment({
+      channelId: creds.channelId,
+      channelSecret: creds.channelSecret,
+      transactionId,
+      amount,
+      currency: "TWD",
+    });
+
+    await logPaymentApi(supabase, {
+      merchant_id: merchantId,
+      order_id: orderId,
+      transaction_id: transactionId,
+      api_type: "confirm",
+      request_body: JSON.stringify({ amount, currency: "TWD" }),
+      response_body: JSON.stringify({
+        success: confirmRes.success,
+        returnCode: confirmRes.returnCode,
+        returnMessage: confirmRes.returnMessage,
+      }),
+      return_code: confirmRes.returnCode ?? "",
+      return_message: confirmRes.returnMessage ?? "",
+    });
+
+    if (!confirmRes.success) {
+      return NextResponse.redirect(`${baseUrl}/?error=linepay_confirm&message=${encodeURIComponent("支付失敗")}`);
+    }
+
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc("create_booking_from_pending", {
+      p_pending_id: (pending as { id: string }).id,
+    });
+    if (rpcErr) {
+      console.error("[LINE Pay Confirm] create_booking_from_pending", rpcErr);
+      return redirectFail("建立訂單失敗", rpcErr.message);
+    }
+    const res = rpcResult as { ok?: boolean; booking_id?: string } | null;
+    if (!res?.ok || !res.booking_id) {
+      return redirectFail("建立訂單失敗");
+    }
+    finalBookingId = res.booking_id;
+    await supabase
+      .from("bookings")
+      .update({ line_pay_transaction_id: transactionId })
+      .eq("id", finalBookingId);
   }
 
   revalidatePath("/member");
 
-  const successUrl = `${baseUrl}/booking/success?bookingId=${encodeURIComponent(orderId)}`;
+  const successUrl = `${baseUrl}/booking/success?bookingId=${encodeURIComponent(finalBookingId)}`;
   return NextResponse.redirect(successUrl);
 }

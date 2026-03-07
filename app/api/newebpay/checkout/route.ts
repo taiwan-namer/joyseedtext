@@ -56,13 +56,14 @@ function escapeAttr(s: string): string {
 }
 
 /**
- * GET /api/newebpay/checkout?bookingId=xxx
- * 依 bookingId 取得訂單，組藍新 TradeInfo + TradeSha，回傳自動 POST 表單（Content-Type: text/html）。
+ * GET /api/newebpay/checkout?pendingId=xxx 或 ?bookingId=xxx（舊流程相容）
+ * 依 pendingId 從 pending_payments 取得待付款，組藍新參數並回傳自動 POST 表單。未付款不寫入 bookings。
  */
 export async function GET(request: NextRequest) {
-  const bookingId = request.nextUrl.searchParams.get("bookingId");
-  if (!bookingId) {
-    return htmlErrorPage("參數錯誤", "缺少 bookingId，請從結帳流程重新進入。");
+  const pendingId = request.nextUrl.searchParams.get("pendingId");
+  const bookingIdLegacy = request.nextUrl.searchParams.get("bookingId");
+  if (!pendingId && !bookingIdLegacy) {
+    return htmlErrorPage("參數錯誤", "缺少 pendingId，請從結帳流程重新進入。");
   }
 
   const creds = getNewebpayCreds();
@@ -71,34 +72,51 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createServerSupabase();
-  const { data: booking, error } = await supabase
-    .from("bookings")
-    .select("id, merchant_id, order_amount, status, payment_method")
-    .eq("id", bookingId)
-    .single();
+  let amount: number;
+  let merchantOrderNo: string;
 
-  if (error || !booking) {
-    return htmlErrorPage("訂單不存在", "查無此訂單，請確認連結是否正確或重新下單。");
-  }
-  if (booking.status !== "unpaid") {
-    return htmlErrorPage("訂單狀態錯誤", "此訂單已付款或已關閉，無法重複付款。");
-  }
-
-  const amount = Math.max(0, Number(booking.order_amount) ?? 0);
-  if (amount <= 0) {
-    return htmlErrorPage("訂單金額異常", "訂單金額有誤，請聯絡客服。");
+  if (pendingId) {
+    const { data: pending, error } = await supabase
+      .from("pending_payments")
+      .select("order_amount, gateway_key")
+      .eq("id", pendingId)
+      .eq("payment_method", "newebpay")
+      .single();
+    if (error || !pending) {
+      return htmlErrorPage("待付款不存在", "查無此筆待付款，請從結帳頁重新選擇藍新付款。");
+    }
+    amount = Math.max(0, Number((pending as { order_amount?: number }).order_amount) ?? 0);
+    merchantOrderNo = String((pending as { gateway_key?: string }).gateway_key ?? "").slice(0, 30);
+    if (amount <= 0 || !merchantOrderNo) {
+      return htmlErrorPage("資料異常", "待付款金額或編號有誤，請重新下單。");
+    }
+  } else {
+    const { data: booking, error } = await supabase
+      .from("bookings")
+      .select("id, order_amount, status")
+      .eq("id", bookingIdLegacy)
+      .single();
+    if (error || !booking) {
+      return htmlErrorPage("訂單不存在", "查無此訂單，請確認連結是否正確或重新下單。");
+    }
+    if ((booking as { status?: string }).status !== "unpaid") {
+      return htmlErrorPage("訂單狀態錯誤", "此訂單已付款或已關閉，無法重複付款。");
+    }
+    amount = Math.max(0, Number((booking as { order_amount?: number }).order_amount) ?? 0);
+    if (amount <= 0) {
+      return htmlErrorPage("訂單金額異常", "訂單金額有誤，請聯絡客服。");
+    }
+    merchantOrderNo = String(bookingIdLegacy).replace(/-/g, "").slice(0, 30);
+    await supabase
+      .from("bookings")
+      .update({ payment_method: "newebpay", newebpay_merchant_order_no: merchantOrderNo })
+      .eq("id", bookingIdLegacy)
+      .eq("status", "unpaid");
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "";
   const returnUrl = `${baseUrl}/api/newebpay/callback/return`;
   const notifyUrl = `${baseUrl}/api/newebpay/callback`;
-
-  const merchantOrderNo = bookingId.replace(/-/g, "").slice(0, 30);
-  await supabase
-    .from("bookings")
-    .update({ payment_method: "newebpay", newebpay_merchant_order_no: merchantOrderNo })
-    .eq("id", bookingId)
-    .eq("status", "unpaid");
 
   const tradeInfoObj = {
     MerchantID: creds.merchantId,

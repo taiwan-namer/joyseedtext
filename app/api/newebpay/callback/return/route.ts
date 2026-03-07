@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 
 function getNewebpayCreds() {
@@ -10,7 +11,7 @@ function getNewebpayCreds() {
 
 /**
  * 藍新付款完成後導回商店（ReturnURL）。接收 POST 表單 TradeInfo / TradeSha，
- * 驗證並解密後導向報名成功頁。
+ * 驗證並解密後依 MerchantOrderNo 查詢對應訂單 id，導向報名成功頁。
  */
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -40,6 +41,14 @@ export async function POST(request: NextRequest) {
   const params = new URLSearchParams(decrypted);
   const merchantOrderNo = params.get("MerchantOrderNo") ?? "";
 
-  const successUrl = `${baseUrl}/booking/success?bookingId=${encodeURIComponent(merchantOrderNo)}`;
+  const supabase = createServerSupabase();
+  const { data: row } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("newebpay_merchant_order_no", merchantOrderNo)
+    .maybeSingle();
+
+  const bookingId = row ? (row as { id: string }).id : merchantOrderNo;
+  const successUrl = `${baseUrl}/booking/success?bookingId=${encodeURIComponent(bookingId)}`;
   return NextResponse.redirect(successUrl);
 }
