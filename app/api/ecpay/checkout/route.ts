@@ -124,19 +124,19 @@ export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "";
   const returnUrl = `${baseUrl}/api/ecpay/callback`;
 
+  // 綠界 AIO 必填欄位（缺一不可，且皆須出現在表單與 CheckMacValue 計算）
   const params: Record<string, string> = {
     MerchantID: creds.merchantId,
     MerchantTradeNo: tradeNo,
     MerchantTradeDate: MerchantTradeDate,
     PaymentType: "aio",
     TotalAmount: String(amount),
-    TradeDesc: "Course Booking",
+    TradeDesc: "Course_Booking",
     ItemName: "課程預約",
     ReturnURL: returnUrl,
     ChoosePayment: "ALL",
     EncryptType: "1",
   };
-
   params.CheckMacValue = ecpayCheckMacValue(params, creds.hashKey, creds.hashIv);
 
   console.log("[ECPay checkout] 送出參數（已隱藏金鑰）:", {

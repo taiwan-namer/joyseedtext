@@ -21,14 +21,15 @@ export function ecpayCheckMacValue(
   console.log("[ECPay CheckMac] 排序並加上 Key/IV 後的原始字串（Key/IV 已遮罩）:", masked);
 
   let encoded = encodeURIComponent(beforeEncode).replace(/%20/g, "+").toLowerCase();
+  // 綠界要求：URL Encode 後將特定字元取代回來（附錄字元還原表）
   encoded = encoded
-    .replace(/%29/g, ")")
-    .replace(/%28/g, "(")
-    .replace(/%2a/g, "*")
-    .replace(/%21/g, "!")
-    .replace(/%2e/g, ".")
+    .replace(/%2d/g, "-")
     .replace(/%5f/g, "_")
-    .replace(/%2d/g, "-");
+    .replace(/%2e/g, ".")
+    .replace(/%21/g, "!")
+    .replace(/%2a/g, "*")
+    .replace(/%28/g, "(")
+    .replace(/%29/g, ")");
   return createHash("sha256").update(encoded, "utf8").digest("hex").toUpperCase();
 }
 
@@ -49,7 +50,8 @@ export function ecpayVerifyCheckMacValue(
 
 /**
  * 藍新 TradeInfo AES 加密（AES-256-CBC，PKCS7 padding）。
- * HashKey 32 字元、HashIV 16 字元；明文 key=value& 加密後以 bin2hex（十六進位）輸出。
+ * 使用 crypto.createCipheriv('aes-256-cbc', HashKey, HashIV)；Node 預設 setAutoPadding(true) 即為 PKCS7。
+ * HashKey 32 bytes、HashIV 16 bytes；加密後轉為 hex（十六進位）字串。
  */
 export function newebpayAesEncrypt(plainText: string, hashKey: string, hashIv: string): string {
   const key = Buffer.from(hashKey, "utf8");
@@ -58,7 +60,7 @@ export function newebpayAesEncrypt(plainText: string, hashKey: string, hashIv: s
     throw new Error(`NewebPay AES: HashKey 須 32 bytes、HashIV 須 16 bytes，目前 key=${key.length} iv=${iv.length}`);
   }
   const cipher = createCipheriv("aes-256-cbc", key, iv);
-  cipher.setAutoPadding(true);
+  cipher.setAutoPadding(true); // PKCS7（Node 預設，勿手動關閉）
   const enc = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
   return enc.toString("hex");
 }
@@ -76,7 +78,7 @@ export function newebpayAesDecrypt(encryptedHex: string, hashKey: string, hashIv
 }
 
 /**
- * 藍新 TradeSha（MPG 2.0）：SHA256("HashKey=" + HashKey + "&" + TradeInfo密文 + "&HashIV=" + HashIV)，結果轉大寫 hex。
+ * 藍新 TradeSha（MPG 2.0）：HashKey=${HashKey}&${TradeInfoHex}&HashIV=${HashIV} → SHA256 → 大寫 hex。
  */
 export function newebpayTradeSha(tradeInfoEncryptedHex: string, hashKey: string, hashIv: string): string {
   const str = `HashKey=${hashKey}&${tradeInfoEncryptedHex}&HashIV=${hashIv}`;
@@ -84,9 +86,14 @@ export function newebpayTradeSha(tradeInfoEncryptedHex: string, hashKey: string,
 }
 
 /**
- * 藍新 TradeInfo 明文：key=value&，key 依 A-Z 排序。必填：MerchantID, RespondType, TimeStamp, Version, MerchantOrderNo, Amt, ItemDesc。
+ * 藍新 TradeInfo 明文：key=value& 連接。藍新不需依字母排序（與綠界不同），可依傳入 key 順序。
+ * 必填：MerchantID, RespondType, TimeStamp(10 位 Unix), Version, MerchantOrderNo, Amt(整數字串), ItemDesc。
  */
-export function newebpayQueryString(obj: Record<string, string | number | undefined>): string {
-  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined && obj[k] !== "").sort();
+export function newebpayQueryString(
+  obj: Record<string, string | number | undefined>,
+  options?: { sort?: boolean }
+): string {
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined && obj[k] !== "");
+  if (options?.sort !== false) keys.sort();
   return keys.map((k) => `${k}=${obj[k]}`).join("&");
 }

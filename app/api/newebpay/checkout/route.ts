@@ -136,7 +136,10 @@ export async function GET(request: NextRequest) {
   };
   if (userEmail) tradeInfoObj.Email = userEmail;
 
-  const tradeInfoPlain = newebpayQueryString(tradeInfoObj);
+  // 藍新不需依字母排序，依物件 key 順序組成字串
+  const tradeInfoPlain = newebpayQueryString(tradeInfoObj, { sort: false });
+  console.log("Raw TradeInfo:", tradeInfoPlain);
+
   let tradeInfo: string;
   try {
     tradeInfo = newebpayAesEncrypt(tradeInfoPlain, creds.hashKey, creds.hashIv);
