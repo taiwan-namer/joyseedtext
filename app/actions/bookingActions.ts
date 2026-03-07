@@ -1025,10 +1025,8 @@ export async function getRollcallDatesWithCounts(): Promise<
         const dateStr = String(s?.date).slice(0, 10);
         const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
         const timeKey = time.length === 5 ? time : "00:00";
-        const slotCap =
-          typeof (s as { capacity?: number }).capacity === "number" && (s as { capacity?: number }).capacity >= 1
-            ? (s as { capacity?: number }).capacity!
-            : classCapacity;
+        const cap = (s as { capacity?: number }).capacity;
+        const slotCap = typeof cap === "number" && cap >= 1 ? cap : classCapacity;
         const key = `${row.id}|${dateStr}|${timeKey}`;
         if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
         const arr = dateToSessions.get(dateStr)!;
@@ -1144,10 +1142,8 @@ export async function getRollcallSessionsByDate(
         if (String(s?.date).slice(0, 10) !== dateStr) continue;
         const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
         const timeKey = time.length === 5 ? time : "00:00";
-        const slotCap =
-          typeof (s as { capacity?: number }).capacity === "number" && (s as { capacity?: number }).capacity >= 1
-            ? (s as { capacity?: number }).capacity!
-            : classCapacity;
+        const cap = (s as { capacity?: number }).capacity;
+        const slotCap = typeof cap === "number" && cap >= 1 ? cap : classCapacity;
         const key = `${row.id}|${dateStr}|${timeKey}`;
         if (!seen.has(key)) {
           seen.add(key);
