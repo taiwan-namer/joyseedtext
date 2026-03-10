@@ -49,11 +49,11 @@ export function AdminAiSupportClient({
     }
   };
 
-  const handleTestSend = async () => {
-    const text = testInput.trim();
+  const handleTestSend = async (overrideInput?: string) => {
+    const text = (overrideInput ?? testInput).trim();
     if (!text || testLoading) return;
     setTestMessages((prev) => [...prev, { role: "user", content: text }]);
-    setTestInput("");
+    if (!overrideInput) setTestInput("");
     setTestLoading(true);
     try {
       const res = await fetch("/api/ai-chat", {
@@ -74,6 +74,12 @@ export function AdminAiSupportClient({
       setTestLoading(false);
     }
   };
+
+  const quickTests = [
+    { label: "課程", phrase: "有哪些適合 3 歲的課程？" },
+    { label: "訂單", phrase: "我的訂單狀態是什麼？" },
+    { label: "常見問題", phrase: "怎麼退款？" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -126,9 +132,22 @@ export function AdminAiSupportClient({
 
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 font-semibold text-gray-900">測試對話</h2>
-        <p className="mb-4 text-sm text-gray-500">
+        <p className="mb-3 text-sm text-gray-500">
           與前台使用相同 API，可測試常見問題、課程查詢等。
         </p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {quickTests.map((q) => (
+            <button
+              key={q.label}
+              type="button"
+              onClick={() => handleTestSend(q.phrase)}
+              disabled={testLoading}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {q.label}模板
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col rounded-lg border border-gray-200 bg-gray-50/50">
           <div
             className="min-h-[200px] max-h-[320px] space-y-2 overflow-y-auto p-3"

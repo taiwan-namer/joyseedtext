@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
+import { ChatCourseCard, type ChatCourseItem } from "./ChatCourseCard";
 
 const WELCOME_MESSAGE = `您好！我是 AI 課程助手 👋
 可以問我：
@@ -11,7 +13,22 @@ const WELCOME_MESSAGE = `您好！我是 AI 課程助手 👋
 • 本週有什麼活動？
 • 我的訂單狀態是什麼？`;
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+export type ChatOrderItem = {
+  id: string;
+  courseTitle: string;
+  status: string;
+  slotDate: string | null;
+  slotTime: string | null;
+  amount: number | null;
+  courseUrl: string;
+};
+
+type ChatMessage =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string }
+  | { role: "assistant"; type: "course_recommendation"; reply: string; courses: ChatCourseItem[] }
+  | { role: "assistant"; type: "order_list"; reply: string; orders: ChatOrderItem[] }
+  | { role: "assistant"; type: "faq"; reply: string };
 
 const ChatButton = React.forwardRef<
   HTMLButtonElement,
@@ -55,31 +72,91 @@ function ChatHeader({ onClose }: { onClose: () => void }) {
   );
 }
 
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  unpaid: "未付款",
+  paid: "已付款",
+  upcoming: "即將上課",
+  completed: "已完成",
+  cancelled: "已取消",
+};
+
 function ChatMessages({
   messages,
   isLoading,
+  primaryColor,
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
+  primaryColor: string;
 }) {
   return (
     <div className="space-y-3">
-      {messages.map((m, i) => (
-        <div
-          key={i}
-          className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-        >
-          <div
-            className={`max-w-[75%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-              m.role === "user"
-                ? "bg-brand text-white"
-                : "bg-gray-100 text-gray-800"
-            }`}
-          >
-            {m.content}
+      {messages.map((m, i) => {
+        if (m.role === "user") {
+          return (
+            <div key={i} className="flex justify-end">
+              <div className="max-w-[75%] rounded-lg bg-brand px-3 py-2 text-sm text-white whitespace-pre-wrap">
+                {m.content}
+              </div>
+            </div>
+          );
+        }
+        if ("type" in m && m.type === "course_recommendation") {
+          return (
+            <div key={i} className="flex justify-start flex-col gap-2">
+              <div className="max-w-[85%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                {m.reply}
+              </div>
+              {m.courses.length > 0 && (
+                <div className="grid gap-2 max-w-[85%]">
+                  {m.courses.map((c) => (
+                    <ChatCourseCard key={c.id} course={c} primaryColor={primaryColor} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        }
+        if ("type" in m && m.type === "order_list") {
+          return (
+            <div key={i} className="flex justify-start flex-col gap-2">
+              <div className="max-w-[85%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                {m.reply}
+              </div>
+              {m.orders.length > 0 && (
+                <ul className="max-w-[85%] space-y-2 rounded-lg border border-gray-200 bg-white p-2 text-sm">
+                  {m.orders.map((o) => (
+                    <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                      <span className="font-medium text-gray-900">{o.courseTitle}</span>
+                      <span className="text-gray-500">{ORDER_STATUS_LABELS[o.status] ?? o.status}</span>
+                      {(o.slotDate || o.slotTime) && (
+                        <span className="text-xs text-gray-500 w-full">
+                          {[o.slotDate, o.slotTime].filter(Boolean).join(" ")}
+                        </span>
+                      )}
+                      {o.amount != null && <span className="text-gray-700">NT$ {o.amount}</span>}
+                      <Link
+                        href={o.courseUrl}
+                        className="text-xs font-medium rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+                      >
+                        查看課程
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        }
+        const text = "reply" in m ? m.reply : "content" in m ? m.content : "";
+        return (
+          <div key={i} className="flex justify-start">
+            <div className="max-w-[75%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap">
+              {text}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       {isLoading && (
         <div className="flex justify-start">
           <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
@@ -159,11 +236,11 @@ function ChatWindow({
 
   return (
     <div
-      className="fixed bottom-20 right-6 z-[99] flex w-[360px] flex-col rounded-xl border border-gray-200 bg-white shadow-xl transition-all duration-200 md:bottom-20 md:right-6 md:h-[520px] md:w-[360px]"
+      className="fixed bottom-24 right-4 z-[99] flex w-[360px] flex-col rounded-xl border border-gray-200 bg-white shadow-xl transition-all duration-200 sm:right-6 md:bottom-24 md:right-6 md:h-[480px] md:w-[360px]"
       style={{
-        height: "70vh",
-        maxHeight: "520px",
-        width: "90%",
+        height: "min(60vh, 480px)",
+        maxHeight: "480px",
+        width: "calc(100% - 2rem)",
         maxWidth: "360px",
         transformOrigin: "bottom right",
       }}
@@ -172,7 +249,7 @@ function ChatWindow({
     >
       <ChatHeader onClose={onClose} />
       <div className="flex-1 overflow-y-auto px-3 py-4" style={{ maxHeight: "400px" }}>
-        <ChatMessages messages={messages} isLoading={isLoading} />
+        <ChatMessages messages={messages} isLoading={isLoading} primaryColor={primaryColor} />
         <div ref={messagesEndRef} />
       </div>
       <ChatInput onSend={onSend} disabled={isLoading} primaryColor={primaryColor} />
@@ -204,13 +281,24 @@ export default function ChatWidget() {
         body: JSON.stringify({ message: text }),
       });
       const data = await res.json();
-      const reply =
-        data.reply ?? data.error ?? "抱歉，我暫時無法回覆，請稍後再試或聯絡客服。";
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      if (data.type === "course_recommendation" && Array.isArray(data.courses)) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", type: "course_recommendation", reply: data.reply ?? "", courses: data.courses },
+        ]);
+      } else if (data.type === "order_list" && Array.isArray(data.orders)) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", type: "order_list", reply: data.reply ?? "", orders: data.orders },
+        ]);
+      } else {
+        const reply = data.reply ?? data.error ?? "抱歉，我暫時無法回覆，請稍後再試或聯絡客服。";
+        setMessages((prev) => [...prev, { role: "assistant", type: "faq", reply }]);
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "連線發生錯誤，請稍後再試。" },
+        { role: "assistant", type: "faq", reply: "連線發生錯誤，請稍後再試。" },
       ]);
     } finally {
       setIsLoading(false);

@@ -31,6 +31,25 @@ function classifyIntent(message: string): "order" | "course" | "faq" {
   return "faq";
 }
 
+export type AiChatCourseItem = {
+  id: string;
+  title: string;
+  image_url: string | null;
+  price: number | null;
+  age_range: string;
+  url: string;
+};
+
+export type AiChatOrderItem = {
+  id: string;
+  courseTitle: string;
+  status: string;
+  slotDate: string | null;
+  slotTime: string | null;
+  amount: number | null;
+  courseUrl: string;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -56,6 +75,7 @@ export async function POST(request: NextRequest) {
     // 訂單查詢僅限登入
     if (intent === "order" && !memberEmail) {
       return Response.json({
+        type: "faq",
         reply:
           "查詢訂單需要先登入會員喔！請先至網站登入後再問「我的訂單」或「我報名了什麼課」。",
       });
@@ -63,77 +83,85 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerSupabase();
 
-    // 1) FAQ
+    if (intent === "course") {
+      const { data: classesRows } = await supabase
+        .from("classes")
+        .select("id, title, image_url, price, scheduled_slots, sidebar_option")
+        .eq("merchant_id", merchantId);
+
+      const courses: AiChatCourseItem[] = (classesRows ?? []).map((row: Record<string, unknown>) => {
+        const id = String(row.id ?? "");
+        const sidebar = (row.sidebar_option as string[] | null) ?? [];
+        const ageLabels = sidebar
+          .map((v) => SIDEBAR_OPTION_LABELS[v] ?? v)
+          .filter(Boolean);
+        return {
+          id,
+          title: String(row.title ?? ""),
+          image_url: row.image_url != null ? String(row.image_url) : null,
+          price: row.price != null ? Number(row.price) : null,
+          age_range: ageLabels.join("、") || "未標示",
+          url: `/course/${id}`,
+        };
+      });
+
+      return Response.json({
+        type: "course_recommendation",
+        reply: courses.length > 0 ? "為您推薦以下課程，可點擊查看詳情或立即報名。" : "目前沒有符合的課程，歡迎稍後再來或聯絡客服。",
+        courses,
+      });
+    }
+
+    if (intent === "order" && memberEmail) {
+      const { data: bookingsRows } = await supabase
+        .from("bookings")
+        .select("id, status, slot_date, slot_time, order_amount, class_id, classes(title)")
+        .eq("merchant_id", merchantId)
+        .eq("member_email", memberEmail)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      const orders: AiChatOrderItem[] = (bookingsRows ?? []).map((b: Record<string, unknown>) => {
+        const c = b.classes as { title?: string } | null;
+        const classId = b.class_id != null ? String(b.class_id) : "";
+        return {
+          id: String(b.id ?? ""),
+          courseTitle: c?.title ?? "課程",
+          status: String(b.status ?? ""),
+          slotDate: b.slot_date != null ? String(b.slot_date) : null,
+          slotTime: b.slot_time != null ? String(b.slot_time) : null,
+          amount: b.order_amount != null ? Number(b.order_amount) : null,
+          courseUrl: classId ? `/course/${classId}` : "/course",
+        };
+      });
+
+      return Response.json({
+        type: "order_list",
+        reply: orders.length > 0 ? "以下是您的訂單紀錄。" : "您目前沒有訂單，歡迎報名課程。",
+        orders,
+      });
+    }
+
+    // FAQ：用常見問題組 context，呼叫 DeepSeek 生成回答
     const faqItems = await getFaqItems();
     const faqContext =
       faqItems.length > 0
         ? faqItems
             .map((i) => `Q: ${i.question}\nA: ${i.answer}`)
             .join("\n\n")
-        : "（目前無常見問題資料）";
+        : "（目前無常見問題資料，請建議使用者聯絡客服）";
 
-    // 2) 課程列表（標題、價格、簡介、年齡標籤、場次）
-    const { data: classesRows } = await supabase
-      .from("classes")
-      .select("id, title, price, course_intro, scheduled_slots, sidebar_option")
-      .eq("merchant_id", merchantId);
-
-    const classesList = (classesRows ?? []).map((row: Record<string, unknown>) => {
-      const sidebar = (row.sidebar_option as string[] | null) ?? [];
-      const ageLabels = sidebar
-        .map((v) => SIDEBAR_OPTION_LABELS[v] ?? v)
-        .filter(Boolean);
-      const slots = row.scheduled_slots as { date?: string; time?: string }[] | null;
-      const slotStr = Array.isArray(slots) && slots.length > 0
-        ? slots.map((s) => `${s.date ?? ""} ${s.time ?? ""}`).join("、")
-        : "（未設定場次）";
-      return `課程：${row.title ?? ""}｜價格：${row.price ?? ""}｜年齡：${ageLabels.join("、") || "未標示"}｜場次：${slotStr}｜簡介：${(row.course_intro as string) ?? ""}`;
-    });
-    const coursesContext =
-      classesList.length > 0
-        ? classesList.join("\n")
-        : "（目前無課程資料）";
-
-    // 3) 訂單（僅登入時）
-    let ordersContext = "";
-    if (intent === "order" && memberEmail) {
-      const { data: bookingsRows } = await supabase
-        .from("bookings")
-        .select("id, status, created_at, slot_date, slot_time, order_amount, classes(title)")
-        .eq("merchant_id", merchantId)
-        .eq("member_email", memberEmail)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      const ordersList = (bookingsRows ?? []).map((b: Record<string, unknown>) => {
-        const c = b.classes as { title?: string } | null;
-        const title = c?.title ?? "課程";
-        return `訂單：${title}｜狀態：${b.status ?? ""}｜日期：${b.slot_date ?? ""} ${b.slot_time ?? ""}｜金額：${b.order_amount ?? ""}`;
-      });
-      ordersContext =
-        ordersList.length > 0
-          ? ordersList.join("\n")
-          : "（此會員目前無訂單）";
-    }
-
-    const systemPrompt = `你是親子課程平台的客服助理。任務：回答家長關於課程、報名、退款、活動的問題。若無法確定答案，請建議聯絡客服。
-回答語氣：親切、簡潔、清楚。
+    const systemPrompt = `你是親子課程平台的客服助理。請僅根據以下【常見問題】回答，語氣親切、簡潔、清楚。若無法從資料中找到答案，請建議聯絡客服。
 
 【常見問題】
-${faqContext}
-
-【課程一覽】
-${coursesContext}
-${ordersContext ? `\n【此會員的訂單】\n${ordersContext}` : ""}
-
-請僅根據以上資料回答，不要捏造課程名稱或價格。`;
+${faqContext}`;
 
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey?.trim()) {
-      return Response.json(
-        { error: "未設定 DEEPSEEK_API_KEY" },
-        { status: 500 }
-      );
+      return Response.json({
+        type: "faq",
+        reply: "客服系統設定中，請稍後再試或直接聯絡客服。",
+      });
     }
 
     const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -155,10 +183,10 @@ ${ordersContext ? `\n【此會員的訂單】\n${ordersContext}` : ""}
     if (!res.ok) {
       const errText = await res.text();
       console.error("DeepSeek API error", res.status, errText);
-      return Response.json(
-        { error: "AI 暫時無法回覆，請稍後再試。" },
-        { status: 502 }
-      );
+      return Response.json({
+        type: "faq",
+        reply: "AI 暫時無法回覆，請稍後再試或聯絡客服。",
+      });
     }
 
     const data = (await res.json()) as {
@@ -168,11 +196,11 @@ ${ordersContext ? `\n【此會員的訂單】\n${ordersContext}` : ""}
       data?.choices?.[0]?.message?.content?.trim() ??
       "抱歉，我暫時無法回覆，請稍後再試或聯絡客服。";
 
-    return Response.json({ reply });
+    return Response.json({ type: "faq", reply });
   } catch (e) {
     console.error("ai-chat error", e);
     return Response.json(
-      { error: "處理時發生錯誤，請稍後再試。" },
+      { type: "faq", reply: "處理時發生錯誤，請稍後再試。" },
       { status: 500 }
     );
   }
