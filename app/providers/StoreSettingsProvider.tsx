@@ -14,6 +14,8 @@ const StoreSettingsContext = createContext<StoreSettings>({
   contactEmail: "",
   contactPhone: "",
   contactAddress: "",
+  aiChatEnabled: true,
+  aiChatWelcomeMessage: null,
 });
 
 export function useStoreSettings() {
@@ -49,6 +51,8 @@ export function StoreSettingsProvider({
       initial.contactEmail,
       initial.contactPhone,
       initial.contactAddress,
+      initial.aiChatEnabled,
+      initial.aiChatWelcomeMessage,
     ]
   );
 

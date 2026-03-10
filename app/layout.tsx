@@ -3,6 +3,7 @@ import "./globals.css";
 import { getStoreSettings } from "./actions/storeSettingsActions";
 import { getSeoSettings } from "./actions/frontendSettingsActions";
 import { StoreSettingsProvider } from "./providers/StoreSettingsProvider";
+import ChatWidget from "./components/chat/ChatWidget";
 
 const DEFAULT_TITLE = "童趣島 WonderVoyage | 兒童才藝活動報名";
 const DEFAULT_DESCRIPTION = "探索孩子的無限潛能";
@@ -28,7 +29,10 @@ export default async function RootLayout({
   return (
     <html lang="zh-TW">
       <body className="antialiased">
-        <StoreSettingsProvider initial={settings}>{children}</StoreSettingsProvider>
+        <StoreSettingsProvider initial={settings}>
+          {children}
+          <ChatWidget />
+        </StoreSettingsProvider>
       </body>
     </html>
   );

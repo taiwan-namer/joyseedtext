@@ -26,6 +26,10 @@ export type StoreSettings = {
   contactEmail: string;
   contactPhone: string;
   contactAddress: string;
+  /** 是否在前台顯示 AI 客服 Widget，預設 true */
+  aiChatEnabled: boolean;
+  /** AI 客服歡迎訊息，null 時用預設 */
+  aiChatWelcomeMessage: string | null;
 };
 
 export type FaqItem = { id: string; question: string; answer: string };
@@ -44,7 +48,7 @@ const STORE_SETTINGS_SELECT_LEGACY =
   "site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address";
 
 const STORE_SETTINGS_SELECT_FULL =
-  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address";
+  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address, ai_chat_enabled, ai_chat_welcome_message";
 
 function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
   const trim = (v: unknown) => (typeof v === "string" ? v.trim() : "") || "";
@@ -59,6 +63,8 @@ function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
     contactEmail: trim(raw.contact_email),
     contactPhone: trim(raw.contact_phone),
     contactAddress: trim(raw.contact_address),
+    aiChatEnabled: raw.ai_chat_enabled === false ? false : true,
+    aiChatWelcomeMessage: typeof raw.ai_chat_welcome_message === "string" && raw.ai_chat_welcome_message.trim() ? raw.ai_chat_welcome_message.trim() : null,
   };
 }
 
@@ -76,6 +82,8 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     contactEmail: "",
     contactPhone: "",
     contactAddress: "",
+    aiChatEnabled: true,
+    aiChatWelcomeMessage: null,
   });
   const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
   const supabase = createServerSupabase();
@@ -213,6 +221,36 @@ export async function updateStoreSettings(
       return { success: false, error: error.message };
     }
     return { success: true, message: "基本資料已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 更新 AI 客服設定（開關、歡迎訊息） */
+export async function updateAiChatSettings(
+  aiChatEnabled: boolean,
+  aiChatWelcomeMessage: string | null
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) {
+      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    }
+    const supabase = createServerSupabase();
+    const { error } = await supabase
+      .from("store_settings")
+      .update({
+        ai_chat_enabled: !!aiChatEnabled,
+        ai_chat_welcome_message: typeof aiChatWelcomeMessage === "string" && aiChatWelcomeMessage.trim() ? aiChatWelcomeMessage.trim() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("merchant_id", merchantId);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, message: "AI 客服設定已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";
     return { success: false, error: msg };
