@@ -208,7 +208,9 @@ export default function AdminDashboardPage() {
                       tickLine={false}
                     />
                     <Tooltip
-                      formatter={(value: number) => [`NT$ ${value.toLocaleString()}`, "營收"]}
+                      formatter={(value) =>
+                        [`NT$ ${Number(value ?? 0).toLocaleString()}`, "營收"]
+                      }
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ""}
                     />
                     <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
