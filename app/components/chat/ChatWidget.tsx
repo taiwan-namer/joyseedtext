@@ -58,41 +58,36 @@ function ChatHeader({ onClose }: { onClose: () => void }) {
 function ChatMessages({
   messages,
   isLoading,
-  messagesEndRef,
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-4" style={{ maxHeight: "400px" }}>
-      <div className="space-y-3">
-        {messages.map((m, i) => (
+    <div className="space-y-3">
+      {messages.map((m, i) => (
+        <div
+          key={i}
+          className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+        >
           <div
-            key={i}
-            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+            className={`max-w-[75%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+              m.role === "user"
+                ? "bg-brand text-white"
+                : "bg-gray-100 text-gray-800"
+            }`}
           >
-            <div
-              className={`max-w-[75%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                m.role === "user"
-                  ? "bg-brand text-white"
-                  : "bg-gray-100 text-gray-800"
-              }`}
-            >
-              {m.content}
-            </div>
+            {m.content}
           </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              思考中…
-            </div>
+        </div>
+      ))}
+      {isLoading && (
+        <div className="flex justify-start">
+          <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            思考中…
           </div>
-        )}
-      </div>
-      <div ref={messagesEndRef} />
+        </div>
+      )}
     </div>
   );
 }
@@ -176,11 +171,10 @@ function ChatWindow({
       aria-label="AI 客服"
     >
       <ChatHeader onClose={onClose} />
-      <ChatMessages
-        messages={messages}
-        isLoading={isLoading}
-        messagesEndRef={messagesEndRef}
-      />
+      <div className="flex-1 overflow-y-auto px-3 py-4" style={{ maxHeight: "400px" }}>
+        <ChatMessages messages={messages} isLoading={isLoading} />
+        <div ref={messagesEndRef} />
+      </div>
       <ChatInput onSend={onSend} disabled={isLoading} primaryColor={primaryColor} />
     </div>
   );
