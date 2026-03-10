@@ -84,10 +84,12 @@ function ChatMessages({
   messages,
   isLoading,
   primaryColor,
+  onLinkClick,
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
   primaryColor: string;
+  onLinkClick?: () => void;
 }) {
   return (
     <div className="space-y-3">
@@ -110,7 +112,12 @@ function ChatMessages({
               {m.courses.length > 0 && (
                 <div className="grid gap-2 max-w-[85%]">
                   {m.courses.map((c) => (
-                    <ChatCourseCard key={c.id} course={c} primaryColor={primaryColor} />
+                    <ChatCourseCard
+                      key={c.id}
+                      course={c}
+                      primaryColor={primaryColor}
+                      onLinkClick={onLinkClick}
+                    />
                   ))}
                 </div>
               )}
@@ -137,6 +144,7 @@ function ChatMessages({
                       {o.amount != null && <span className="text-gray-700">NT$ {o.amount}</span>}
                       <Link
                         href={o.courseUrl}
+                        onClick={onLinkClick}
                         className="text-xs font-medium rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
                       >
                         查看課程
@@ -236,20 +244,22 @@ function ChatWindow({
 
   return (
     <div
-      className="fixed bottom-24 right-4 z-[99] flex w-[360px] flex-col rounded-xl border border-gray-200 bg-white shadow-xl transition-all duration-200 sm:right-6 md:bottom-24 md:right-6 md:h-[480px] md:w-[360px]"
+      className="fixed inset-0 z-[99] flex flex-col bg-white transition-all duration-200 md:inset-auto md:left-auto md:top-auto md:bottom-24 md:right-6 md:h-[480px] md:w-[360px] md:max-h-[480px] md:rounded-xl md:border md:border-gray-200 md:shadow-xl"
       style={{
-        height: "min(60vh, 480px)",
-        maxHeight: "480px",
-        width: "calc(100% - 2rem)",
-        maxWidth: "360px",
-        transformOrigin: "bottom right",
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
       role="dialog"
       aria-label="AI 客服"
     >
       <ChatHeader onClose={onClose} />
-      <div className="flex-1 overflow-y-auto px-3 py-4" style={{ maxHeight: "400px" }}>
-        <ChatMessages messages={messages} isLoading={isLoading} primaryColor={primaryColor} />
+      <div className="flex-1 overflow-y-auto px-3 py-4 min-h-0 md:max-h-[400px]">
+        <ChatMessages
+          messages={messages}
+          isLoading={isLoading}
+          primaryColor={primaryColor}
+          onLinkClick={onClose}
+        />
         <div ref={messagesEndRef} />
       </div>
       <ChatInput onSend={onSend} disabled={isLoading} primaryColor={primaryColor} />

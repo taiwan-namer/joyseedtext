@@ -11,7 +11,18 @@ export type ChatCourseItem = {
   url: string;
 };
 
-export function ChatCourseCard({ course, primaryColor }: { course: ChatCourseItem; primaryColor: string }) {
+export function ChatCourseCard({
+  course,
+  primaryColor,
+  onLinkClick,
+}: {
+  course: ChatCourseItem;
+  primaryColor: string;
+  onLinkClick?: () => void;
+}) {
+  const handleClick = () => {
+    onLinkClick?.();
+  };
   return (
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
       {course.image_url ? (
@@ -37,12 +48,14 @@ export function ChatCourseCard({ course, primaryColor }: { course: ChatCourseIte
         <div className="mt-2 flex gap-2">
           <Link
             href={course.url}
+            onClick={handleClick}
             className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
             查看課程
           </Link>
           <Link
             href={course.url}
+            onClick={handleClick}
             className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium text-white"
             style={{ backgroundColor: primaryColor }}
           >
