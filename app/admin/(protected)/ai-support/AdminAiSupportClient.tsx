@@ -1,13 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { updateAiChatSettings } from "@/app/actions/storeSettingsActions";
+import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { Loader2, Send } from "lucide-react";
+import { ChatCourseCard, type ChatCourseItem } from "@/app/components/chat/ChatCourseCard";
 
-type ChatMsg = { role: "user" | "assistant"; content: string };
+type ChatOrderItem = {
+  id: string;
+  courseTitle: string;
+  status: string;
+  slotDate: string | null;
+  slotTime: string | null;
+  amount: number | null;
+  courseUrl: string;
+};
+
+type ChatMsg =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string }
+  | { role: "assistant"; type: "course_recommendation"; reply: string; courses: ChatCourseItem[] }
+  | { role: "assistant"; type: "order_list"; reply: string; orders: ChatOrderItem[] };
 
 const DEFAULT_WELCOME =
   "您好！我是 AI 課程助手 👋\n可以問我：\n• 有哪些適合 3 歲的課程？\n• 本週有什麼活動？\n• 我的訂單狀態是什麼？";
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  unpaid: "未付款",
+  paid: "已付款",
+  upcoming: "即將上課",
+  completed: "已完成",
+  cancelled: "已取消",
+};
 
 export function AdminAiSupportClient({
   initialAiChatEnabled,
@@ -16,6 +41,7 @@ export function AdminAiSupportClient({
   initialAiChatEnabled: boolean;
   initialAiChatWelcomeMessage: string;
 }) {
+  const { primaryColor } = useStoreSettings();
   const [aiChatEnabled, setAiChatEnabled] = useState(initialAiChatEnabled);
   const [welcomeMessage, setWelcomeMessage] = useState(
     initialAiChatWelcomeMessage || DEFAULT_WELCOME
@@ -24,7 +50,7 @@ export function AdminAiSupportClient({
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [testMessages, setTestMessages] = useState<ChatMsg[]>([
-    { role: "assistant", content: "在下方輸入問題測試 AI 回覆。" },
+    { role: "assistant", content: "在下方輸入問題測試 AI 回覆；可點「訂單模板」預覽訂單列表（僅後台範例）。" },
   ]);
   const [testInput, setTestInput] = useState("");
   const [testLoading, setTestLoading] = useState(false);
@@ -49,7 +75,7 @@ export function AdminAiSupportClient({
     }
   };
 
-  const handleTestSend = async (overrideInput?: string) => {
+  const handleTestSend = async (overrideInput?: string, adminPreviewOrder?: boolean) => {
     const text = (overrideInput ?? testInput).trim();
     if (!text || testLoading) return;
     setTestMessages((prev) => [...prev, { role: "user", content: text }]);
@@ -59,12 +85,23 @@ export function AdminAiSupportClient({
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, admin_preview_order: adminPreviewOrder === true }),
       });
       const data = await res.json();
-      const reply =
-        data.reply ?? data.error ?? "無法取得回覆，請檢查 DEEPSEEK_API_KEY 與網路。";
-      setTestMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      if (data.type === "course_recommendation" && Array.isArray(data.courses)) {
+        setTestMessages((prev) => [
+          ...prev,
+          { role: "assistant", type: "course_recommendation", reply: data.reply ?? "", courses: data.courses },
+        ]);
+      } else if (data.type === "order_list" && Array.isArray(data.orders)) {
+        setTestMessages((prev) => [
+          ...prev,
+          { role: "assistant", type: "order_list", reply: data.reply ?? "", orders: data.orders },
+        ]);
+      } else {
+        const reply = data.reply ?? data.error ?? "無法取得回覆，請檢查 DEEPSEEK_API_KEY 與網路。";
+        setTestMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      }
     } catch {
       setTestMessages((prev) => [
         ...prev,
@@ -76,9 +113,9 @@ export function AdminAiSupportClient({
   };
 
   const quickTests = [
-    { label: "課程", phrase: "有哪些適合 3 歲的課程？" },
-    { label: "訂單", phrase: "我的訂單狀態是什麼？" },
-    { label: "常見問題", phrase: "怎麼退款？" },
+    { label: "課程", phrase: "有哪些適合 3 歲的課程？", adminPreview: false },
+    { label: "訂單", phrase: "我的訂單狀態是什麼？", adminPreview: true },
+    { label: "常見問題", phrase: "怎麼退款？", adminPreview: false },
   ];
 
   return (
@@ -140,7 +177,7 @@ export function AdminAiSupportClient({
             <button
               key={q.label}
               type="button"
-              onClick={() => handleTestSend(q.phrase)}
+              onClick={() => handleTestSend(q.phrase, q.adminPreview)}
               disabled={testLoading}
               className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
             >
@@ -150,20 +187,66 @@ export function AdminAiSupportClient({
         </div>
         <div className="flex flex-col rounded-lg border border-gray-200 bg-gray-50/50">
           <div
-            className="min-h-[200px] max-h-[320px] space-y-2 overflow-y-auto p-3"
+            className="min-h-[200px] max-h-[400px] space-y-2 overflow-y-auto p-3"
           >
-            {testMessages.map((m, i) => (
-              <div
-                key={i}
-                className={
-                  m.role === "user"
-                    ? "ml-auto max-w-[85%] rounded-lg bg-amber-500 px-3 py-2 text-sm text-white"
-                    : "max-w-[85%] rounded-lg bg-white px-3 py-2 text-sm text-gray-800 shadow-sm"
-                }
-              >
-                <span className="whitespace-pre-wrap">{m.content}</span>
-              </div>
-            ))}
+            {testMessages.map((m, i) => {
+              if (m.role === "user") {
+                return (
+                  <div key={i} className="ml-auto max-w-[85%] rounded-lg bg-amber-500 px-3 py-2 text-sm text-white">
+                    <span className="whitespace-pre-wrap">{m.content}</span>
+                  </div>
+                );
+              }
+              if ("type" in m && m.type === "course_recommendation") {
+                return (
+                  <div key={i} className="space-y-2">
+                    <div className="max-w-[85%] rounded-lg bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
+                      {m.reply}
+                    </div>
+                    {m.courses.length > 0 && (
+                      <div className="grid max-w-[85%] gap-2 sm:grid-cols-2">
+                        {m.courses.map((c) => (
+                          <ChatCourseCard key={c.id} course={c} primaryColor={primaryColor} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              if ("type" in m && m.type === "order_list") {
+                return (
+                  <div key={i} className="space-y-2">
+                    <div className="max-w-[85%] rounded-lg bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
+                      {m.reply}
+                    </div>
+                    {m.orders.length > 0 && (
+                      <ul className="max-w-[85%] space-y-2 rounded-lg border border-gray-200 bg-white p-2 text-sm">
+                        {m.orders.map((o) => (
+                          <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                            <span className="font-medium text-gray-900">{o.courseTitle}</span>
+                            <span className="text-gray-500">{ORDER_STATUS_LABELS[o.status] ?? o.status}</span>
+                            {(o.slotDate || o.slotTime) && (
+                              <span className="w-full text-xs text-gray-500">
+                                {[o.slotDate, o.slotTime].filter(Boolean).join(" ")}
+                              </span>
+                            )}
+                            {o.amount != null && <span className="text-gray-700">NT$ {o.amount}</span>}
+                            <Link href={o.courseUrl} className="rounded border border-gray-300 px-2 py-1 text-xs font-medium hover:bg-gray-50">
+                              查看課程
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className="max-w-[85%] rounded-lg bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
+                  <span className="whitespace-pre-wrap">{m.content}</span>
+                </div>
+              );
+            })}
             {testLoading && (
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Loader2 className="h-4 w-4 animate-spin" />

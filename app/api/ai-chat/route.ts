@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getCurrentMemberEmail } from "@/app/actions/bookingActions";
 import { getFaqItems } from "@/app/actions/storeSettingsActions";
+import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 
 const SIDEBAR_OPTION_LABELS: Record<string, string> = {
   "0": "0-3歲",
@@ -52,7 +53,7 @@ export type AiChatOrderItem = {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as { message?: string; admin_preview_order?: boolean };
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     if (!message) {
       return Response.json(
@@ -71,9 +72,47 @@ export async function POST(request: NextRequest) {
 
     const memberEmail = await getCurrentMemberEmail();
     const intent = classifyIntent(message);
+    const adminPreviewOrder = body?.admin_preview_order === true;
 
-    // 訂單查詢僅限登入
+    // 訂單查詢：未登入時，若為後台範例預覽則驗證 admin 後回傳範例訂單
     if (intent === "order" && !memberEmail) {
+      if (adminPreviewOrder) {
+        try {
+          await verifyAdminSession();
+        } catch {
+          return Response.json({
+            type: "faq",
+            reply: "查詢訂單需要先登入會員喔！請先至網站登入後再問「我的訂單」或「我報名了什麼課」。",
+          });
+        }
+        const supabase = createServerSupabase();
+        const { data: bookingsRows } = await supabase
+          .from("bookings")
+          .select("id, status, slot_date, slot_time, order_amount, class_id, classes(title)")
+          .eq("merchant_id", merchantId)
+          .order("created_at", { ascending: false })
+          .limit(2);
+
+        const orders: AiChatOrderItem[] = (bookingsRows ?? []).map((b: Record<string, unknown>) => {
+          const c = b.classes as { title?: string } | null;
+          const classId = b.class_id != null ? String(b.class_id) : "";
+          return {
+            id: String(b.id ?? ""),
+            courseTitle: c?.title ?? "課程",
+            status: String(b.status ?? ""),
+            slotDate: b.slot_date != null ? String(b.slot_date) : null,
+            slotTime: b.slot_time != null ? String(b.slot_time) : null,
+            amount: b.order_amount != null ? Number(b.order_amount) : null,
+            courseUrl: classId ? `/course/${classId}` : "/course",
+          };
+        });
+
+        return Response.json({
+          type: "order_list",
+          reply: "以下為訂單列表範例（僅供後台預覽）。前台訪客需登入會員才能查詢自己的訂單。",
+          orders,
+        });
+      }
       return Response.json({
         type: "faq",
         reply:
