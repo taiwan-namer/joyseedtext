@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Filter, Plus, Image as ImageIcon, Trash2, Loader2 } from "lucide-react";
 import { getClassesForAdmin, deleteClasses, updateCourseCapacity, type ClassRow } from "@/app/actions/productActions";
+import { getEnrollmentCountsForAdmin } from "@/app/actions/bookingActions";
 
 /** 名額欄：可編輯數字，失焦或 Enter 時儲存 */
 function CapacityCell({
@@ -57,15 +58,22 @@ export default function AdminProductsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingCapacityId, setUpdatingCapacityId] = useState<string | null>(null);
+  const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
 
   const fetchList = async () => {
     setIsLoading(true);
     setError(null);
-    const result = await getClassesForAdmin();
-    if (result.success) {
-      setClasses(result.data);
+    const [classResult, countResult] = await Promise.all([
+      getClassesForAdmin(),
+      getEnrollmentCountsForAdmin(),
+    ]);
+    if (classResult.success) {
+      setClasses(classResult.data);
     } else {
-      setError(result.error);
+      setError(classResult.error);
+    }
+    if (countResult.success) {
+      setEnrollmentCounts(countResult.data);
     }
     setIsLoading(false);
   };
@@ -196,6 +204,9 @@ export default function AdminProductsPage() {
                 <th className="text-left py-3 px-4 font-medium text-gray-700 w-24">
                   名額
                 </th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 w-20">
+                  已報名
+                </th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[220px]">
                   首頁設定
                 </th>
@@ -207,19 +218,19 @@ export default function AdminProductsPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 px-4 text-center text-gray-500">
+                  <td colSpan={10} className="py-12 px-4 text-center text-gray-500">
                     資料載入中...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={9} className="py-12 px-4 text-center text-red-600">
+                  <td colSpan={10} className="py-12 px-4 text-center text-red-600">
                     {error}
                   </td>
                 </tr>
               ) : classes.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 px-4 text-center text-gray-500">
+                  <td colSpan={10} className="py-12 px-4 text-center text-gray-500">
                     尚無課程，請點「新增」建立
                   </td>
                 </tr>
@@ -295,6 +306,9 @@ export default function AdminProductsPage() {
                           }
                         }}
                       />
+                    </td>
+                    <td className="py-3 px-4 text-gray-700">
+                      {enrollmentCounts[item.id] ?? 0}
                     </td>
                     <td className="py-3 px-4 text-gray-500">—</td>
                     <td className="py-3 px-4 text-gray-600">—</td>

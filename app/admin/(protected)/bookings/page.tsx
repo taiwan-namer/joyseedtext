@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Loader2, CheckCircle, Trash2 } from "lucide-react";
+import { ChevronLeft, Loader2, CheckCircle, Trash2, Filter } from "lucide-react";
 import { getAdminBookings, markBookingAsPaid, completeBooking, deleteBooking, type BookingWithClass } from "@/app/actions/bookingActions";
 
 function formatDate(iso: string) {
@@ -56,6 +56,14 @@ function formatCourseDate(row: BookingWithClass) {
   }
 }
 
+const STATUS_OPTIONS = [
+  { value: "", label: "全部狀態" },
+  { value: "unpaid", label: "未付款" },
+  { value: "paid", label: "已付款" },
+  { value: "completed", label: "完成課程" },
+  { value: "cancelled", label: "已取消" },
+] as const;
+
 export default function AdminBookingsPage() {
   const [list, setList] = useState<BookingWithClass[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +71,22 @@ export default function AdminBookingsPage() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>("");
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
+
+  const filteredList = list.filter((row) => {
+    if (filterStatus && row.status !== filterStatus) return false;
+    if (filterStartDate) {
+      const rowDate = row.created_at.slice(0, 10);
+      if (rowDate < filterStartDate) return false;
+    }
+    if (filterEndDate) {
+      const rowDate = row.created_at.slice(0, 10);
+      if (rowDate > filterEndDate) return false;
+    }
+    return true;
+  });
 
   const fetchList = async () => {
     setLoading(true);
@@ -128,6 +152,47 @@ export default function AdminBookingsPage() {
       </div>
       <h1 className="text-xl font-bold text-gray-900">訂單管理</h1>
 
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">篩選</span>
+        </div>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value || "all"} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-2">
+          <label htmlFor="bookings_start" className="text-sm text-gray-600">開始日期</label>
+          <input
+            id="bookings_start"
+            type="date"
+            value={filterStartDate}
+            onChange={(e) => setFilterStartDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="bookings_end" className="text-sm text-gray-600">結束日期</label>
+          <input
+            id="bookings_end"
+            type="date"
+            value={filterEndDate}
+            onChange={(e) => setFilterEndDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <span className="text-sm text-gray-500">
+          顯示 {filteredList.length} / {list.length} 筆
+        </span>
+      </div>
+
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           {loading ? (
@@ -138,26 +203,33 @@ export default function AdminBookingsPage() {
             <p className="py-8 px-4 text-red-600 text-sm">{error}</p>
           ) : list.length === 0 ? (
             <p className="py-8 px-4 text-gray-500 text-sm">尚無訂單</p>
+          ) : filteredList.length === 0 ? (
+            <p className="py-8 px-4 text-gray-500 text-sm">篩選後無符合的訂單</p>
           ) : (
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 w-24">訂單編號</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700" title="來自報名時選擇的場次；舊訂單或未選場次顯示為 —">課程日期</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">課程名稱</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">家長姓名</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">電話</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">購買人信箱</th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-700 w-20">金額</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">購買時間</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">狀態</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700 w-36">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {list.map((row) => (
+                {filteredList.map((row) => (
                   <tr
                     key={row.id}
                     className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors"
                   >
+                    <td className="py-3 px-4 text-gray-600 font-mono text-xs" title={row.id}>
+                      {row.id.slice(0, 8)}…
+                    </td>
                     <td className="py-3 px-4 text-gray-900" title={!row.slot_date ? "此筆為舊訂單或未選擇場次，故無課程日期" : undefined}>
                       {formatCourseDate(row)}
                     </td>
@@ -165,6 +237,9 @@ export default function AdminBookingsPage() {
                     <td className="py-3 px-4 text-gray-900">{row.parent_name || "—"}</td>
                     <td className="py-3 px-4 text-gray-600">{row.parent_phone || "—"}</td>
                     <td className="py-3 px-4 text-gray-900">{row.member_email}</td>
+                    <td className="py-3 px-4 text-right text-gray-900 font-medium">
+                      {row.class_price != null ? `NT$ ${row.class_price.toLocaleString()}` : "—"}
+                    </td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(row.created_at)}</td>
                     <td className="py-3 px-4">
                       <span

@@ -1,4 +1,5 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getBookingCountsByMemberEmailForAdmin } from "@/app/actions/bookingActions";
 import { DeleteMemberButton } from "./DeleteMemberButton";
 
 function envTrim(key: string): string {
@@ -10,11 +11,17 @@ export default async function AdminMembersPage() {
   const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
   const supabase = createServerSupabase();
 
-  const { data: rows, error } = await supabase
-    .from("members")
-    .select("id, name, phone, email, created_at")
-    .eq("merchant_id", merchantId)
-    .order("created_at", { ascending: false });
+  const [membersResult, countResult] = await Promise.all([
+    supabase
+      .from("members")
+      .select("id, name, phone, email, created_at")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
+    getBookingCountsByMemberEmailForAdmin(),
+  ]);
+
+  const { data: rows, error } = membersResult;
+  const bookingCounts = countResult.success ? countResult.data : {} as Record<string, number>;
 
   if (error) {
     return (
@@ -85,6 +92,7 @@ export default async function AdminMembersPage() {
                   <th className="text-left py-3 px-4 font-medium text-gray-700">會員姓名</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">電話</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">信箱</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 w-24">報名課程數</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">註冊日期</th>
                   <th className="w-12 py-3 px-4 font-medium text-gray-700 text-center">操作</th>
                 </tr>
@@ -100,6 +108,9 @@ export default async function AdminMembersPage() {
                     </td>
                     <td className="py-3 px-4 text-gray-700">{m.phone ?? "—"}</td>
                     <td className="py-3 px-4 text-gray-700">{m.email ?? "—"}</td>
+                    <td className="py-3 px-4 text-gray-700">
+                      {bookingCounts[m.email ?? ""] ?? 0}
+                    </td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(m.created_at)}</td>
                     <td className="py-3 px-4 text-center">
                       <DeleteMemberButton memberId={m.id} />

@@ -16,11 +16,14 @@ import {
   MoreHorizontal,
   Zap,
   Megaphone,
+  MessageCircle,
+  LayoutDashboard,
 } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 
 const SIDEBAR_MENU = [
   { label: "查看前台", href: "/", icon: ExternalLink, newTab: true },
+  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   {
     label: "我的賣場",
     icon: Store,
@@ -75,8 +78,15 @@ const SIDEBAR_MENU = [
     open: false,
     children: [
       { label: "訂單管理", href: "/admin/bookings" },
+      { label: "訂單金額管理", href: "/admin/revenue" },
       { label: "報名進度查詢", href: "/admin/enrollment" },
     ],
+  },
+  {
+    label: "AI客服",
+    icon: MessageCircle,
+    open: false,
+    children: [{ label: "AI客服", href: "/admin/ai-support" }],
   },
   {
     label: "其他功能",
@@ -107,6 +117,7 @@ function Sidebar({
     功能應用項目: false,
     行銷項目: false,
     訂單綜合項: false,
+    AI客服: false,
     其他功能: false,
   });
 

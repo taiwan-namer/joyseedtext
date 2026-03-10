@@ -806,6 +806,74 @@ export async function getAdminBookings(): Promise<
   }
 }
 
+/**
+ * 後台課程列表用：各課程的已報名人數（status 為 paid 或 completed）
+ */
+export async function getEnrollmentCountsForAdmin(): Promise<
+  | { success: true; data: Record<string, number> }
+  | { success: false; error: string }
+> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+
+    const supabase = createServerSupabase();
+    const { data: rows, error } = await supabase
+      .from("bookings")
+      .select("class_id")
+      .eq("merchant_id", merchantId)
+      .in("status", ["paid", "completed"]);
+
+    if (error) return { success: false, error: error.message };
+
+    const counts: Record<string, number> = {};
+    for (const r of rows ?? []) {
+      const id = (r as { class_id?: string }).class_id;
+      if (id) {
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+    }
+    return { success: true, data: counts };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "取得報名人數失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 後台會員列表用：各會員的報名課程數（status 為 paid 或 completed），以 member_email 為 key
+ */
+export async function getBookingCountsByMemberEmailForAdmin(): Promise<
+  | { success: true; data: Record<string, number> }
+  | { success: false; error: string }
+> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+
+    const supabase = createServerSupabase();
+    const { data: rows, error } = await supabase
+      .from("bookings")
+      .select("member_email")
+      .eq("merchant_id", merchantId)
+      .in("status", ["paid", "completed"]);
+
+    if (error) return { success: false, error: error.message };
+
+    const counts: Record<string, number> = {};
+    for (const r of rows ?? []) {
+      const email = (r as { member_email?: string }).member_email;
+      if (email) {
+        counts[email] = (counts[email] ?? 0) + 1;
+      }
+    }
+    return { success: true, data: counts };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "取得報名數失敗";
+    return { success: false, error: msg };
+  }
+}
+
 /** 點名簿用：訂單 + 家長／小朋友／聯絡方式，與訂單管理相同，皆直接來自 bookings 表 */
 export type BookingWithMember = {
   id: string;
