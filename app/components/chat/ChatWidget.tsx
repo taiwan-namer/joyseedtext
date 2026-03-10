@@ -322,12 +322,14 @@ export default function ChatWidget() {
 
   return (
     <>
-      <ChatButton
-        ref={buttonRef}
-        onClick={() => setIsOpen((v) => !v)}
-        ariaExpanded={isOpen}
-        primaryColor={primaryColor}
-      />
+      {!isOpen && (
+        <ChatButton
+          ref={buttonRef}
+          onClick={() => setIsOpen(true)}
+          ariaExpanded={false}
+          primaryColor={primaryColor}
+        />
+      )}
       <ChatWindow
         isOpen={isOpen}
         onClose={handleClose}
