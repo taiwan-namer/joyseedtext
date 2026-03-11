@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateECPayMacValue } from "@/lib/crypto-utils";
+import { ecpayInvoiceEncryptData } from "@/lib/ecpay/invoice-encrypt";
 
 const ECPAY_INVOICE_STAGE_URL = "https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue";
 
@@ -70,17 +70,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 200 });
   }
 
-  const relateNumber = (body.relateNumber ?? `INV${Date.now()}`).slice(0, 30);
+  const relateNumber = (body.relateNumber ?? `INV${Date.now()}`).slice(0, 50);
   const customerName = body.customerName?.trim() || "測試買家";
   const customerAddr = body.customerAddr?.trim() || "台北市信義區測試地址";
   const customerPhone = body.customerPhone?.trim() || "0912345678";
   const customerEmail = body.customerEmail?.trim() || "test@example.com";
   const salesAmount = Number.isFinite(body.salesAmount) && (body.salesAmount as number) > 0 ? Number(body.salesAmount) : 850;
 
-  const defaultItems = `ItemName=課程預約|ItemCount=1|ItemWord=堂|ItemPrice=${salesAmount}|ItemAmount=${salesAmount}`;
-  const itemsRaw = body.itemsRaw?.trim() || defaultItems;
-
-  const params: Record<string, string> = {
+  // 綠界 B2C 發票 API：請求為 JSON，含 MerchantID、RqHeader.Timestamp、Data（AES 加密後的 payload）
+  // Data 內容：先組 JSON 再 URL Encode 整串，再 AES-128-CBC 加密，輸出 Base64
+  const dataPayload = {
     MerchantID: creds.merchantId,
     RelateNumber: relateNumber,
     CustomerID: "",
@@ -92,20 +91,46 @@ export async function POST(req: NextRequest) {
     ClearanceMark: "",
     Print: "0",
     Donation: "0",
+    CarrierType: "",
+    CarrierNum: "",
     TaxType: "1",
-    SalesAmount: String(salesAmount),
-    Items: encodeURIComponent(itemsRaw),
+    SalesAmount: salesAmount,
     InvType: "07",
     vat: "1",
+    Items: [
+      {
+        ItemSeq: 1,
+        ItemName: "課程預約",
+        ItemCount: 1,
+        ItemWord: "堂",
+        ItemPrice: salesAmount,
+        ItemTaxType: "1",
+        ItemAmount: salesAmount,
+      },
+    ],
   };
 
-  const checkMac = generateECPayMacValue(params, creds.hashKey, creds.hashIv);
-  params.CheckMacValue = checkMac;
-
-  const searchParams = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    searchParams.append(k, v);
+  let encryptedData: string;
+  try {
+    encryptedData = ecpayInvoiceEncryptData(
+      JSON.stringify(dataPayload),
+      creds.hashKey,
+      creds.hashIv
+    );
+  } catch (e) {
+    console.error("[Invoice issue] Data 加密失敗", e);
+    return NextResponse.json(
+      { ok: false, error: "Data encryption failed", detail: String((e as Error).message) },
+      { status: 200 }
+    );
   }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const requestBody = {
+    MerchantID: creds.merchantId,
+    RqHeader: { Timestamp: timestamp },
+    Data: encryptedData,
+  };
 
   let responseText = "";
   let status = 200;
@@ -113,9 +138,9 @@ export async function POST(req: NextRequest) {
     const res = await fetch(ECPAY_INVOICE_STAGE_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        "Content-Type": "application/json",
       },
-      body: searchParams.toString(),
+      body: JSON.stringify(requestBody),
     });
     status = res.status;
     responseText = await res.text();
@@ -135,10 +160,9 @@ export async function POST(req: NextRequest) {
       ecpayStatus: status,
       raw: responseText,
       sent: {
-        MerchantID: params.MerchantID,
-        RelateNumber: params.RelateNumber,
-        SalesAmount: params.SalesAmount,
-        ItemsRaw: itemsRaw,
+        MerchantID: creds.merchantId,
+        RelateNumber: relateNumber,
+        SalesAmount: salesAmount,
       },
     },
     { status: 200 }
