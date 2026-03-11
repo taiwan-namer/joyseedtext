@@ -1,6 +1,7 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getBookingCountsByMemberEmailForAdmin } from "@/app/actions/bookingActions";
 import { DeleteMemberButton } from "./DeleteMemberButton";
+import { MemberBookingLink } from "./MemberBookingLink";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -109,7 +110,7 @@ export default async function AdminMembersPage() {
                     <td className="py-3 px-4 text-gray-700">{m.phone ?? "—"}</td>
                     <td className="py-3 px-4 text-gray-700">{m.email ?? "—"}</td>
                     <td className="py-3 px-4 text-gray-700">
-                      {bookingCounts[m.email ?? ""] ?? 0}
+                      <MemberBookingLink email={m.email ?? null} count={bookingCounts[m.email ?? ""] ?? 0} />
                     </td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(m.created_at)}</td>
                     <td className="py-3 px-4 text-center">

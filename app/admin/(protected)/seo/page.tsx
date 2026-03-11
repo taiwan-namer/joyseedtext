@@ -60,7 +60,7 @@ export default function SeoPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-4">
         <Link
           href="/admin"
@@ -72,8 +72,24 @@ export default function SeoPage() {
       </div>
       <h1 className="text-xl font-bold text-gray-900 bg-slate-800 text-white px-4 py-2 rounded">SEO設定</h1>
       <p className="text-sm text-gray-600">
-        設定網頁標題、關鍵字與描述，將顯示於搜尋結果與瀏覽器分頁，有助於搜尋引擎優化。
+        設定網頁標題（分頁名稱）、關鍵字與描述，將顯示於搜尋結果與瀏覽器分頁，有助於搜尋引擎優化。
       </p>
+
+      {/* 預覽區：左圖右文，讓用戶了解分頁名稱與呈現方式 */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-col sm:flex-row gap-4 items-start">
+        <div className="w-full sm:w-40 shrink-0 rounded-lg border border-gray-200 bg-white overflow-hidden aspect-video sm:aspect-square flex items-center justify-center text-gray-400 text-xs">
+          <span>分頁預覽圖<br />（示範）</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-gray-500 mb-1">瀏覽器分頁會顯示：</p>
+          <p className="text-sm font-semibold text-gray-900 truncate" title={seoTitle || "未設定"}>
+            {seoTitle || "請在下方填寫網頁標題（分頁名稱）"}
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            左側為示範區塊，實際搜尋結果與分頁會依您設定的標題、描述顯示。
+          </p>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {message && (
@@ -92,7 +108,7 @@ export default function SeoPage() {
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
           <div>
             <label htmlFor="seo_title" className="mb-1 block text-sm font-medium text-gray-700">
-              網頁標題:
+              分頁名稱（網頁標題）:
             </label>
             <input
               id="seo_title"
@@ -100,12 +116,12 @@ export default function SeoPage() {
               name="seo_title"
               value={seoTitle}
               onChange={(e) => setSeoTitle(e.target.value)}
-              placeholder="例：童趣島 | 親子共學的溫柔冒險"
+              placeholder="例：童趣島 WonderVoyage | 兒童才藝活動報名"
               maxLength={80}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
               disabled={isPending}
             />
-            <p className="mt-1 text-xs text-red-600">* 三十字以內最佳</p>
+            <p className="mt-1 text-xs text-gray-600">此標題會顯示於瀏覽器分頁與搜尋結果，三十字以內最佳。</p>
             {titleLen > 0 && (
               <p className="mt-0.5 text-xs text-gray-500">{titleLen} 字</p>
             )}

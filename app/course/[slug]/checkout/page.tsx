@@ -54,11 +54,17 @@ export default function CheckoutPage() {
   const [hasAllergyOrGenetic, setHasAllergyOrGenetic] = useState<boolean>(true);
   const [childAllergyDetail, setChildAllergyDetail] = useState("");
   const [childAge, setChildAge] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("ecpay");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [atmBankName, setAtmBankName] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
+  const [paymentEnabled, setPaymentEnabled] = useState<{
+    newebpay: boolean;
+    ecpay: boolean;
+    linepay: boolean;
+    atm: boolean;
+  }>({ newebpay: false, ecpay: false, linepay: false, atm: false });
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [completingPending, setCompletingPending] = useState(false);
@@ -97,6 +103,18 @@ export default function CheckoutPage() {
     getPaymentSettings().then((data) => {
       setAtmBankName(data.atmBankName ?? "");
       setAtmBankAccount(data.atmBankAccount ?? "");
+      setPaymentEnabled({
+        newebpay: data.paymentNewebpayEnabled ?? false,
+        ecpay: data.paymentEcpayEnabled ?? false,
+        linepay: data.paymentLinepayEnabled ?? false,
+        atm: data.paymentAtmEnabled ?? false,
+      });
+      const first: PaymentMethod[] = [];
+      if (data.paymentEcpayEnabled) first.push("ecpay");
+      if (data.paymentNewebpayEnabled) first.push("newebpay");
+      if (data.paymentLinepayEnabled) first.push("linepay");
+      if (data.paymentAtmEnabled) first.push("transfer");
+      if (first.length > 0) setPaymentMethod(first[0]);
     });
   }, []);
 
@@ -325,14 +343,17 @@ export default function CheckoutPage() {
     sessionStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(pending));
   };
 
+  const hasPaymentOption = paymentEnabled.ecpay || paymentEnabled.newebpay || paymentEnabled.linepay || paymentEnabled.atm;
   const buttonText =
-    paymentMethod === "card" || paymentMethod === "ecpay"
+    paymentMethod === "ecpay"
       ? "前往付款"
       : paymentMethod === "linepay"
         ? "使用 Line Pay 付款"
         : paymentMethod === "newebpay"
           ? "前往 ATM 付款"
-          : "確認預約並取得帳號";
+          : paymentMethod === "transfer"
+            ? "確認預約並取得帳號"
+            : "前往付款";
 
   const handleSubmit = async () => {
     setSubmitError(null);
@@ -377,6 +398,10 @@ export default function CheckoutPage() {
     }
     if (hasSession === false) {
       setShowLoginPrompt(true);
+      return;
+    }
+    if (!paymentEnabled.ecpay && !paymentEnabled.newebpay && !paymentEnabled.linepay && !paymentEnabled.atm) {
+      setSubmitError("目前沒有可用的付款方式，請聯絡店家。");
       return;
     }
     setSubmitLoading(true);
@@ -506,6 +531,7 @@ export default function CheckoutPage() {
             loading={submitLoading}
             atmBankName={atmBankName}
             atmBankAccount={atmBankAccount}
+            submitDisabled={!hasPaymentOption}
           />
         </div>
 
@@ -644,143 +670,97 @@ export default function CheckoutPage() {
               </div>
             </section>
 
-            {/* 2. 選擇付款方式 */}
+            {/* 2. 選擇付款方式（僅顯示後台已開啟的選項） */}
             <section className="bg-white p-6 rounded-xl shadow-sm">
               <h2 className="text-lg font-bold text-gray-900 mb-6">
                 選擇付款方式
               </h2>
-              <div className="space-y-3">
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "card"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="card"
-                    checked={paymentMethod === "card"}
-                    onChange={() => setPaymentMethod("card")}
-                    className="sr-only"
-                  />
-                  <CreditCard
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "card"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    線上刷卡 (第三方金流)
-                  </span>
-                </label>
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "ecpay"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="ecpay"
-                    checked={paymentMethod === "ecpay"}
-                    onChange={() => setPaymentMethod("ecpay")}
-                    className="sr-only"
-                  />
-                  <CreditCard
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "ecpay"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    信用卡 (綠界)
-                  </span>
-                </label>
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "newebpay"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="newebpay"
-                    checked={paymentMethod === "newebpay"}
-                    onChange={() => setPaymentMethod("newebpay")}
-                    className="sr-only"
-                  />
-                  <Building
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "newebpay"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    ATM (藍新)
-                  </span>
-                </label>
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "linepay"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="linepay"
-                    checked={paymentMethod === "linepay"}
-                    onChange={() => setPaymentMethod("linepay")}
-                    className="sr-only"
-                  />
-                  <Smartphone
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "linepay"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    Line Pay
-                  </span>
-                </label>
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "transfer"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="transfer"
-                    checked={paymentMethod === "transfer"}
-                    onChange={() => setPaymentMethod("transfer")}
-                    className="sr-only"
-                  />
-                  <Building
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "transfer"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    ATM 銀行轉帳
-                  </span>
-                </label>
-              </div>
+              {!paymentEnabled.ecpay && !paymentEnabled.newebpay && !paymentEnabled.linepay && !paymentEnabled.atm ? (
+                <p className="text-gray-500 text-sm">目前沒有可用的付款方式，請稍後再試或聯絡店家。</p>
+              ) : (
+                <div className="space-y-3">
+                  {paymentEnabled.ecpay && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "ecpay"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="ecpay"
+                        checked={paymentMethod === "ecpay"}
+                        onChange={() => setPaymentMethod("ecpay")}
+                        className="sr-only"
+                      />
+                      <CreditCard className={`w-6 h-6 shrink-0 ${paymentMethod === "ecpay" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">信用卡 (綠界)</span>
+                    </label>
+                  )}
+                  {paymentEnabled.newebpay && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "newebpay"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="newebpay"
+                        checked={paymentMethod === "newebpay"}
+                        onChange={() => setPaymentMethod("newebpay")}
+                        className="sr-only"
+                      />
+                      <Building className={`w-6 h-6 shrink-0 ${paymentMethod === "newebpay" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">ATM (藍新)</span>
+                    </label>
+                  )}
+                  {paymentEnabled.linepay && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "linepay"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="linepay"
+                        checked={paymentMethod === "linepay"}
+                        onChange={() => setPaymentMethod("linepay")}
+                        className="sr-only"
+                      />
+                      <Smartphone className={`w-6 h-6 shrink-0 ${paymentMethod === "linepay" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">Line Pay</span>
+                    </label>
+                  )}
+                  {paymentEnabled.atm && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "transfer"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="transfer"
+                        checked={paymentMethod === "transfer"}
+                        onChange={() => setPaymentMethod("transfer")}
+                        className="sr-only"
+                      />
+                      <Building className={`w-6 h-6 shrink-0 ${paymentMethod === "transfer" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">ATM 銀行轉帳</span>
+                    </label>
+                  )}
+                </div>
+              )}
               {/* ATM 轉帳資訊：選 ATM 時顯示 */}
               {paymentMethod === "transfer" && (atmBankName || atmBankAccount) && (
                 <div className="mt-4 p-5 rounded-xl bg-slate-50 border border-slate-200">
@@ -815,6 +795,7 @@ export default function CheckoutPage() {
                 loading={submitLoading}
                 atmBankName={atmBankName}
                 atmBankAccount={atmBankAccount}
+                submitDisabled={!hasPaymentOption}
               />
             </div>
           </div>
@@ -832,6 +813,7 @@ function OrderSummaryCard({
   loading = false,
   atmBankName = "",
   atmBankAccount = "",
+  submitDisabled = false,
 }: {
   orderSummary: { courseName: string; dateTime: string; totalAmount: number };
   paymentMethod: PaymentMethod;
@@ -840,6 +822,7 @@ function OrderSummaryCard({
   loading?: boolean;
   atmBankName?: string;
   atmBankAccount?: string;
+  submitDisabled?: boolean;
 }) {
   const showAtmBlock = paymentMethod === "transfer" && (atmBankName || atmBankAccount);
   return (
@@ -887,7 +870,7 @@ function OrderSummaryCard({
       <button
         type="button"
         onClick={onSubmit}
-        disabled={loading}
+        disabled={loading || submitDisabled}
         className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-70 disabled:cursor-not-allowed text-white py-4 rounded-lg font-bold text-lg transition-colors flex items-center justify-center gap-2"
       >
         {loading && <Loader2 className="w-5 h-5 animate-spin shrink-0" />}

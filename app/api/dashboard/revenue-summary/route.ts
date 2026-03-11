@@ -8,8 +8,9 @@ function getMerchantId(): string | null {
 }
 
 /**
- * GET /api/dashboard/revenue-summary?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+ * GET /api/dashboard/revenue-summary?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&course_id=xxx
  * 老師後台訂單金額總覽：總營收、總報名人數、課程數量、平均客單價（僅 status = paid）
+ * course_id 為選填，篩選指定課程。
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date")?.trim();
     const endDate = searchParams.get("end_date")?.trim();
+    const courseId = searchParams.get("course_id")?.trim() || null;
     if (!startDate || !endDate) {
       return NextResponse.json(
         { error: "請提供 start_date 與 end_date（YYYY-MM-DD）" },
@@ -43,13 +45,17 @@ export async function GET(request: NextRequest) {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-    const { data: rows, error } = await supabase
+    let query = supabase
       .from("bookings")
       .select("id, class_id, order_amount, classes(price)")
       .eq("merchant_id", merchantId)
       .eq("status", "paid")
       .gte("created_at", startISO)
       .lt("created_at", endNextISO);
+    if (courseId) {
+      query = query.eq("class_id", courseId);
+    }
+    const { data: rows, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

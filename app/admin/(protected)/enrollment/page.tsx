@@ -12,6 +12,7 @@ import {
   type SessionBookingsResult,
   type RollcallDateWithCounts,
 } from "@/app/actions/bookingActions";
+import { updateSessionCapacity } from "@/app/actions/productActions";
 
 function buildAddonOptionDisplay(
   row: BookingWithMember,
@@ -81,15 +82,64 @@ function statusBadgeClass(s: string): string {
   }
 }
 
-/** 單一場次折疊：標題 [時間] 課程名稱，右側 已報名 X / 總名額；展開後點名簿 Table（含加購選項） */
+/** 可編輯名額：失焦或 Enter 時儲存 */
+function CapacityCell({
+  capacity,
+  isUpdating,
+  onUpdate,
+}: {
+  capacity: number;
+  isUpdating: boolean;
+  onUpdate: (value: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState<string>(String(capacity));
+  useEffect(() => {
+    setValue(String(capacity));
+  }, [capacity]);
+
+  const commit = () => {
+    const n = parseInt(value.trim(), 10);
+    if (Number.isInteger(n) && n >= 1) {
+      if (n !== capacity) onUpdate(n);
+    } else {
+      setValue(String(capacity));
+    }
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      {isUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600 shrink-0" />}
+      <input
+        type="number"
+        min={1}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === "Enter" && commit()}
+        onClick={(e) => e.stopPropagation()}
+        className="w-12 py-1 px-1.5 rounded border border-gray-300 text-center text-sm text-gray-900"
+      />
+    </span>
+  );
+}
+
+/** 單一場次折疊：標題 [時間] 課程名稱，右側 已報名 X / 總名額（可編輯）；展開後點名簿 Table（含加購選項） */
 function SessionAccordion({
   session,
+  onCapacityUpdated,
 }: {
   session: RollcallSession;
+  onCapacityUpdated?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [sessionData, setSessionData] = useState<SessionBookingsResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [capacity, setCapacity] = useState(session.capacity);
+  const [updatingCapacity, setUpdatingCapacity] = useState(false);
+
+  useEffect(() => {
+    setCapacity(session.capacity);
+  }, [session.capacity]);
 
   useEffect(() => {
     if (!open || sessionData !== null) return;
@@ -100,6 +150,18 @@ function SessionAccordion({
       })
       .finally(() => setLoading(false));
   }, [open, session.classId, session.slotDate, session.time, sessionData]);
+
+  const handleCapacityUpdate = async (value: number) => {
+    setUpdatingCapacity(true);
+    const res = await updateSessionCapacity(session.classId, session.slotDate, session.time, value);
+    setUpdatingCapacity(false);
+    if (res.success) {
+      setCapacity(value);
+      onCapacityUpdated?.();
+    } else {
+      alert(res.error);
+    }
+  };
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -120,10 +182,15 @@ function SessionAccordion({
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 sm:gap-4 shrink-0 text-sm text-gray-600">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0 text-sm text-gray-600" onClick={(e) => e.stopPropagation()}>
           <span>已報名：<strong className="text-gray-900">{session.enrolledCount}</strong></span>
           <span className="text-gray-400">/</span>
-          <span>總名額：<strong className="text-gray-900">{session.capacity}</strong></span>
+          <span>總名額：</span>
+          <CapacityCell
+            capacity={capacity}
+            isUpdating={updatingCapacity}
+            onUpdate={handleCapacityUpdate}
+          />
         </div>
       </button>
 
@@ -339,6 +406,16 @@ export default function AdminEnrollmentPage() {
             <SessionAccordion
               key={`${session.classId}-${session.slotDate}-${session.time}`}
               session={session}
+              onCapacityUpdated={() => {
+                if (selectedDate) {
+                  getRollcallSessionsByDate(selectedDate).then((res) => {
+                    if (res.success) setSessions(res.data);
+                  });
+                  getRollcallDatesWithCounts().then((res) => {
+                    if (res.success) setDateItems(res.data);
+                  });
+                }
+              }}
             />
           ))
         )}

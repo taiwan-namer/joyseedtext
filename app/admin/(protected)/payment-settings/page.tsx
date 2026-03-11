@@ -6,24 +6,12 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { getPaymentSettings, updatePaymentSettings } from "@/app/actions/frontendSettingsActions";
 
-function parseLinePayFromStorage(value: string | null): { channelId: string; channelSecret: string } {
-  if (!value?.trim()) return { channelId: "", channelSecret: "" };
-  try {
-    const o = JSON.parse(value.trim()) as Record<string, unknown>;
-    return {
-      channelId: typeof o.channelId === "string" ? o.channelId : "",
-      channelSecret: typeof o.channelSecret === "string" ? o.channelSecret : "",
-    };
-  } catch {
-    return { channelId: "", channelSecret: "" };
-  }
-}
-
 export default function PaymentSettingsPage() {
   const router = useRouter();
-  const [linePayChannelId, setLinePayChannelId] = useState("");
-  const [linePayChannelSecret, setLinePayChannelSecret] = useState("");
-  const [thirdPartyApi, setThirdPartyApi] = useState("");
+  const [paymentNewebpayEnabled, setPaymentNewebpayEnabled] = useState(false);
+  const [paymentEcpayEnabled, setPaymentEcpayEnabled] = useState(false);
+  const [paymentLinepayEnabled, setPaymentLinepayEnabled] = useState(false);
+  const [paymentAtmEnabled, setPaymentAtmEnabled] = useState(false);
   const [atmBankName, setAtmBankName] = useState("");
   const [atmBankCode, setAtmBankCode] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
@@ -34,10 +22,10 @@ export default function PaymentSettingsPage() {
   useEffect(() => {
     getPaymentSettings()
       .then((data) => {
-        const { channelId, channelSecret } = parseLinePayFromStorage(data.linePayApi ?? null);
-        setLinePayChannelId(channelId);
-        setLinePayChannelSecret(channelSecret);
-        setThirdPartyApi(data.thirdPartyApi ?? "");
+        setPaymentNewebpayEnabled(data.paymentNewebpayEnabled ?? false);
+        setPaymentEcpayEnabled(data.paymentEcpayEnabled ?? false);
+        setPaymentLinepayEnabled(data.paymentLinepayEnabled ?? false);
+        setPaymentAtmEnabled(data.paymentAtmEnabled ?? false);
         setAtmBankName(data.atmBankName ?? "");
         setAtmBankCode(data.atmBankCode ?? "");
         setAtmBankAccount(data.atmBankAccount ?? "");
@@ -52,14 +40,10 @@ export default function PaymentSettingsPage() {
     e.preventDefault();
     setMessage(null);
     const formData = new FormData();
-    formData.set(
-      "line_pay_api",
-      JSON.stringify({
-        channelId: linePayChannelId.trim(),
-        channelSecret: linePayChannelSecret.trim(),
-      })
-    );
-    formData.set("third_party_api", thirdPartyApi);
+    formData.set("payment_newebpay_enabled", paymentNewebpayEnabled ? "1" : "0");
+    formData.set("payment_ecpay_enabled", paymentEcpayEnabled ? "1" : "0");
+    formData.set("payment_linepay_enabled", paymentLinepayEnabled ? "1" : "0");
+    formData.set("payment_atm_enabled", paymentAtmEnabled ? "1" : "0");
     formData.set("atm_bank_name", atmBankName);
     formData.set("atm_bank_code", atmBankCode);
     formData.set("atm_bank_account", atmBankAccount);
@@ -96,7 +80,7 @@ export default function PaymentSettingsPage() {
       </div>
       <h1 className="text-xl font-bold text-gray-900">金流設定</h1>
       <p className="text-sm text-gray-600">
-        設定各金流管道之 API 金鑰或設定值，請依各廠商文件填寫。
+        開啟／關閉各付款方式，結帳頁將只顯示已開啟的選項。API 由系統環境變數設定，此處不需填寫。ATM 轉帳開啟時請填寫銀行資訊，結帳頁會顯示給消費者。
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -114,113 +98,100 @@ export default function PaymentSettingsPage() {
         )}
 
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-6">
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-2">LINE Pay（V3）</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              用於 LINE Pay 線上付款，請至 LINE Pay 商家後台取得 Channel ID 與 Channel Secret。
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="line_pay_channel_id" className="mb-1 block text-sm font-medium text-gray-700">
-                  Channel ID
-                </label>
-                <input
-                  id="line_pay_channel_id"
-                  name="line_pay_channel_id"
-                  type="text"
-                  value={linePayChannelId}
-                  onChange={(e) => setLinePayChannelId(e.target.value)}
-                  placeholder="例：2000123456"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  disabled={isPending}
-                  autoComplete="off"
-                />
-              </div>
-              <div>
-                <label htmlFor="line_pay_channel_secret" className="mb-1 block text-sm font-medium text-gray-700">
-                  Channel Secret
-                </label>
-                <input
-                  id="line_pay_channel_secret"
-                  name="line_pay_channel_secret"
-                  type="password"
-                  value={linePayChannelSecret}
-                  onChange={(e) => setLinePayChannelSecret(e.target.value)}
-                  placeholder="請輸入 Channel Secret"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  disabled={isPending}
-                  autoComplete="off"
-                />
-              </div>
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">藍新 NewebPay</h3>
+              <p className="text-sm text-gray-500 mt-0.5">結帳頁顯示「ATM (藍新)」選項</p>
             </div>
-          </div>
-
-          <div>
-            <label htmlFor="third_party_api" className="mb-2 block text-sm font-medium text-gray-700">
-              第三方金流
-            </label>
-            <textarea
-              id="third_party_api"
-              name="third_party_api"
-              value={thirdPartyApi}
-              onChange={(e) => setThirdPartyApi(e.target.value)}
-              placeholder="請貼上第三方金流 API 金鑰或設定（可多行）"
-              rows={3}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-y"
+            <Toggle
+              checked={paymentNewebpayEnabled}
+              onChange={setPaymentNewebpayEnabled}
               disabled={isPending}
             />
           </div>
-
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-4">ATM 轉帳</h3>
-            <p className="text-sm text-gray-500 mb-4">消費者選擇 ATM 付款時，結帳頁將顯示以下資訊供轉帳使用。</p>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="atm_bank_name" className="mb-1 block text-sm font-medium text-gray-700">
-                  1. 銀行單位
-                </label>
-                <input
-                  id="atm_bank_name"
-                  name="atm_bank_name"
-                  type="text"
-                  value={atmBankName}
-                  onChange={(e) => setAtmBankName(e.target.value)}
-                  placeholder="例：國泰世華銀行"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  disabled={isPending}
-                />
-              </div>
-              <div>
-                <label htmlFor="atm_bank_code" className="mb-1 block text-sm font-medium text-gray-700">
-                  2. 銀行代碼
-                </label>
-                <input
-                  id="atm_bank_code"
-                  name="atm_bank_code"
-                  type="text"
-                  value={atmBankCode}
-                  onChange={(e) => setAtmBankCode(e.target.value)}
-                  placeholder="例：013"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  disabled={isPending}
-                />
-              </div>
-              <div>
-                <label htmlFor="atm_bank_account" className="mb-1 block text-sm font-medium text-gray-700">
-                  3. 銀行帳號
-                </label>
-                <input
-                  id="atm_bank_account"
-                  name="atm_bank_account"
-                  type="text"
-                  value={atmBankAccount}
-                  onChange={(e) => setAtmBankAccount(e.target.value)}
-                  placeholder="請輸入轉帳用銀行帳號"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  disabled={isPending}
-                />
-              </div>
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">綠界 ECPay</h3>
+              <p className="text-sm text-gray-500 mt-0.5">結帳頁顯示「信用卡 (綠界)」選項</p>
             </div>
+            <Toggle
+              checked={paymentEcpayEnabled}
+              onChange={setPaymentEcpayEnabled}
+              disabled={isPending}
+            />
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">LINE Pay</h3>
+              <p className="text-sm text-gray-500 mt-0.5">結帳頁顯示「Line Pay」選項</p>
+            </div>
+            <Toggle
+              checked={paymentLinepayEnabled}
+              onChange={setPaymentLinepayEnabled}
+              disabled={isPending}
+            />
+          </div>
+          <div className="py-2 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">ATM 銀行轉帳</h3>
+                <p className="text-sm text-gray-500 mt-0.5">結帳頁顯示「ATM 銀行轉帳」；開啟時需填寫銀行資訊</p>
+              </div>
+              <Toggle
+                checked={paymentAtmEnabled}
+                onChange={setPaymentAtmEnabled}
+                disabled={isPending}
+              />
+            </div>
+            {paymentAtmEnabled && (
+              <div className="mt-4 pl-0 space-y-4 rounded-lg bg-gray-50 p-4">
+                <div>
+                  <label htmlFor="atm_bank_name" className="mb-1 block text-sm font-medium text-gray-700">
+                    銀行單位
+                  </label>
+                  <input
+                    id="atm_bank_name"
+                    name="atm_bank_name"
+                    type="text"
+                    value={atmBankName}
+                    onChange={(e) => setAtmBankName(e.target.value)}
+                    placeholder="例：國泰世華銀行"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                    disabled={isPending}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="atm_bank_code" className="mb-1 block text-sm font-medium text-gray-700">
+                    銀行代碼
+                  </label>
+                  <input
+                    id="atm_bank_code"
+                    name="atm_bank_code"
+                    type="text"
+                    value={atmBankCode}
+                    onChange={(e) => setAtmBankCode(e.target.value)}
+                    placeholder="例：013"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                    disabled={isPending}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="atm_bank_account" className="mb-1 block text-sm font-medium text-gray-700">
+                    銀行帳號
+                  </label>
+                  <input
+                    id="atm_bank_account"
+                    name="atm_bank_account"
+                    type="text"
+                    value={atmBankAccount}
+                    onChange={(e) => setAtmBankAccount(e.target.value)}
+                    placeholder="請輸入轉帳用銀行帳號"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                    disabled={isPending}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -236,5 +207,34 @@ export default function PaymentSettingsPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 ${
+        checked ? "bg-amber-500" : "bg-gray-200"
+      }`}
+    >
+      <span
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+          checked ? "translate-x-5" : "translate-x-1"
+        }`}
+      />
+    </button>
   );
 }

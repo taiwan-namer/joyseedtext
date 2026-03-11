@@ -49,6 +49,10 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
         atmBankName: null,
         atmBankCode: null,
         atmBankAccount: null,
+        paymentNewebpayEnabled: false,
+        paymentEcpayEnabled: false,
+        paymentLinepayEnabled: false,
+        paymentAtmEnabled: false,
       };
     }
     const raw = data.frontend_settings as Record<string, unknown>;
@@ -89,6 +93,10 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       atmBankName: typeof raw.atmBankName === "string" ? raw.atmBankName : null,
       atmBankAccount: typeof raw.atmBankAccount === "string" ? raw.atmBankAccount : null,
       atmBankCode: raw.atmBankCode != null ? String(raw.atmBankCode) : null,
+      paymentNewebpayEnabled: raw.paymentNewebpayEnabled === true,
+      paymentEcpayEnabled: raw.paymentEcpayEnabled === true,
+      paymentLinepayEnabled: raw.paymentLinepayEnabled === true,
+      paymentAtmEnabled: raw.paymentAtmEnabled === true,
     };
   } catch {
     return {
@@ -110,6 +118,10 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       atmBankName: null,
       atmBankAccount: null,
       atmBankCode: null,
+      paymentNewebpayEnabled: false,
+      paymentEcpayEnabled: false,
+      paymentLinepayEnabled: false,
+      paymentAtmEnabled: false,
     };
   }
 }
@@ -346,13 +358,17 @@ export async function updateSeoSettings(formData: FormData): Promise<
   }
 }
 
-/** 金流設定：供後台金流設定頁與結帳頁 ATM 顯示使用 */
+/** 金流設定：供後台金流設定頁與結帳頁使用（開關與 ATM 銀行資訊） */
 export async function getPaymentSettings(): Promise<{
   linePayApi: string | null;
   thirdPartyApi: string | null;
   atmBankName: string | null;
   atmBankCode: string | null;
   atmBankAccount: string | null;
+  paymentNewebpayEnabled: boolean;
+  paymentEcpayEnabled: boolean;
+  paymentLinepayEnabled: boolean;
+  paymentAtmEnabled: boolean;
 }> {
   const s = await getFrontendSettings();
   return {
@@ -361,10 +377,14 @@ export async function getPaymentSettings(): Promise<{
     atmBankName: s.atmBankName ?? null,
     atmBankCode: s.atmBankCode ?? null,
     atmBankAccount: s.atmBankAccount ?? null,
+    paymentNewebpayEnabled: s.paymentNewebpayEnabled ?? false,
+    paymentEcpayEnabled: s.paymentEcpayEnabled ?? false,
+    paymentLinepayEnabled: s.paymentLinepayEnabled ?? false,
+    paymentAtmEnabled: s.paymentAtmEnabled ?? false,
   };
 }
 
-/** 金流設定頁：僅更新 Line Pay / 第三方金流 / ATM API */
+/** 金流設定頁：更新各金流開關與 ATM 銀行資訊（不讓用戶填 API，僅開關；ATM 開啟時填銀行資訊） */
 export async function updatePaymentSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
@@ -373,8 +393,10 @@ export async function updatePaymentSettings(formData: FormData): Promise<
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();
-    const linePayApi = (formData.get("line_pay_api") as string)?.trim() || null;
-    const thirdPartyApi = (formData.get("third_party_api") as string)?.trim() || null;
+    const paymentNewebpayEnabled = formData.get("payment_newebpay_enabled") === "1";
+    const paymentEcpayEnabled = formData.get("payment_ecpay_enabled") === "1";
+    const paymentLinepayEnabled = formData.get("payment_linepay_enabled") === "1";
+    const paymentAtmEnabled = formData.get("payment_atm_enabled") === "1";
     const atmBankName = (formData.get("atm_bank_name") as string)?.trim() || null;
     const atmBankCode = (formData.get("atm_bank_code") as string)?.trim() || null;
     const atmBankAccount = (formData.get("atm_bank_account") as string)?.trim() || null;
@@ -399,11 +421,15 @@ export async function updatePaymentSettings(formData: FormData): Promise<
             seoTitle: existing.seoTitle ?? null,
             seoKeywords: existing.seoKeywords ?? null,
             seoDescription: existing.seoDescription ?? null,
-            linePayApi,
-            thirdPartyApi,
-            atmBankName,
-            atmBankCode,
-            atmBankAccount,
+            linePayApi: existing.linePayApi ?? null,
+            thirdPartyApi: existing.thirdPartyApi ?? null,
+            atmBankName: paymentAtmEnabled ? atmBankName : (existing.atmBankName ?? null),
+            atmBankCode: paymentAtmEnabled ? atmBankCode : (existing.atmBankCode ?? null),
+            atmBankAccount: paymentAtmEnabled ? atmBankAccount : (existing.atmBankAccount ?? null),
+            paymentNewebpayEnabled,
+            paymentEcpayEnabled,
+            paymentLinepayEnabled,
+            paymentAtmEnabled,
           },
           updated_at: new Date().toISOString(),
         },

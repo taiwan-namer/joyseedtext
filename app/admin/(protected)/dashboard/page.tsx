@@ -39,6 +39,26 @@ function formatDate(iso: string) {
   }
 }
 
+function formatCourseDate(row: BookingWithClass) {
+  const datePart = row.slot_date?.trim?.() || row.slot_date;
+  if (!datePart) return "—";
+  const timePart = (row.slot_time != null ? String(row.slot_time).slice(0, 5) : null) || "00:00";
+  try {
+    const iso = timePart.length === 5 ? `${datePart}T${timePart}:00` : `${datePart}T00:00:00`;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return `${datePart} ${timePart}`;
+    return d.toLocaleString("zh-TW", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return timePart ? `${datePart} ${timePart}` : datePart;
+  }
+}
+
 function statusLabel(s: string) {
   switch (s) {
     case "unpaid":
@@ -69,19 +89,26 @@ const CHART_COLOR = "#d97706"; // amber-600
 export default function AdminDashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyItem[]>([]);
-  const [recentOrders, setRecentOrders] = useState<BookingWithClass[]>([]);
+  const [allBookings, setAllBookings] = useState<BookingWithClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterCourseId, setFilterCourseId] = useState<string>("");
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
+
+  const { start: defaultStart, end: defaultEnd } = getCurrentMonthRange();
+  const startDate = filterStartDate || defaultStart;
+  const endDate = filterEndDate || defaultEnd;
 
   useEffect(() => {
     let cancelled = false;
-    const { start, end } = getCurrentMonthRange();
 
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ start_date: start, end_date: end });
+        const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+        if (filterCourseId) params.set("course_id", filterCourseId);
         const [summaryRes, monthlyRes] = await Promise.all([
           fetch(`/api/dashboard/revenue-summary?${params}`),
           fetch("/api/dashboard/monthly-revenue"),
@@ -109,7 +136,7 @@ export default function AdminDashboardPage() {
         setMonthlyData(monthly.items ?? []);
 
         if (bookingsRes.success) {
-          setRecentOrders(bookingsRes.data.slice(0, 10));
+          setAllBookings(bookingsRes.data);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "載入失敗");
@@ -122,7 +149,19 @@ export default function AdminDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [startDate, endDate, filterCourseId]);
+
+  const recentOrdersFiltered = allBookings.filter((row) => {
+    if (filterCourseId && row.class_id !== filterCourseId) return false;
+    if (filterStartDate && row.created_at.slice(0, 10) < filterStartDate) return false;
+    if (filterEndDate && row.created_at.slice(0, 10) > filterEndDate) return false;
+    return true;
+  });
+  const recentOrders = recentOrdersFiltered.slice(0, 10);
+
+  const courseOptions = Array.from(
+    new Map(allBookings.map((b) => [b.class_id, b.class_title || "—"])).entries()
+  ).map(([id, title]) => ({ id, title }));
 
   const chartData = monthlyData.map(({ month, revenue }) => ({
     name: month.replace("-", "/"),
@@ -149,15 +188,54 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {/* 篩選：課程、日期（篩選後上方營收連動） */}
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <span className="text-sm font-medium text-gray-700">篩選</span>
+        <select
+          value={filterCourseId}
+          onChange={(e) => setFilterCourseId(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">全部課程</option>
+          {courseOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.title}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-2">
+          <label htmlFor="dash_start" className="text-sm text-gray-600">開始日期</label>
+          <input
+            id="dash_start"
+            type="date"
+            value={filterStartDate}
+            onChange={(e) => setFilterStartDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="dash_end" className="text-sm text-gray-600">結束日期</label>
+          <input
+            id="dash_end"
+            type="date"
+            value={filterEndDate}
+            onChange={(e) => setFilterEndDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
         </div>
       ) : (
         <>
-          {/* Summary cards - 本月 */}
+          {/* Summary cards - 依篩選連動 */}
           <div>
-            <p className="text-sm font-medium text-gray-500 mb-3">本月總覽</p>
+            <p className="text-sm font-medium text-gray-500 mb-3">
+              {filterCourseId || filterStartDate || filterEndDate ? "篩選後總覽" : "本月總覽"}
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <p className="text-sm font-medium text-gray-500">總營收</p>
@@ -239,10 +317,11 @@ export default function AdminDashboardPage() {
               {recentOrders.length === 0 ? (
                 <p className="py-8 px-4 text-center text-gray-500 text-sm">尚無訂單</p>
               ) : (
-                <table className="w-full min-w-[640px] text-sm">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="text-left py-3 px-4 font-medium text-gray-700">訂單編號</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">課程日期</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">課程名稱</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">家長姓名</th>
                       <th className="text-right py-3 px-4 font-medium text-gray-700">金額</th>
@@ -259,6 +338,7 @@ export default function AdminDashboardPage() {
                         <td className="py-3 px-4 text-gray-600 font-mono text-xs" title={row.id}>
                           {row.id.slice(0, 8)}…
                         </td>
+                        <td className="py-3 px-4 text-gray-600">{formatCourseDate(row)}</td>
                         <td className="py-3 px-4 text-gray-900">{row.class_title || "—"}</td>
                         <td className="py-3 px-4 text-gray-900">{row.parent_name || "—"}</td>
                         <td className="py-3 px-4 text-right font-medium text-gray-900">

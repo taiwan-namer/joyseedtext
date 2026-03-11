@@ -53,7 +53,7 @@ const SIDEBAR_MENU = [
     icon: Package,
     open: true,
     children: [
-      { label: "商品管理區", href: "/admin", active: true, sub: ["新增課程", "價格組合設定"] },
+      { label: "商品管理區", href: "/admin", active: true, sub: ["新增課程"] },
     ],
   },
   {
@@ -208,7 +208,7 @@ function Sidebar({
                         (child as { sub?: string[] }).sub!.map((subLabel) => (
                           <Link
                             key={subLabel}
-                            href={subLabel === "新增課程" ? "/admin/classes/new" : subLabel === "常見問題" ? "/admin/faq" : "#"}
+                            href={subLabel === "新增課程" ? "/admin/classes/new" : subLabel === "常見問題" ? "/admin/faq" : "/admin"}
                             prefetch={false}
                             className="flex items-center gap-2 py-1.5 pl-12 pr-4 text-xs text-slate-400 hover:text-slate-200"
                             onClick={isMobile ? onClose : undefined}

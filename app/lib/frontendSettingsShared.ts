@@ -37,6 +37,14 @@ export type FrontendSettings = {
   atmBankCode: string | null;
   /** 金流 ATM：銀行帳號 */
   atmBankAccount: string | null;
+  /** 金流開關：藍新 NewebPay（結帳頁顯示/隱藏） */
+  paymentNewebpayEnabled: boolean;
+  /** 金流開關：綠界 ECPay */
+  paymentEcpayEnabled: boolean;
+  /** 金流開關：LINE Pay */
+  paymentLinepayEnabled: boolean;
+  /** 金流開關：ATM 銀行轉帳（開啟時需填寫銀行資訊） */
+  paymentAtmEnabled: boolean;
 };
 
 /** 預設 10 個會員圖示（專案 public/member-icons/ 內建） */

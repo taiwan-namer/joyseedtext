@@ -485,6 +485,74 @@ export async function completeBooking(
 }
 
 /**
+ * 後台：一鍵將多筆訂單標記為「已付款」。僅 status 為 unpaid/upcoming 且為 ATM 或未填寫付款方式者會更新。
+ */
+export async function batchMarkBookingsAsPaid(
+  bookingIds: string[]
+): Promise<
+  | { success: true; updated: number; message?: string }
+  | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    const ids = bookingIds.filter((id) => typeof id === "string" && id.length > 0);
+    if (ids.length === 0) return { success: true, updated: 0, message: "無符合的訂單" };
+
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from("bookings")
+      .update({ status: "paid" })
+      .eq("merchant_id", merchantId)
+      .in("status", ["unpaid", "upcoming"])
+      .in("id", ids)
+      .select("id");
+
+    if (error) return { success: false, error: error.message };
+    const updated = Array.isArray(data) ? data.length : 0;
+    return { success: true, updated, message: `已將 ${updated} 筆標記為已付款` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "更新失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 後台：一鍵將多筆訂單標記為「完成課程」。僅 status 為 paid 者會更新。
+ */
+export async function batchCompleteBookings(
+  bookingIds: string[]
+): Promise<
+  | { success: true; updated: number; message?: string }
+  | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    const ids = bookingIds.filter((id) => typeof id === "string" && id.length > 0);
+    if (ids.length === 0) return { success: true, updated: 0, message: "無符合的訂單" };
+
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from("bookings")
+      .update({ status: "completed" })
+      .eq("merchant_id", merchantId)
+      .eq("status", "paid")
+      .in("id", ids)
+      .select("id");
+
+    if (error) return { success: false, error: error.message };
+    const updated = Array.isArray(data) ? data.length : 0;
+    return { success: true, updated, message: `已將 ${updated} 筆標記為完成課程` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "更新失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
  * 後台：刪除訂單（多租戶：僅允許該 merchant_id）。刪除後將該課程名額 +1 回補。
  */
 export async function deleteBooking(
@@ -870,6 +938,102 @@ export async function getBookingCountsByMemberEmailForAdmin(): Promise<
     return { success: true, data: counts };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "取得報名數失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 後台會員管理：依會員信箱取得該會員的購買紀錄（訂單列表）。
+ */
+export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Promise<
+  | { success: true; data: BookingWithClass[] }
+  | { success: false; error: string }
+> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    const email = (memberEmail ?? "").trim();
+    if (!email) return { success: false, error: "請提供會員信箱" };
+
+    const supabase = createServerSupabase();
+    const { data: rows, error } = await supabase
+      .from("bookings")
+      .select(`
+        id,
+        member_email,
+        parent_name,
+        parent_phone,
+        class_id,
+        status,
+        payment_method,
+        created_at,
+        slot_date,
+        slot_time,
+        order_amount,
+        addon_indices,
+        classes ( title, image_url, price, addon_prices )
+      `)
+      .eq("merchant_id", merchantId)
+      .eq("member_email", email)
+      .order("created_at", { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+
+    const list: BookingWithClass[] = (rows ?? []).map((r: Record<string, unknown>) => {
+      const classes = r.classes as { title?: string; image_url?: string; price?: number; addon_prices?: unknown } | null;
+      const slotDateRaw = r.slot_date;
+      const slotTimeRaw = r.slot_time;
+      const slot_date =
+        slotDateRaw != null && slotDateRaw !== ""
+          ? String(slotDateRaw).replace(/T.*$/, "").slice(0, 10)
+          : null;
+      const slot_time =
+        slotTimeRaw != null && String(slotTimeRaw).trim() !== ""
+          ? String(slotTimeRaw).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5)
+          : null;
+      const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
+      const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
+      const addonRaw = classes?.addon_prices;
+      let classAddonPrices: { name: string; price: number }[] | null = null;
+      if (Array.isArray(addonRaw)) {
+        classAddonPrices = (addonRaw as { name?: string; price?: number }[]).map((a) => ({
+          name: a?.name != null ? String(a.name) : "",
+          price: a?.price != null ? Number(a.price) : 0,
+        }));
+      } else if (typeof addonRaw === "string") {
+        try {
+          const parsed = JSON.parse(addonRaw) as unknown;
+          if (Array.isArray(parsed)) {
+            classAddonPrices = (parsed as { name?: string; price?: number }[]).map((a) => ({
+              name: a?.name != null ? String(a.name) : "",
+              price: a?.price != null ? Number(a.price) : 0,
+            }));
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return {
+        id: String(r.id),
+        member_email: String(r.member_email),
+        parent_name: r.parent_name != null ? String(r.parent_name) : null,
+        parent_phone: r.parent_phone != null ? String(r.parent_phone) : null,
+        class_id: String(r.class_id),
+        status: String(r.status),
+        payment_method: r.payment_method != null ? String(r.payment_method) : "atm",
+        created_at: String(r.created_at),
+        slot_date,
+        slot_time,
+        class_title: classes?.title ?? null,
+        class_image_url: classes?.image_url ?? null,
+        class_price: classPrice,
+        addon_indices: parseAddonIndicesFromDb(r.addon_indices),
+        class_addon_prices: classAddonPrices,
+      };
+    });
+    return { success: true, data: list };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "取得購買紀錄失敗";
     return { success: false, error: msg };
   }
 }

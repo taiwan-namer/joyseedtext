@@ -3,51 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Filter, Plus, Image as ImageIcon, Trash2, Loader2 } from "lucide-react";
-import { getClassesForAdmin, deleteClasses, updateCourseCapacity, type ClassRow } from "@/app/actions/productActions";
+import { getClassesForAdmin, deleteClasses, type ClassRow } from "@/app/actions/productActions";
 import { getEnrollmentCountsForAdmin } from "@/app/actions/bookingActions";
-
-/** 名額欄：可編輯數字，失焦或 Enter 時儲存 */
-function CapacityCell({
-  capacity,
-  isUpdating,
-  onUpdate,
-}: {
-  id: string;
-  capacity: number | null;
-  isUpdating: boolean;
-  onUpdate: (value: number) => Promise<void>;
-}) {
-  const [value, setValue] = useState<string>(capacity != null ? String(capacity) : "");
-  useEffect(() => {
-    setValue(capacity != null ? String(capacity) : "");
-  }, [capacity]);
-
-  const commit = () => {
-    const n = parseInt(value.trim(), 10);
-    if (Number.isInteger(n) && n >= 1) {
-      if (n !== (capacity ?? 0)) onUpdate(n);
-    } else {
-      setValue(capacity != null ? String(capacity) : "");
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-1 w-20">
-      {isUpdating ? (
-        <Loader2 className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
-      ) : null}
-      <input
-        type="number"
-        min={1}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => e.key === "Enter" && commit()}
-        className="w-14 py-1 px-2 rounded border border-gray-300 text-center text-sm text-gray-900"
-      />
-    </div>
-  );
-}
 
 export default function AdminProductsPage() {
   const [classes, setClasses] = useState<ClassRow[]>([]);
@@ -57,7 +14,6 @@ export default function AdminProductsPage() {
   const [filterText, setFilterText] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [updatingCapacityId, setUpdatingCapacityId] = useState<string | null>(null);
   const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
 
   const fetchList = async () => {
@@ -117,9 +73,12 @@ export default function AdminProductsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">
-        F商品管理區 / 產品資訊
-      </h1>
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden max-w-4xl">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <h1 className="text-lg font-semibold text-gray-900">商品管理區 / 產品資訊</h1>
+          <p className="mt-1 text-sm text-gray-500">管理課程列表，可篩選、新增、編輯或刪除。</p>
+        </div>
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -170,9 +129,9 @@ export default function AdminProductsPage() {
         <div className="text-sm text-gray-600">商品數：{isLoading ? "—" : filteredClasses.length}{filterText ? `（篩選後）` : ""}</div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[800px] text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left py-3 px-4 font-medium text-gray-700 w-24">
@@ -201,16 +160,13 @@ export default function AdminProductsPage() {
                 <th className="text-left py-3 px-4 font-medium text-gray-700 w-28">
                   售價
                 </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 w-24">
-                  名額
-                </th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700 w-20">
                   已報名
                 </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[220px]">
+                <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[180px]" title="是否顯示於首頁輪播／熱門區；說明見同目錄 README-商品管理.md">
                   首頁設定
                 </th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[180px]">
+                <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[120px]" title="數字愈小排序愈前面；說明見同目錄 README-商品管理.md">
                   階層位置
                 </th>
               </tr>
@@ -218,19 +174,19 @@ export default function AdminProductsPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="py-12 px-4 text-center text-gray-500">
+                  <td colSpan={9} className="py-12 px-4 text-center text-gray-500">
                     資料載入中...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={10} className="py-12 px-4 text-center text-red-600">
+                  <td colSpan={9} className="py-12 px-4 text-center text-red-600">
                     {error}
                   </td>
                 </tr>
               ) : classes.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 px-4 text-center text-gray-500">
+                  <td colSpan={9} className="py-12 px-4 text-center text-gray-500">
                     尚無課程，請點「新增」建立
                   </td>
                 </tr>
@@ -287,25 +243,6 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="py-3 px-4 text-gray-700">
                       {item.price != null ? item.price : "—"}
-                    </td>
-                    <td className="py-3 px-4">
-                      <CapacityCell
-                        id={item.id}
-                        capacity={item.capacity}
-                        isUpdating={updatingCapacityId === item.id}
-                        onUpdate={async (value) => {
-                          setUpdatingCapacityId(item.id);
-                          const result = await updateCourseCapacity(item.id, value);
-                          setUpdatingCapacityId(null);
-                          if (result.success) {
-                            setClasses((prev) =>
-                              prev.map((c) => (c.id === item.id ? { ...c, capacity: value } : c))
-                            );
-                          } else {
-                            alert(result.error);
-                          }
-                        }}
-                      />
                     </td>
                     <td className="py-3 px-4 text-gray-700">
                       {enrollmentCounts[item.id] ?? 0}
