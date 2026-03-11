@@ -16,6 +16,8 @@ const StoreSettingsContext = createContext<StoreSettings>({
   contactAddress: "",
   aiChatEnabled: true,
   aiChatWelcomeMessage: null,
+  invoiceItems: null,
+  invoiceProvider: "ecpay",
 });
 
 export function useStoreSettings() {
