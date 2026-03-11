@@ -13,6 +13,17 @@ function getEcpayInvoiceCreds() {
   return { merchantId, hashKey, hashIv };
 }
 
+/** GET：瀏覽器直接開網址時顯示說明，避免空白頁 */
+export async function GET() {
+  return NextResponse.json(
+    {
+      message: "此為發票開立 API，請使用 POST 請求。",
+      hint: "可用 curl、Postman 或瀏覽器 Console 的 fetch('...', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ relateNumber: 'INVTEST1', salesAmount: 850 }) }) 測試。",
+    },
+    { status: 200 }
+  );
+}
+
 type InvoiceRequestBody = {
   relateNumber?: string;
   customerName?: string;
@@ -29,10 +40,11 @@ export async function POST(req: NextRequest) {
   if (!creds) {
     return NextResponse.json(
       {
+        ok: false,
         error:
           "ECPAY_INVOICE_MERCHANT_ID / ECPAY_INVOICE_HASH_KEY / ECPAY_INVOICE_HASH_IV 未設定，請先在環境變數中填寫綠界電子發票金鑰。",
       },
-      { status: 500 }
+      { status: 200 }
     );
   }
 
@@ -55,7 +67,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (e) {
     console.error("[Invoice issue] 解析請求 body 失敗", e);
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 200 });
   }
 
   const relateNumber = (body.relateNumber ?? `INV${Date.now()}`).slice(0, 30);
@@ -109,7 +121,10 @@ export async function POST(req: NextRequest) {
     responseText = await res.text();
   } catch (e) {
     console.error("[Invoice issue] 向綠界發票 API 發送請求失敗", e);
-    return NextResponse.json({ error: "Failed to call ECPay invoice API" }, { status: 502 });
+    return NextResponse.json(
+      { ok: false, error: "Failed to call ECPay invoice API", detail: String((e as Error).message) },
+      { status: 200 }
+    );
   }
 
   console.log("Invoice Response:", responseText);
@@ -117,7 +132,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(
     {
       ok: status === 200,
-      status,
+      ecpayStatus: status,
       raw: responseText,
       sent: {
         MerchantID: params.MerchantID,
@@ -126,7 +141,7 @@ export async function POST(req: NextRequest) {
         ItemsRaw: itemsRaw,
       },
     },
-    { status: status === 200 ? 200 : 502 }
+    { status: 200 }
   );
 }
 
