@@ -27,6 +27,8 @@ export type FrontendSettings = {
   seoKeywords: string | null;
   /** SEO：網頁描述（&lt;meta description&gt;） */
   seoDescription: string | null;
+  /** SEO：分頁圖示（Favicon）網址，顯示於瀏覽器分頁左側 */
+  seoFaviconUrl: string | null;
   /** 金流：Line Pay API（金鑰或設定） */
   linePayApi: string | null;
   /** 金流：第三方金流 API */

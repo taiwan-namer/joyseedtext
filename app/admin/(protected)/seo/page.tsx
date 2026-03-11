@@ -11,6 +11,8 @@ export default function SeoPage() {
   const [seoTitle, setSeoTitle] = useState("");
   const [seoKeywords, setSeoKeywords] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
+  const [seoFaviconUrl, setSeoFaviconUrl] = useState("");
+  const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -21,6 +23,7 @@ export default function SeoPage() {
         setSeoTitle(data.seoTitle ?? "");
         setSeoKeywords(data.seoKeywords ?? "");
         setSeoDescription(data.seoDescription ?? "");
+        setSeoFaviconUrl(data.seoFaviconUrl ?? "");
       })
       .catch((err) => {
         setMessage({ type: "error", text: err?.message ?? "無法載入" });
@@ -28,13 +31,25 @@ export default function SeoPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleFaviconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      setFaviconPreview(URL.createObjectURL(file));
+    } else {
+      setFaviconPreview(null);
+    }
+  };
+
+  const displayFaviconUrl = faviconPreview || seoFaviconUrl || null;
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMessage(null);
-    const formData = new FormData();
+    const formData = new FormData(e.currentTarget);
     formData.set("seo_title", seoTitle);
     formData.set("seo_keywords", seoKeywords);
     formData.set("seo_description", seoDescription);
+    formData.set("seo_favicon_url", seoFaviconUrl);
     startTransition(async () => {
       const result = await updateSeoSettings(formData);
       if (result.success) {
@@ -75,18 +90,19 @@ export default function SeoPage() {
         設定網頁標題（分頁名稱）、關鍵字與描述，將顯示於搜尋結果與瀏覽器分頁，有助於搜尋引擎優化。
       </p>
 
-      {/* 預覽區：左圖右文，讓用戶了解分頁名稱與呈現方式 */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-full sm:w-40 shrink-0 rounded-lg border border-gray-200 bg-white overflow-hidden aspect-video sm:aspect-square flex items-center justify-center text-gray-400 text-xs">
-          <span>分頁預覽圖<br />（示範）</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-gray-500 mb-1">瀏覽器分頁會顯示：</p>
-          <p className="text-sm font-semibold text-gray-900 truncate" title={seoTitle || "未設定"}>
+      {/* 預覽區：長條型、與瀏覽器分頁相同 UI（左圖示 + 右標題） */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-gray-500">分頁預覽（與瀏覽器分頁相同呈現）</p>
+        <div className="rounded-lg bg-gray-700 shadow-inner flex items-center gap-2 px-3 py-2.5 min-h-[40px]">
+          <div className="w-7 h-7 rounded flex-shrink-0 overflow-hidden bg-gray-600 flex items-center justify-center">
+            {displayFaviconUrl ? (
+              <img src={displayFaviconUrl} alt="" className="w-full h-full object-contain" />
+            ) : (
+              <span className="text-white text-sm font-semibold">V</span>
+            )}
+          </div>
+          <p className="text-white text-sm truncate flex-1 min-w-0" title={seoTitle || "未設定"}>
             {seoTitle || "請在下方填寫網頁標題（分頁名稱）"}
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            左側為示範區塊，實際搜尋結果與分頁會依您設定的標題、描述顯示。
           </p>
         </div>
       </div>
@@ -106,6 +122,40 @@ export default function SeoPage() {
         )}
 
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              分頁圖示（Favicon）
+            </label>
+            <p className="text-xs text-gray-500 mb-2">上傳圖片可取代分頁左側的「V」圖示，建議使用正方形圖片（如 32×32 或 64×64）。</p>
+            <div className="flex flex-wrap items-end gap-4">
+              <div>
+                <label htmlFor="seo_favicon" className="inline-block rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
+                  選擇圖片
+                </label>
+                <input
+                  id="seo_favicon"
+                  name="seo_favicon"
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={handleFaviconFileChange}
+                  disabled={isPending}
+                />
+              </div>
+              <div className="flex-1 min-w-[200px]">
+                <label htmlFor="seo_favicon_url" className="mb-0.5 block text-xs text-gray-500">或貼上圖示網址</label>
+                <input
+                  id="seo_favicon_url"
+                  type="text"
+                  value={seoFaviconUrl}
+                  onChange={(e) => setSeoFaviconUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  disabled={isPending}
+                />
+              </div>
+            </div>
+          </div>
           <div>
             <label htmlFor="seo_title" className="mb-1 block text-sm font-medium text-gray-700">
               分頁名稱（網頁標題）:

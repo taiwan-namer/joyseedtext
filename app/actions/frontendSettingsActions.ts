@@ -44,6 +44,7 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
         seoTitle: null,
         seoKeywords: null,
         seoDescription: null,
+        seoFaviconUrl: null,
         linePayApi: null,
         thirdPartyApi: null,
         atmBankName: null,
@@ -88,6 +89,7 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       seoTitle: typeof raw.seoTitle === "string" ? raw.seoTitle : null,
       seoKeywords: typeof raw.seoKeywords === "string" ? raw.seoKeywords : null,
       seoDescription: typeof raw.seoDescription === "string" ? raw.seoDescription : null,
+      seoFaviconUrl: typeof raw.seoFaviconUrl === "string" ? raw.seoFaviconUrl : null,
       linePayApi: typeof raw.linePayApi === "string" ? raw.linePayApi : null,
       thirdPartyApi: typeof raw.thirdPartyApi === "string" ? raw.thirdPartyApi : null,
       atmBankName: typeof raw.atmBankName === "string" ? raw.atmBankName : null,
@@ -113,6 +115,7 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       seoTitle: null,
       seoKeywords: null,
       seoDescription: null,
+      seoFaviconUrl: null,
       linePayApi: null,
       thirdPartyApi: null,
       atmBankName: null,
@@ -298,16 +301,18 @@ export async function getSeoSettings(): Promise<{
   seoTitle: string | null;
   seoKeywords: string | null;
   seoDescription: string | null;
+  seoFaviconUrl: string | null;
 }> {
   const s = await getFrontendSettings();
   return {
     seoTitle: s.seoTitle ?? null,
     seoKeywords: s.seoKeywords ?? null,
     seoDescription: s.seoDescription ?? null,
+    seoFaviconUrl: s.seoFaviconUrl ?? null,
   };
 }
 
-/** SEO 設定頁：僅更新網頁標題、關鍵字、描述 */
+/** SEO 設定頁：更新網頁標題、關鍵字、描述、分頁圖示（Favicon） */
 export async function updateSeoSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
@@ -319,6 +324,15 @@ export async function updateSeoSettings(formData: FormData): Promise<
     const seoTitle = (formData.get("seo_title") as string)?.trim() || null;
     const seoKeywords = (formData.get("seo_keywords") as string)?.trim() || null;
     const seoDescription = (formData.get("seo_description") as string)?.trim() || null;
+    const faviconUrlForm = (formData.get("seo_favicon_url") as string)?.trim() || null;
+    const faviconFile = formData.get("seo_favicon") as File | null;
+    let seoFaviconUrl = existing.seoFaviconUrl ?? null;
+    if (faviconUrlForm) {
+      seoFaviconUrl = faviconUrlForm;
+    } else if (faviconFile && faviconFile instanceof File && faviconFile.size > 0) {
+      const url = await uploadOneToR2(formData, "seo_favicon");
+      if (url) seoFaviconUrl = url;
+    }
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -340,11 +354,16 @@ export async function updateSeoSettings(formData: FormData): Promise<
             seoTitle,
             seoKeywords,
             seoDescription,
+            seoFaviconUrl,
             linePayApi: existing.linePayApi ?? null,
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+            paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+            paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+            paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
           },
           updated_at: new Date().toISOString(),
         },

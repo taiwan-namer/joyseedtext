@@ -13,10 +13,12 @@ export async function generateMetadata(): Promise<Metadata> {
   const title = (seo.seoTitle && seo.seoTitle.trim()) || DEFAULT_TITLE;
   const description = (seo.seoDescription && seo.seoDescription.trim()) || DEFAULT_DESCRIPTION;
   const keywords = seo.seoKeywords && seo.seoKeywords.trim() ? seo.seoKeywords.trim() : undefined;
+  const faviconUrl = seo.seoFaviconUrl && seo.seoFaviconUrl.trim() ? seo.seoFaviconUrl.trim() : undefined;
   return {
     title,
     description,
     keywords: keywords ? keywords.split(",").map((k) => k.trim()).filter(Boolean) : undefined,
+    ...(faviconUrl && { icons: { icon: faviconUrl } }),
   };
 }
 
