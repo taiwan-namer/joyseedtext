@@ -6,6 +6,12 @@ import { ecpayInvoiceEncryptData } from "@/lib/ecpay/invoice-encrypt";
 import { getStoreSettings } from "@/app/actions/storeSettingsActions";
 
 const ECPAY_INVOICE_STAGE_URL = "https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue";
+const ECPAY_INVOICE_PRODUCTION_URL = "https://einvoice.ecpay.com.tw/B2CInvoice/Issue";
+
+function getEcpayInvoiceApiUrl(): string {
+  const env = (process.env.ECPAY_INVOICE_ENV ?? process.env.ECPAY_ENV ?? "").trim().toLowerCase();
+  return env === "production" ? ECPAY_INVOICE_PRODUCTION_URL : ECPAY_INVOICE_STAGE_URL;
+}
 
 export function getEcpayInvoiceCreds() {
   const merchantId = process.env.ECPAY_INVOICE_MERCHANT_ID?.trim() ?? "";
@@ -131,7 +137,8 @@ export async function issueEcpayInvoice(
   };
 
   try {
-    const res = await fetch(ECPAY_INVOICE_STAGE_URL, {
+    const apiUrl = getEcpayInvoiceApiUrl();
+    const res = await fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),

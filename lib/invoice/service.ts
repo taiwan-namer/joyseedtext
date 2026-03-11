@@ -5,6 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStoreSettings } from "@/app/actions/storeSettingsActions";
 import { buildEcpayItemsFromStore, issueEcpayInvoice } from "@/lib/invoice/ecpay-issue";
+import { issueEzpayInvoice } from "@/lib/invoice/ezpay-issue";
 
 export type IssueInvoiceResult =
   | { ok: true; raw?: string }
@@ -53,7 +54,15 @@ export async function issueInvoice(
   const provider = store.invoiceProvider === "ezpay" ? "ezpay" : "ecpay";
 
   if (provider === "ezpay") {
-    return { ok: false, error: "ezPay 發票尚未串接，請於後台發票設定改選「綠界 ECPay」或聯絡開發。" };
+    const result = await issueEzpayInvoice({
+      relateNumber,
+      customerName,
+      customerAddr,
+      customerPhone,
+      customerEmail,
+      salesAmount: amount,
+    });
+    return result;
   }
 
   const { items: ecpayItems, salesAmount } = await buildEcpayItemsFromStore(amount);
