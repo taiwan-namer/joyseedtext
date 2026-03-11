@@ -94,6 +94,7 @@ const SIDEBAR_MENU = [
     open: false,
     children: [
       { label: "金流設定", href: "/admin/payment-settings" },
+      { label: "發票設定", href: "/admin/invoice-settings" },
     ],
   },
 ];

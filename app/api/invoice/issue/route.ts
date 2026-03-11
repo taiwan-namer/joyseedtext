@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ecpayInvoiceEncryptData } from "@/lib/ecpay/invoice-encrypt";
-
-const ECPAY_INVOICE_STAGE_URL = "https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue";
-
-function getEcpayInvoiceCreds() {
-  const merchantId = process.env.ECPAY_INVOICE_MERCHANT_ID?.trim() ?? "";
-  const hashKey = process.env.ECPAY_INVOICE_HASH_KEY?.trim() ?? "";
-  const hashIv = process.env.ECPAY_INVOICE_HASH_IV?.trim() ?? "";
-  if (!merchantId || !hashKey || !hashIv) {
-    return null;
-  }
-  return { merchantId, hashKey, hashIv };
-}
+import {
+  getEcpayInvoiceCreds,
+  buildEcpayItemsFromStore,
+  issueEcpayInvoice,
+  type EcpayInvoiceItem,
+} from "@/lib/invoice/ecpay-issue";
 
 /** GET：瀏覽器直接開網址時顯示說明，避免空白頁 */
 export async function GET() {
@@ -24,15 +17,30 @@ export async function GET() {
   );
 }
 
+/** 發票單一品項（由呼叫端傳入，可多筆，例如課程＋服務費） */
+export type InvoiceItemInput = {
+  /** 品名，例如「課程預約」「服務費」 */
+  name: string;
+  /** 數量，預設 1 */
+  count?: number;
+  /** 單位，預設「式」 */
+  word?: string;
+  /** 單價（含稅） */
+  price: number;
+  /** 小計（含稅），未填則為 price * count */
+  amount?: number;
+};
+
 type InvoiceRequestBody = {
   relateNumber?: string;
   customerName?: string;
   customerAddr?: string;
   customerPhone?: string;
   customerEmail?: string;
+  /** 總金額（含稅）；若傳入 items 則可省略，會自動加總 */
   salesAmount?: number;
-  /** 自行組好的 Items 字串（ItemName=...|ItemCount=...|ItemWord=...|ItemPrice=...|ItemAmount=...）；未提供時使用預設單一品項。 */
-  itemsRaw?: string;
+  /** 發票品項陣列；未傳則使用預設一筆「課程預約」+ salesAmount */
+  items?: InvoiceItemInput[];
 };
 
 export async function POST(req: NextRequest) {
@@ -55,6 +63,15 @@ export async function POST(req: NextRequest) {
       body = (await req.json()) as InvoiceRequestBody;
     } else if (contentType.includes("application/x-www-form-urlencoded")) {
       const form = await req.formData();
+      const itemsStr = form.get("items") as string | null;
+      let items: InvoiceItemInput[] | undefined;
+      if (itemsStr) {
+        try {
+          items = JSON.parse(itemsStr) as InvoiceItemInput[];
+        } catch {
+          items = undefined;
+        }
+      }
       body = {
         relateNumber: (form.get("relateNumber") as string) ?? undefined,
         customerName: (form.get("customerName") as string) ?? undefined,
@@ -62,7 +79,7 @@ export async function POST(req: NextRequest) {
         customerPhone: (form.get("customerPhone") as string) ?? undefined,
         customerEmail: (form.get("customerEmail") as string) ?? undefined,
         salesAmount: form.get("salesAmount") ? Number(form.get("salesAmount")) : undefined,
-        itemsRaw: (form.get("itemsRaw") as string) ?? undefined,
+        items,
       };
     }
   } catch (e) {
@@ -75,94 +92,62 @@ export async function POST(req: NextRequest) {
   const customerAddr = body.customerAddr?.trim() || "台北市信義區測試地址";
   const customerPhone = body.customerPhone?.trim() || "0912345678";
   const customerEmail = body.customerEmail?.trim() || "test@example.com";
-  const salesAmount = Number.isFinite(body.salesAmount) && (body.salesAmount as number) > 0 ? Number(body.salesAmount) : 850;
 
-  // 綠界 B2C 發票 API：請求為 JSON，含 MerchantID、RqHeader.Timestamp、Data（AES 加密後的 payload）
-  // Data 內容：先組 JSON 再 URL Encode 整串，再 AES-128-CBC 加密，輸出 Base64
-  const dataPayload = {
-    MerchantID: creds.merchantId,
-    RelateNumber: relateNumber,
-    CustomerID: "",
-    CustomerIdentifier: "",
-    CustomerName: customerName,
-    CustomerAddr: customerAddr,
-    CustomerPhone: customerPhone,
-    CustomerEmail: customerEmail,
-    ClearanceMark: "",
-    Print: "0",
-    Donation: "0",
-    CarrierType: "",
-    CarrierNum: "",
-    TaxType: "1",
-    SalesAmount: salesAmount,
-    InvType: "07",
-    vat: "1",
-    Items: [
-      {
-        ItemSeq: 1,
-        ItemName: "課程預約",
-        ItemCount: 1,
-        ItemWord: "堂",
-        ItemPrice: salesAmount,
+  let ecpayItems: EcpayInvoiceItem[];
+  let salesAmount: number;
+
+  if (Array.isArray(body.items) && body.items.length > 0) {
+    ecpayItems = body.items.map((row, i) => {
+      const count = Number.isFinite(row.count) && (row.count as number) >= 1 ? Math.round(Number(row.count)) : 1;
+      const price = Number(row.price);
+      const amount = Number.isFinite(row.amount) ? Number(row.amount) : price * count;
+      return {
+        ItemSeq: i + 1,
+        ItemName: String(row.name || "").slice(0, 500) || "品項",
+        ItemCount: count,
+        ItemWord: String(row.word || "式").slice(0, 6),
+        ItemPrice: price,
         ItemTaxType: "1",
-        ItemAmount: salesAmount,
-      },
-    ],
-  };
-
-  let encryptedData: string;
-  try {
-    encryptedData = ecpayInvoiceEncryptData(
-      JSON.stringify(dataPayload),
-      creds.hashKey,
-      creds.hashIv
-    );
-  } catch (e) {
-    console.error("[Invoice issue] Data 加密失敗", e);
-    return NextResponse.json(
-      { ok: false, error: "Data encryption failed", detail: String((e as Error).message) },
-      { status: 200 }
-    );
-  }
-
-  const timestamp = Math.floor(Date.now() / 1000);
-  const requestBody = {
-    MerchantID: creds.merchantId,
-    RqHeader: { Timestamp: timestamp },
-    Data: encryptedData,
-  };
-
-  let responseText = "";
-  let status = 200;
-  try {
-    const res = await fetch(ECPAY_INVOICE_STAGE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
+        ItemAmount: amount,
+      };
     });
-    status = res.status;
-    responseText = await res.text();
-  } catch (e) {
-    console.error("[Invoice issue] 向綠界發票 API 發送請求失敗", e);
+    salesAmount = ecpayItems.reduce((sum, x) => sum + x.ItemAmount, 0);
+  } else {
+    const total = Number.isFinite(body.salesAmount) && (body.salesAmount as number) > 0 ? Number(body.salesAmount) : 850;
+    const built = await buildEcpayItemsFromStore(total);
+    ecpayItems = built.items;
+    salesAmount = built.salesAmount;
+  }
+
+  const result = await issueEcpayInvoice({
+    relateNumber,
+    customerName,
+    customerAddr,
+    customerPhone,
+    customerEmail,
+    salesAmount,
+    ecpayItems,
+  });
+
+  if (!result.ok) {
     return NextResponse.json(
-      { ok: false, error: "Failed to call ECPay invoice API", detail: String((e as Error).message) },
+      { ok: false, error: result.error, sent: { RelateNumber: relateNumber, SalesAmount: salesAmount } },
       { status: 200 }
     );
   }
 
-  console.log("Invoice Response:", responseText);
+  console.log("Invoice Response:", result.raw);
 
   return NextResponse.json(
     {
-      ok: status === 200,
-      ecpayStatus: status,
-      raw: responseText,
+      ok: true,
+      ecpayStatus: 200,
+      raw: result.raw,
       sent: {
-        MerchantID: creds.merchantId,
+        MerchantID: creds!.merchantId,
         RelateNumber: relateNumber,
         SalesAmount: salesAmount,
+        items: ecpayItems.map((x) => ({ name: x.ItemName, count: x.ItemCount, word: x.ItemWord, price: x.ItemPrice, amount: x.ItemAmount })),
       },
     },
     { status: 200 }

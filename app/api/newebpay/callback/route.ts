@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
+import { issueInvoice } from "@/lib/invoice/service";
 
 /**
  * 藍新背景通知（NotifyURL）。
@@ -230,6 +231,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
       }
       console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
+      const invoiceResult = await issueInvoice(supabase, bookingRow.id);
+      if (!invoiceResult.ok) {
+        console.error("[NewebPay callback] 發票開立失敗（不影響付款結果）bookingId:", bookingRow.id, "error:", invoiceResult.error);
+        await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", bookingRow.id);
+      } else {
+        await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", bookingRow.id);
+      }
       revalidatePath("/member");
       return NextResponse.json({ message: "OK" });
     }
@@ -261,6 +269,13 @@ export async function POST(request: NextRequest) {
             .update({ newebpay_merchant_order_no: merchantOrderNo, newebpay_trade_no: tradeNo })
             .eq("id", res.booking_id);
           console.log("[NewebPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id);
+          const invoiceResult = await issueInvoice(supabase, res.booking_id);
+          if (!invoiceResult.ok) {
+            console.error("[NewebPay callback] 發票開立失敗（不影響付款結果）bookingId:", res.booking_id, "error:", invoiceResult.error);
+            await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", res.booking_id);
+          } else {
+            await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", res.booking_id);
+          }
         }
       }
     } else {

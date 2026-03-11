@@ -15,6 +15,14 @@ const DEFAULT_PRIMARY_COLOR = "#F59E0B"; // Tailwind amber-500
 const DEFAULT_BACKGROUND_COLOR = "#fafaf9"; // 淺色柔和
 const DEFAULT_ABOUT_SECTION_BG = "#ffffff";
 
+/** 後台設定的發票品項一筆 */
+export type InvoiceItemSetting = {
+  name: string;
+  word: string;
+  /** 固定金額（選填）；若填則此品項為固定金額，其餘金額歸第一筆或未填的那一筆 */
+  amount?: number;
+};
+
 export type StoreSettings = {
   siteName: string;
   primaryColor: string;
@@ -30,6 +38,10 @@ export type StoreSettings = {
   aiChatEnabled: boolean;
   /** AI 客服歡迎訊息，null 時用預設 */
   aiChatWelcomeMessage: string | null;
+  /** 發票品項設定，null 時開立發票用預設一筆「課程預約」 */
+  invoiceItems: InvoiceItemSetting[] | null;
+  /** 發票開立廠商：'ecpay' 綠界、'ezpay' 藍新 ezPay（選 ezpay 尚未串接時會略過開立） */
+  invoiceProvider: "ecpay" | "ezpay";
 };
 
 export type FaqItem = { id: string; question: string; answer: string };
@@ -48,7 +60,26 @@ const STORE_SETTINGS_SELECT_LEGACY =
   "site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address";
 
 const STORE_SETTINGS_SELECT_FULL =
-  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address, ai_chat_enabled, ai_chat_welcome_message";
+  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address, ai_chat_enabled, ai_chat_welcome_message, invoice_items, invoice_provider";
+
+function parseInvoiceItems(raw: unknown): InvoiceItemSetting[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: InvoiceItemSetting[] = [];
+  for (const x of raw) {
+    if (typeof x !== "object" || x == null || !("name" in x)) continue;
+    const name = String((x as { name?: unknown }).name ?? "").trim();
+    if (!name) continue;
+    out.push({
+      name,
+      word: String((x as { word?: unknown }).word ?? "式").trim().slice(0, 6),
+      amount:
+        typeof (x as { amount?: unknown }).amount === "number" && Number.isFinite((x as { amount?: unknown }).amount)
+          ? Number((x as { amount?: unknown }).amount)
+          : undefined,
+    });
+  }
+  return out.length > 0 ? out : null;
+}
 
 function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
   const trim = (v: unknown) => (typeof v === "string" ? v.trim() : "") || "";
@@ -65,6 +96,8 @@ function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
     contactAddress: trim(raw.contact_address),
     aiChatEnabled: raw.ai_chat_enabled === false ? false : true,
     aiChatWelcomeMessage: typeof raw.ai_chat_welcome_message === "string" && raw.ai_chat_welcome_message.trim() ? raw.ai_chat_welcome_message.trim() : null,
+    invoiceItems: parseInvoiceItems(raw.invoice_items),
+    invoiceProvider: raw.invoice_provider === "ezpay" ? "ezpay" : "ecpay",
   };
 }
 
@@ -84,6 +117,8 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     contactAddress: "",
     aiChatEnabled: true,
     aiChatWelcomeMessage: null,
+    invoiceItems: null,
+    invoiceProvider: "ecpay",
   });
   const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
   const supabase = createServerSupabase();
@@ -255,4 +290,46 @@ export async function updateAiChatSettings(
     const msg = e instanceof Error ? e.message : "儲存失敗";
     return { success: false, error: msg };
   }
+}
+
+/** 更新發票設定（後台發票設定頁：廠商 + 品項） */
+export async function updateInvoiceSettings(
+  invoiceProvider: "ecpay" | "ezpay",
+  items: InvoiceItemSetting[]
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) {
+      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    }
+    const list = items.filter((i) => (i.name ?? "").trim() !== "").map((i) => ({
+      name: String(i.name).trim().slice(0, 500),
+      word: String(i.word ?? "式").trim().slice(0, 6),
+      amount: typeof i.amount === "number" && Number.isFinite(i.amount) && i.amount >= 0 ? i.amount : undefined,
+    }));
+    const supabase = createServerSupabase();
+    const { error } = await supabase
+      .from("store_settings")
+      .update({
+        invoice_provider: invoiceProvider === "ezpay" ? "ezpay" : "ecpay",
+        invoice_items: list.length > 0 ? list : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("merchant_id", merchantId);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, message: "發票設定已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** @deprecated 請改用 updateInvoiceSettings(provider, items) */
+export async function updateInvoiceItems(
+  items: InvoiceItemSetting[]
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  return updateInvoiceSettings("ecpay", items);
 }
