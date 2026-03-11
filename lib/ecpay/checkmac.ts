@@ -136,8 +136,8 @@ export function ecpayCheckMacValueForParams(
 ): string {
   const kvPairs: [string, string][] = Object.keys(params)
     .filter((k) => k !== "CheckMacValue")
-    .map((k) => [k, params[k]])
-    .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+    .map((k): [string, string] => [k, String(params[k] ?? "")])
+    .filter(([, v]) => v.trim() !== "")
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 
   return buildCheckMacValueFromPairs(kvPairs, hashKey, hashIv, options);
