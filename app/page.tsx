@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import { getCoursesForHomepage } from "./actions/productActions";
 import { getFrontendSettings } from "./actions/frontendSettingsActions";
 import type { CarouselItem } from "./lib/frontendSettingsShared";
+import { getDefaultLayoutBlocks, type LayoutBlock } from "./lib/frontendSettingsShared";
 
 // ========== 課程卡片型別（首頁熱門課程） ==========
 type Activity = {
@@ -65,8 +66,9 @@ export default function WonderVoyageHomePage() {
   const [navBookingLabel, setNavBookingLabel] = useState("課程預約");
   const [navFaqLabel, setNavFaqLabel] = useState("常見問題");
   const [aboutContent, setAboutContent] = useState<string | null>(null);
+  const [layoutBlocks, setLayoutBlocks] = useState<LayoutBlock[]>(getDefaultLayoutBlocks());
 
-  // 前台設定（大圖、輪播、導覽列）
+  // 前台設定（大圖、輪播、導覽列、畫布區塊）
   useEffect(() => {
     getFrontendSettings().then((s) => {
       setHeroImageUrl(s.heroImageUrl);
@@ -80,6 +82,7 @@ export default function WonderVoyageHomePage() {
       setNavBookingLabel(s.navBookingLabel || "課程預約");
       setNavFaqLabel(s.navFaqLabel || "常見問題");
       setAboutContent(s.aboutContent ?? null);
+      setLayoutBlocks(s.layoutBlocks && s.layoutBlocks.length > 0 ? s.layoutBlocks : getDefaultLayoutBlocks());
     });
   }, []);
 
@@ -103,6 +106,16 @@ export default function WonderVoyageHomePage() {
       }
     });
   }, []);
+
+  const getBlock = (id: string) => layoutBlocks.find((b) => b.id === id);
+  const getBlockStyle = (id: string): React.CSSProperties => {
+    const b = getBlock(id);
+    if (!b) return {};
+    return {
+      ...(b.heightPx != null && b.heightPx > 0 ? { minHeight: b.heightPx } : {}),
+      ...(b.backgroundImageUrl ? { backgroundImage: `url(${b.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : {}),
+    };
+  };
 
   const defaultCarousel: CarouselItem[] = [
     { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
@@ -150,10 +163,10 @@ export default function WonderVoyageHomePage() {
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-7xl">
+      <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-4">
         {/* 2. Hero 主圖（有設定圖片才顯示）；緊貼 header 無間隙，底色與圖片融合 */}
         {heroImageUrl && (
-          <section className="px-4 pt-0 pb-4">
+          <section className="px-0 pt-0 pb-4" style={getBlockStyle("hero")}>
             <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
               <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none" aria-hidden />
@@ -163,7 +176,7 @@ export default function WonderVoyageHomePage() {
 
         {/* 3. 輪播牆（由前台設定） */}
         {carouselList.length > 0 && (
-          <section className="px-4 py-4">
+          <section className="px-0 py-4" style={getBlockStyle("carousel")}>
             <div className="relative w-full aspect-[12/5] rounded-xl overflow-hidden">
               {carouselList.map((item, i) => (
                 <div
@@ -200,7 +213,7 @@ export default function WonderVoyageHomePage() {
       </main>
 
       {/* 4. 熱門課程 - 全寬區塊，橫向輪播卡片（連動後台新增課程） */}
-      <section className="w-full py-6 pb-8 relative bg-page">
+      <section className="w-full py-6 pb-8 relative bg-page" style={getBlockStyle("courses")}>
         <div className="max-w-7xl mx-auto px-4 mb-4">
           <h2 className="text-lg font-semibold text-gray-800">熱門課程</h2>
         </div>
@@ -311,7 +324,7 @@ export default function WonderVoyageHomePage() {
 
       {/* 4.5 關於我們（後台前台設定可編輯富文本） */}
       {(aboutContent != null && aboutContent.trim() !== "") && (
-        <section id="about" className="py-12 px-4 scroll-mt-20 border-t border-gray-100" style={{ backgroundColor: aboutSectionBackgroundColor }}>
+        <section id="about" className="py-12 px-4 scroll-mt-20 border-t border-gray-100" style={{ backgroundColor: aboutSectionBackgroundColor, ...getBlockStyle("about") }}>
           <div className="mx-auto max-w-7xl">
             <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">{navAboutLabel || "關於我們"}</h2>
             <div
@@ -323,7 +336,7 @@ export default function WonderVoyageHomePage() {
       )}
 
       {/* 5. 常見問題 */}
-      <section id="faq" className="bg-white py-12 px-4 scroll-mt-20">
+      <section id="faq" className="bg-white py-12 px-4 scroll-mt-20" style={getBlockStyle("faq")}>
         <div className="mx-auto max-w-7xl">
           <h2 className="text-xl font-bold text-gray-900 mb-8 text-center">常見問題</h2>
           <FAQ />
@@ -331,7 +344,7 @@ export default function WonderVoyageHomePage() {
       </section>
 
       {/* 5.5 聯絡區：左側店名＋聯絡＋社群，右側地圖；下方隱私權／服務條款 */}
-      <section className="bg-page border-t border-gray-100 py-12 px-4">
+      <section className="bg-page border-t border-gray-100 py-12 px-4" style={getBlockStyle("contact")}>
         <div className="mx-auto max-w-7xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             <div className="space-y-6">
@@ -448,7 +461,7 @@ export default function WonderVoyageHomePage() {
       </section>
 
       {/* 6. Footer */}
-      <footer className="bg-white border-t border-gray-100 mt-auto">
+      <footer className="bg-white border-t border-gray-100 mt-auto" style={getBlockStyle("footer")}>
         <div className="mx-auto max-w-7xl px-4 py-8">
           <div className="text-center text-gray-400 text-sm">
             <p>© 2026 {siteName} WonderVoyage 版權所有</p>

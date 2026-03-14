@@ -1,15 +1,18 @@
 "use server";
 
 import { unstable_noStore } from "next/cache";
-import { uploadOneToR2 } from "@/app/actions/productActions";
+import { uploadOneToR2, uploadOneToR2WithPrefix } from "@/app/actions/productActions";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import {
   type CarouselItem,
   type FrontendSettings,
+  type LayoutBlock,
   DEFAULT_MEMBER_ICON_URLS,
   DEFAULT_CAROUSEL,
   DEFAULT_HERO_TITLE,
   DEFAULT_NAV,
+  DEFAULT_LAYOUT_ORDER,
+  getDefaultLayoutBlocks,
 } from "@/app/lib/frontendSettingsShared";
 
 function envTrim(key: string): string {
@@ -54,6 +57,9 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
         paymentEcpayEnabled: false,
         paymentLinepayEnabled: false,
         paymentAtmEnabled: false,
+        layoutOrder: DEFAULT_LAYOUT_ORDER,
+        fullWidthImageUrl: null,
+        layoutBlocks: getDefaultLayoutBlocks(),
       };
     }
     const raw = data.frontend_settings as Record<string, unknown>;
@@ -99,6 +105,11 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       paymentEcpayEnabled: raw.paymentEcpayEnabled === true,
       paymentLinepayEnabled: raw.paymentLinepayEnabled === true,
       paymentAtmEnabled: raw.paymentAtmEnabled === true,
+      layoutOrder: Array.isArray(raw.layout_order) && (raw.layout_order as unknown[]).length > 0
+        ? (raw.layout_order as unknown[]).filter((x): x is string => typeof x === "string")
+        : DEFAULT_LAYOUT_ORDER,
+      fullWidthImageUrl: typeof raw.fullWidthImageUrl === "string" ? raw.fullWidthImageUrl : null,
+      layoutBlocks: parseLayoutBlocks(raw.layout_blocks),
     };
   } catch {
     return {
@@ -125,7 +136,224 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       paymentEcpayEnabled: false,
       paymentLinepayEnabled: false,
       paymentAtmEnabled: false,
+      layoutOrder: DEFAULT_LAYOUT_ORDER,
+      fullWidthImageUrl: null,
+      layoutBlocks: getDefaultLayoutBlocks(),
     };
+  }
+}
+
+function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
+  if (!Array.isArray(raw) || raw.length === 0) return getDefaultLayoutBlocks();
+  const blocks: LayoutBlock[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const o = raw[i] as Record<string, unknown> | null;
+    if (!o || typeof o.id !== "string") continue;
+    const order = typeof o.order === "number" ? o.order : i;
+    const heightPx = typeof o.heightPx === "number" && o.heightPx > 0 ? o.heightPx : null;
+    const backgroundImageUrl = typeof o.backgroundImageUrl === "string" ? o.backgroundImageUrl : null;
+    blocks.push({ id: o.id, order, heightPx, backgroundImageUrl });
+  }
+  blocks.sort((a, b) => a.order - b.order);
+  return blocks.length > 0 ? blocks : getDefaultLayoutBlocks();
+}
+
+/** 更新畫布區塊（後台「首頁版面」儲存用）；會一併寫入 layout_order 以相容舊版 */
+export async function updateLayoutBlocks(blocks: LayoutBlock[]): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const sorted = [...blocks].sort((a, b) => a.order - b.order);
+    const layout_order = sorted.map((b) => b.id);
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      heroImageUrl: existing.heroImageUrl,
+      heroTitle: existing.heroTitle,
+      carouselItems: existing.carouselItems,
+      navAboutLabel: existing.navAboutLabel,
+      navCoursesLabel: existing.navCoursesLabel,
+      navBookingLabel: existing.navBookingLabel,
+      navFaqLabel: existing.navFaqLabel,
+      memberIconGallery: existing.memberIconGallery,
+      memberIconSelectedIndex: existing.memberIconSelectedIndex,
+      aboutContent: existing.aboutContent ?? null,
+      seoTitle: existing.seoTitle ?? null,
+      seoKeywords: existing.seoKeywords ?? null,
+      seoDescription: existing.seoDescription ?? null,
+      seoFaviconUrl: existing.seoFaviconUrl ?? null,
+      linePayApi: existing.linePayApi ?? null,
+      thirdPartyApi: existing.thirdPartyApi ?? null,
+      atmBankName: existing.atmBankName ?? null,
+      atmBankAccount: existing.atmBankAccount ?? null,
+      atmBankCode: existing.atmBankCode ?? null,
+      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      layout_order,
+      fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
+      layout_blocks: sorted.map((b) => ({
+        id: b.id,
+        order: b.order,
+        heightPx: b.heightPx,
+        backgroundImageUrl: b.backgroundImageUrl,
+      })),
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "版面已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 上傳區塊背景圖至 R2，回傳網址（再由前端寫入該區塊 backgroundImageUrl 並呼叫 updateLayoutBlocks） */
+export async function uploadLayoutBlockBackground(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "background_image", "layout-bg");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 更新首頁區塊順序（後台「首頁版面」儲存用） */
+export async function updateLayoutOrder(order: string[]): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const uniqueOrder = Array.from(new Set(order)).filter((id) => id != null && String(id).trim() !== "");
+    if (uniqueOrder.length === 0) return { success: false, error: "至少需保留一個區塊" };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      heroImageUrl: existing.heroImageUrl,
+      heroTitle: existing.heroTitle,
+      carouselItems: existing.carouselItems,
+      navAboutLabel: existing.navAboutLabel,
+      navCoursesLabel: existing.navCoursesLabel,
+      navBookingLabel: existing.navBookingLabel,
+      navFaqLabel: existing.navFaqLabel,
+      memberIconGallery: existing.memberIconGallery,
+      memberIconSelectedIndex: existing.memberIconSelectedIndex,
+      aboutContent: existing.aboutContent ?? null,
+      seoTitle: existing.seoTitle ?? null,
+      seoKeywords: existing.seoKeywords ?? null,
+      seoDescription: existing.seoDescription ?? null,
+      seoFaviconUrl: existing.seoFaviconUrl ?? null,
+      linePayApi: existing.linePayApi ?? null,
+      thirdPartyApi: existing.thirdPartyApi ?? null,
+      atmBankName: existing.atmBankName ?? null,
+      atmBankAccount: existing.atmBankAccount ?? null,
+      atmBankCode: existing.atmBankCode ?? null,
+      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      layout_order: uniqueOrder,
+      fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
+      layout_blocks: uniqueOrder.map((id, i) => {
+        const b = existing.layoutBlocks.find((x) => x.id === id);
+        return b ? { id: b.id, order: i, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl } : { id, order: i, heightPx: null, backgroundImageUrl: null };
+      }),
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "版面順序已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 更新單張大圖區塊的圖片網址 */
+export async function updateFullWidthImageUrl(url: string | null): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const value = typeof url === "string" && url.trim() ? url.trim() : null;
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      heroImageUrl: existing.heroImageUrl,
+      heroTitle: existing.heroTitle,
+      carouselItems: existing.carouselItems,
+      navAboutLabel: existing.navAboutLabel,
+      navCoursesLabel: existing.navCoursesLabel,
+      navBookingLabel: existing.navBookingLabel,
+      navFaqLabel: existing.navFaqLabel,
+      memberIconGallery: existing.memberIconGallery,
+      memberIconSelectedIndex: existing.memberIconSelectedIndex,
+      aboutContent: existing.aboutContent ?? null,
+      seoTitle: existing.seoTitle ?? null,
+      seoKeywords: existing.seoKeywords ?? null,
+      seoDescription: existing.seoDescription ?? null,
+      seoFaviconUrl: existing.seoFaviconUrl ?? null,
+      linePayApi: existing.linePayApi ?? null,
+      thirdPartyApi: existing.thirdPartyApi ?? null,
+      atmBankName: existing.atmBankName ?? null,
+      atmBankAccount: existing.atmBankAccount ?? null,
+      atmBankCode: existing.atmBankCode ?? null,
+      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      layout_order: existing.layoutOrder,
+      fullWidthImageUrl: value,
+      layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "單張大圖網址已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
   }
 }
 
@@ -227,6 +455,9 @@ export async function updateFrontendSettings(formData: FormData): Promise<
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
+            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
           },
           updated_at: new Date().toISOString(),
         },
@@ -283,6 +514,9 @@ export async function updateAboutPage(formData: FormData): Promise<
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
+            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
           },
           updated_at: new Date().toISOString(),
         },
@@ -364,6 +598,9 @@ export async function updateSeoSettings(formData: FormData): Promise<
             paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
             paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
             paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
+            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
           },
           updated_at: new Date().toISOString(),
         },
@@ -449,6 +686,9 @@ export async function updatePaymentSettings(formData: FormData): Promise<
             paymentEcpayEnabled,
             paymentLinepayEnabled,
             paymentAtmEnabled,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
+            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
           },
           updated_at: new Date().toISOString(),
         },

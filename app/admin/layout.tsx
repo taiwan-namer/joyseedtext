@@ -31,6 +31,7 @@ const SIDEBAR_MENU = [
     children: [
       { label: "基本資料", href: "/admin/settings", active: false },
       { label: "前台設定", href: "/admin/frontend-settings", active: false },
+      { label: "首頁版面", href: "/admin/layout", active: false },
     ],
   },
   {

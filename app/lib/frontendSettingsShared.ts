@@ -47,6 +47,70 @@ export type FrontendSettings = {
   paymentLinepayEnabled: boolean;
   /** 金流開關：ATM 銀行轉帳（開啟時需填寫銀行資訊） */
   paymentAtmEnabled: boolean;
+  /** 首頁區塊顯示順序（依此陣列順序渲染） */
+  layoutOrder: string[];
+  /** 單張大圖區塊的圖片網址 */
+  fullWidthImageUrl: string | null;
+  /** 畫布區塊（含順序、高度、背景圖）；有值時前台依此渲染，否則用 layoutOrder */
+  layoutBlocks: LayoutBlock[];
+};
+
+/** 單一畫布區塊（存於 frontend_settings.layout_blocks） */
+export type LayoutBlock = {
+  id: string;
+  order: number;
+  /** 區塊高度（px），用戶可調；未設則用元件預設 */
+  heightPx: number | null;
+  /** 區塊背景圖網址（上傳至 R2 後存 URL） */
+  backgroundImageUrl: string | null;
+};
+
+/** 首頁區塊 ID（與前台區塊一一對應） */
+export const LAYOUT_SECTION_IDS = [
+  "header",
+  "hero",
+  "hero_carousel",
+  "carousel",
+  "carousel_2",
+  "full_width_image",
+  "courses",
+  "courses_grid",
+  "courses_list",
+  "about",
+  "faq",
+  "contact",
+  "footer",
+] as const;
+export type LayoutSectionId = (typeof LAYOUT_SECTION_IDS)[number];
+
+/** 預設首頁區塊順序 */
+export const DEFAULT_LAYOUT_ORDER: string[] = ["header", "hero", "carousel", "courses", "about", "faq", "contact", "footer"];
+
+/** 預設畫布區塊（由 DEFAULT_LAYOUT_ORDER 產生，高度與背景圖為預設） */
+export function getDefaultLayoutBlocks(): LayoutBlock[] {
+  return DEFAULT_LAYOUT_ORDER.map((id, i) => ({
+    id,
+    order: i,
+    heightPx: null,
+    backgroundImageUrl: null,
+  }));
+}
+
+/** 區塊 ID 對應中文標籤（後台畫布顯示用） */
+export const LAYOUT_SECTION_LABELS: Record<string, string> = {
+  header: "上方導覽列",
+  hero: "首頁大圖",
+  hero_carousel: "首頁大圖（輪播）",
+  carousel: "輪播牆",
+  carousel_2: "輪播牆 2",
+  full_width_image: "單張大圖",
+  courses: "熱門課程（橫向捲動）",
+  courses_grid: "熱門課程（網格）",
+  courses_list: "熱門課程（列表）",
+  about: "關於我們",
+  faq: "常見問題",
+  contact: "聯絡區",
+  footer: "頁尾",
 };
 
 /** 預設 10 個會員圖示（專案 public/member-icons/ 內建） */
