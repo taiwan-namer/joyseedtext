@@ -10,6 +10,7 @@ import {
   DEFAULT_CAROUSEL,
   DEFAULT_HERO_TITLE,
   DEFAULT_NAV,
+  DEFAULT_LAYOUT_ORDER,
 } from "@/app/lib/frontendSettingsShared";
 
 function envTrim(key: string): string {
@@ -54,6 +55,8 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
         paymentEcpayEnabled: false,
         paymentLinepayEnabled: false,
         paymentAtmEnabled: false,
+        layoutOrder: DEFAULT_LAYOUT_ORDER,
+        fullWidthImageUrl: null,
       };
     }
     const raw = data.frontend_settings as Record<string, unknown>;
@@ -99,6 +102,10 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       paymentEcpayEnabled: raw.paymentEcpayEnabled === true,
       paymentLinepayEnabled: raw.paymentLinepayEnabled === true,
       paymentAtmEnabled: raw.paymentAtmEnabled === true,
+      layoutOrder: Array.isArray(raw.layout_order) && (raw.layout_order as unknown[]).length > 0
+        ? (raw.layout_order as unknown[]).filter((x): x is string => typeof x === "string")
+        : DEFAULT_LAYOUT_ORDER,
+      fullWidthImageUrl: typeof raw.fullWidthImageUrl === "string" ? raw.fullWidthImageUrl : null,
     };
   } catch {
     return {
@@ -125,7 +132,124 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       paymentEcpayEnabled: false,
       paymentLinepayEnabled: false,
       paymentAtmEnabled: false,
+      layoutOrder: DEFAULT_LAYOUT_ORDER,
+      fullWidthImageUrl: null,
     };
+  }
+}
+
+/** 更新首頁區塊順序（後台「首頁版面」儲存用） */
+export async function updateLayoutOrder(order: string[]): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const uniqueOrder = Array.from(new Set(order)).filter((id) => id != null && String(id).trim() !== "");
+    if (uniqueOrder.length === 0) return { success: false, error: "至少需保留一個區塊" };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      heroImageUrl: existing.heroImageUrl,
+      heroTitle: existing.heroTitle,
+      carouselItems: existing.carouselItems,
+      navAboutLabel: existing.navAboutLabel,
+      navCoursesLabel: existing.navCoursesLabel,
+      navBookingLabel: existing.navBookingLabel,
+      navFaqLabel: existing.navFaqLabel,
+      memberIconGallery: existing.memberIconGallery,
+      memberIconSelectedIndex: existing.memberIconSelectedIndex,
+      aboutContent: existing.aboutContent ?? null,
+      seoTitle: existing.seoTitle ?? null,
+      seoKeywords: existing.seoKeywords ?? null,
+      seoDescription: existing.seoDescription ?? null,
+      seoFaviconUrl: existing.seoFaviconUrl ?? null,
+      linePayApi: existing.linePayApi ?? null,
+      thirdPartyApi: existing.thirdPartyApi ?? null,
+      atmBankName: existing.atmBankName ?? null,
+      atmBankAccount: existing.atmBankAccount ?? null,
+      atmBankCode: existing.atmBankCode ?? null,
+      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      layout_order: uniqueOrder,
+      fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "版面順序已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 更新單張大圖區塊的圖片網址 */
+export async function updateFullWidthImageUrl(url: string | null): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const value = typeof url === "string" && url.trim() ? url.trim() : null;
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      heroImageUrl: existing.heroImageUrl,
+      heroTitle: existing.heroTitle,
+      carouselItems: existing.carouselItems,
+      navAboutLabel: existing.navAboutLabel,
+      navCoursesLabel: existing.navCoursesLabel,
+      navBookingLabel: existing.navBookingLabel,
+      navFaqLabel: existing.navFaqLabel,
+      memberIconGallery: existing.memberIconGallery,
+      memberIconSelectedIndex: existing.memberIconSelectedIndex,
+      aboutContent: existing.aboutContent ?? null,
+      seoTitle: existing.seoTitle ?? null,
+      seoKeywords: existing.seoKeywords ?? null,
+      seoDescription: existing.seoDescription ?? null,
+      seoFaviconUrl: existing.seoFaviconUrl ?? null,
+      linePayApi: existing.linePayApi ?? null,
+      thirdPartyApi: existing.thirdPartyApi ?? null,
+      atmBankName: existing.atmBankName ?? null,
+      atmBankAccount: existing.atmBankAccount ?? null,
+      atmBankCode: existing.atmBankCode ?? null,
+      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      layout_order: existing.layoutOrder,
+      fullWidthImageUrl: value,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "單張大圖網址已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
   }
 }
 
@@ -227,6 +351,8 @@ export async function updateFrontendSettings(formData: FormData): Promise<
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -283,6 +409,8 @@ export async function updateAboutPage(formData: FormData): Promise<
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -364,6 +492,8 @@ export async function updateSeoSettings(formData: FormData): Promise<
             paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
             paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
             paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -449,6 +579,8 @@ export async function updatePaymentSettings(formData: FormData): Promise<
             paymentEcpayEnabled,
             paymentLinepayEnabled,
             paymentAtmEnabled,
+            layout_order: existing.layoutOrder,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },
