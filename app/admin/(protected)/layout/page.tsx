@@ -45,6 +45,7 @@ export default function AdminLayoutPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 畫布用資料（與前台一致）
@@ -52,6 +53,9 @@ export default function AdminLayoutPage() {
   const [carouselItems, setCarouselItems] = useState<CarouselItem[]>([]);
   const [aboutContent, setAboutContent] = useState<string | null>(null);
   const [navAboutLabel, setNavAboutLabel] = useState("關於我們");
+  const [navCoursesLabel, setNavCoursesLabel] = useState("課程介紹");
+  const [navBookingLabel, setNavBookingLabel] = useState("課程預約");
+  const [navFaqLabel, setNavFaqLabel] = useState("常見問題");
   const [fullWidthImageUrl, setFullWidthImageUrl] = useState<string | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
 
@@ -67,6 +71,9 @@ export default function AdminLayoutPage() {
         ]);
         setAboutContent(s.aboutContent ?? null);
         setNavAboutLabel(s.navAboutLabel || "關於我們");
+        setNavCoursesLabel(s.navCoursesLabel || "課程介紹");
+        setNavBookingLabel(s.navBookingLabel || "課程預約");
+        setNavFaqLabel(s.navFaqLabel || "常見問題");
         setFullWidthImageUrl(s.fullWidthImageUrl ?? null);
         if (coursesRes.success && coursesRes.data.length > 0) {
           setActivities(
@@ -98,6 +105,29 @@ export default function AdminLayoutPage() {
   };
 
   const getBlockIndex = (blockId: string) => blocks.findIndex((b) => b.id === blockId);
+
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    e.dataTransfer.setData("text/plain", String(index));
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
+  };
+  const handleDragLeave = () => setDragOverIndex(null);
+  const handleDrop = (toIndex: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+    if (Number.isNaN(fromIndex) || fromIndex === toIndex) return;
+    const next = [...blocks];
+    const [removed] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, removed);
+    setBlocks(next.map((b, i) => ({ ...b, order: i })));
+    setMessage(null);
+  };
+  const handleDragEnd = () => setDragOverIndex(null);
 
   const removeBlock = (index: number) => {
     if (blocks.length <= 1) return;
@@ -219,9 +249,9 @@ export default function AdminLayoutPage() {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* 左側：可加入的積木 + 目前的積木 */}
-        <aside className="lg:w-56 shrink-0 space-y-6">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* 左側：可加入的積木 + 目前的積木（固定，捲動時不消失） */}
+        <aside className="lg:w-56 shrink-0 space-y-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
             <h2 className="text-sm font-semibold text-gray-800 mb-3">可加入的積木</h2>
             <ul className="space-y-1.5">
@@ -245,41 +275,34 @@ export default function AdminLayoutPage() {
           </div>
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
             <h2 className="text-sm font-semibold text-gray-800 mb-3">目前的積木</h2>
+            <p className="text-xs text-gray-500 mb-2">拖曳項目可調整順序</p>
             <ul className="space-y-1">
               {blocks.map((b, i) => (
-                <li key={`${b.id}-${i}`} className="flex items-center gap-2">
+                <li
+                  key={`${b.id}-${i}`}
+                  draggable
+                  onDragStart={handleDragStart(i)}
+                  onDragOver={handleDragOver(i)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop(i)}
+                  onDragEnd={handleDragEnd}
+                  className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 cursor-grab active:cursor-grabbing transition-colors ${
+                    dragOverIndex === i ? "border-amber-400 bg-amber-50" : "border-transparent hover:bg-gray-100"
+                  }`}
+                >
+                  <GripVertical className="h-4 w-4 text-gray-400 shrink-0" aria-hidden />
                   <span className="flex-1 text-sm text-gray-700 truncate">
                     {LAYOUT_SECTION_LABELS[b.id] ?? b.id}
                   </span>
-                  <div className="flex items-center shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => moveUp(i)}
-                      disabled={i === 0}
-                      className="p-1 rounded hover:bg-gray-200 disabled:opacity-40"
-                      aria-label="上移"
-                    >
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveDown(i)}
-                      disabled={i === blocks.length - 1}
-                      className="p-1 rounded hover:bg-gray-200 disabled:opacity-40"
-                      aria-label="下移"
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeBlock(i)}
-                      disabled={blocks.length <= 1}
-                      className="p-1 rounded hover:bg-red-100 text-red-600 disabled:opacity-40 text-xs"
-                      aria-label="移除"
-                    >
-                      移除
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeBlock(i)}
+                    disabled={blocks.length <= 1}
+                    className="p-1 rounded hover:bg-red-100 text-red-600 disabled:opacity-40 text-xs shrink-0"
+                    aria-label="移除"
+                  >
+                    移除
+                  </button>
                 </li>
               ))}
             </ul>
@@ -305,6 +328,9 @@ export default function AdminLayoutPage() {
                 carouselItems={carouselItems}
                 aboutContent={aboutContent}
                 navAboutLabel={navAboutLabel}
+                navCoursesLabel={navCoursesLabel}
+                navBookingLabel={navBookingLabel}
+                navFaqLabel={navFaqLabel}
                 activities={activities}
                 fullWidthImageUrl={fullWidthImageUrl}
               />
@@ -325,8 +351,8 @@ export default function AdminLayoutPage() {
           </div>
         </div>
 
-        {/* 右側：編輯此區塊（選中時顯示） */}
-        <aside className="lg:w-64 shrink-0">
+        {/* 右側：編輯此區塊（選中時顯示，固定，捲動時不消失） */}
+        <aside className="lg:w-64 shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           {selectedBlock && selectedIndex >= 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-4">
               <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
@@ -350,6 +376,9 @@ export default function AdminLayoutPage() {
               )}
 
               <div>
+                <p className="text-xs font-medium text-amber-700 mb-1">
+                  目前高度: {selectedBlock.heightPx != null && selectedBlock.heightPx > 0 ? `${selectedBlock.heightPx} px` : "自動"}
+                </p>
                 <label className="block text-xs font-medium text-gray-700 mb-1">區塊高度 (px)</label>
                 <input
                   type="number"

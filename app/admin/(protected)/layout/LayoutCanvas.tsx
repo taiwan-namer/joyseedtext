@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   HeroSection,
   HeroCarouselSection,
@@ -33,6 +34,9 @@ type LayoutCanvasProps = {
   carouselItems: CarouselItem[];
   aboutContent: string | null;
   navAboutLabel: string;
+  navCoursesLabel: string;
+  navBookingLabel: string;
+  navFaqLabel: string;
   activities: Activity[];
   fullWidthImageUrl: string | null;
 };
@@ -46,6 +50,9 @@ export default function LayoutCanvas({
   carouselItems,
   aboutContent,
   navAboutLabel,
+  navCoursesLabel,
+  navBookingLabel,
+  navFaqLabel,
   activities,
   fullWidthImageUrl,
 }: LayoutCanvasProps) {
@@ -139,6 +146,19 @@ export default function LayoutCanvas({
 
   return (
     <div className="w-full space-y-0 bg-gray-50 rounded-b-lg">
+      {/* 上方欄位：與前台一致的 header（你很棒、關於我們那欄） */}
+      <header className="bg-white border-b border-gray-100 shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between gap-2">
+          <h1 className="text-xl font-bold text-amber-600 shrink-0">{siteName}</h1>
+          <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0 overflow-x-auto scrollbar-hide text-sm text-gray-600">
+            <span className="whitespace-nowrap">{navAboutLabel || "關於我們"}</span>
+            <Link href="/courses" className="whitespace-nowrap hover:text-amber-600">{navCoursesLabel || "課程介紹"}</Link>
+            <Link href="/course/booking" className="whitespace-nowrap hover:text-amber-600">{navBookingLabel || "課程預約"}</Link>
+            <span className="whitespace-nowrap">{navFaqLabel || "常見問題"}</span>
+            <span className="whitespace-nowrap text-gray-400">登入</span>
+          </div>
+        </div>
+      </header>
       {blocks.map((block) => renderSection(block))}
     </div>
   );
