@@ -51,6 +51,18 @@ export type FrontendSettings = {
   layoutOrder: string[];
   /** 單張大圖區塊的圖片網址 */
   fullWidthImageUrl: string | null;
+  /** 畫布區塊（含順序、高度、背景圖）；有值時前台依此渲染，否則用 layoutOrder */
+  layoutBlocks: LayoutBlock[];
+};
+
+/** 單一畫布區塊（存於 frontend_settings.layout_blocks） */
+export type LayoutBlock = {
+  id: string;
+  order: number;
+  /** 區塊高度（px），用戶可調；未設則用元件預設 */
+  heightPx: number | null;
+  /** 區塊背景圖網址（上傳至 R2 後存 URL） */
+  backgroundImageUrl: string | null;
 };
 
 /** 首頁區塊 ID（與前台區塊一一對應） */
@@ -72,6 +84,16 @@ export type LayoutSectionId = (typeof LAYOUT_SECTION_IDS)[number];
 
 /** 預設首頁區塊順序 */
 export const DEFAULT_LAYOUT_ORDER: string[] = ["hero", "carousel", "courses", "about", "faq", "contact", "footer"];
+
+/** 預設畫布區塊（由 DEFAULT_LAYOUT_ORDER 產生，高度與背景圖為預設） */
+export function getDefaultLayoutBlocks(): LayoutBlock[] {
+  return DEFAULT_LAYOUT_ORDER.map((id, i) => ({
+    id,
+    order: i,
+    heightPx: null,
+    backgroundImageUrl: null,
+  }));
+}
 
 /** 區塊 ID 對應中文標籤（後台畫布顯示用） */
 export const LAYOUT_SECTION_LABELS: Record<string, string> = {

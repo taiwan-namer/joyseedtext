@@ -96,6 +96,15 @@ export async function uploadOneToR2(
   formData: FormData,
   key: string
 ): Promise<string | null> {
+  return uploadOneToR2WithPrefix(formData, key, "classes");
+}
+
+/** 上傳單一檔案到 R2，可指定路徑前綴（例如 layout-bg 用於首頁區塊背景圖） */
+export async function uploadOneToR2WithPrefix(
+  formData: FormData,
+  key: string,
+  pathPrefix: string
+): Promise<string | null> {
   const file = formData.get(key) as File | null;
   if (!file || !(file instanceof File) || file.size === 0) return null;
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return null;
@@ -104,7 +113,7 @@ export async function uploadOneToR2(
   const publicBaseUrl = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.trim() ?? "").replace(/\/+$/, "");
   if (!bucketName || !publicBaseUrl) throw new Error("缺少 R2 環境變數");
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const fileName = `classes/${Date.now()}-${key}-${safeName}`;
+  const fileName = `${pathPrefix}/${Date.now()}-${key}-${safeName}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   const client = getR2Client();
   await client.send(
