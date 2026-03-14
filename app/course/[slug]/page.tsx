@@ -6,6 +6,7 @@ import { useParams, useRouter, notFound } from "next/navigation";
 import { ChevronRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight as ChevronRightArrow, X } from "lucide-react";
 import { getCourseBySlug } from "../course-data";
 import { getCourseById } from "@/app/actions/productActions";
+import { getSlotRemainingCounts, type SlotRemaining } from "@/app/actions/bookingActions";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import type { CustomerNotice } from "../course-data";
@@ -43,20 +44,23 @@ function formatDateKey(year: number, month: number, day: number): string {
   return `${year}-${m}-${d}`;
 }
 
-// 選擇日期與時間模態：有場次的日期粗體黑字，無場次反灰；點選日期後才顯示該日時段；剩餘人數顯示在確認按鈕旁邊（會因日期與販售而不同）
+// 選擇日期與時間模態：有場次的日期粗體黑字，無場次反灰；點選日期後才顯示該日時段；剩餘人數依所選場次連動訂單庫存
 function DateTimeModal({
   open,
   onClose,
   onConfirm,
   availableSlots = [],
   remainingCapacity,
+  slotRemainingList = [],
 }: {
   open: boolean;
   onClose: () => void;
   onConfirm: (date: string, time: string) => void;
   availableSlots?: { date: string; time: string }[];
-  /** 剩餘名額（依課程／日期與販售可能不同，目前為課程維度；若後端支援按日期時段可改為動態查詢） */
+  /** 無 slotRemainingList 時的 fallback 剩餘名額 */
   remainingCapacity?: number | null;
+  /** 各場次剩餘名額（與訂單庫存連動），有則優先顯示所選場次的 remaining */
+  slotRemainingList?: SlotRemaining[];
 }) {
   const today = useMemo(() => new Date(), []);
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -118,7 +122,12 @@ function DateTimeModal({
     setSelectedTime(null);
   };
 
-  const canConfirm = !!dateStr && !!selectedTime;
+  const slotRemaining =
+    dateStr && selectedTime && slotRemainingList.length > 0
+      ? slotRemainingList.find((s) => s.date === dateStr && s.time === selectedTime)?.remaining ?? null
+      : null;
+  const displayRemaining = slotRemaining !== null ? slotRemaining : remainingCapacity ?? null;
+  const canConfirm = !!dateStr && !!selectedTime && (displayRemaining === null || displayRemaining > 0);
 
   const handleConfirm = () => {
     if (dateStr && selectedTime) {
@@ -242,9 +251,13 @@ function DateTimeModal({
             {dateStr ? dateStr : "—"} {selectedTime ?? "請選擇時段"}
           </span>
           <div className="flex items-center gap-3 shrink-0">
-            {canConfirm && (
+            {dateStr && selectedTime && (
               <span className="text-sm text-gray-600 whitespace-nowrap">
-                {typeof remainingCapacity === "number" ? `剩餘 ${remainingCapacity} 人` : "剩餘名額：—"}
+                {displayRemaining !== null
+                  ? displayRemaining > 0
+                    ? `剩餘 ${displayRemaining} 人`
+                    : "已額滿"
+                  : "剩餘名額：—"}
               </span>
             )}
             <button
@@ -346,8 +359,8 @@ export default function CourseDetailPage() {
   const [dateTimeModalOpen, setDateTimeModalOpen] = useState(false);
   const [selectedDateTime, setSelectedDateTime] = useState<{ date: string; time: string } | null>(null);
   const [selectedAddonIndices, setSelectedAddonIndices] = useState<number[]>([]);
-  /** 彈窗內顯示的剩餘名額（打開彈窗時重新取得，反映販售變動） */
-  const [modalRemainingCapacity, setModalRemainingCapacity] = useState<number | null>(null);
+  /** 彈窗內各場次剩餘名額（打開彈窗時重新取得，與訂單庫存連動） */
+  const [slotRemainingList, setSlotRemainingList] = useState<SlotRemaining[]>([]);
 
   useEffect(() => {
     if (!slug) return;
@@ -366,15 +379,16 @@ export default function CourseDetailPage() {
     return () => { cancelled = true; };
   }, [slug]);
 
-  // 打開日期時間彈窗時重新取得剩餘名額，使「剩餘人數」因販售而更新
+  // 打開日期時間彈窗時取得各場次剩餘名額（連動訂單庫存，完成訂單後會變動）
   useEffect(() => {
-    if (!dateTimeModalOpen || !slug) return;
+    if (!dateTimeModalOpen || !course || !("id" in course)) return;
     let cancelled = false;
-    getCourseById(slug).then((c) => {
-      if (!cancelled && c && "capacity" in c) setModalRemainingCapacity(c.capacity ?? null);
+    getSlotRemainingCounts(course.id).then((res) => {
+      if (!cancelled && res.success) setSlotRemainingList(res.slots);
+      else if (!cancelled) setSlotRemainingList([]);
     });
     return () => { cancelled = true; };
-  }, [dateTimeModalOpen, slug]);
+  }, [dateTimeModalOpen, course]);
 
   if (!course) {
     return (
@@ -607,11 +621,8 @@ export default function CourseDetailPage() {
                 onClose={() => setDateTimeModalOpen(false)}
                 onConfirm={(date, time) => setSelectedDateTime({ date, time })}
                 availableSlots={course.scheduledSlots ?? []}
-                remainingCapacity={
-                  modalRemainingCapacity !== null && modalRemainingCapacity !== undefined
-                    ? modalRemainingCapacity
-                    : (course as CourseForPublic).capacity
-                }
+                remainingCapacity={(course as CourseForPublic).capacity ?? null}
+                slotRemainingList={slotRemainingList}
               />
             </div>
           </aside>

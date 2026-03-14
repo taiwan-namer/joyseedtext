@@ -2,6 +2,7 @@
 
 import { unstable_noStore } from "next/cache";
 import { uploadOneToR2 } from "@/app/actions/productActions";
+import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import {
   type CarouselItem,
   type FrontendSettings,
@@ -9,6 +10,8 @@ import {
   DEFAULT_CAROUSEL,
   DEFAULT_HERO_TITLE,
   DEFAULT_NAV,
+  DEFAULT_LAYOUT_ORDER,
+  LAYOUT_SECTION_IDS,
 } from "@/app/lib/frontendSettingsShared";
 
 function envTrim(key: string): string {
@@ -43,14 +46,25 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
         seoTitle: null,
         seoKeywords: null,
         seoDescription: null,
+        seoFaviconUrl: null,
         linePayApi: null,
         thirdPartyApi: null,
         atmBankName: null,
         atmBankCode: null,
         atmBankAccount: null,
+        paymentNewebpayEnabled: false,
+        paymentEcpayEnabled: false,
+        paymentLinepayEnabled: false,
+        paymentAtmEnabled: false,
+        layoutOrder: DEFAULT_LAYOUT_ORDER,
+        fullWidthImageUrl: null,
       };
     }
     const raw = data.frontend_settings as Record<string, unknown>;
+    const validIds = new Set(LAYOUT_SECTION_IDS);
+    const layoutOrderRaw = Array.isArray(raw.layout_order) ? raw.layout_order : DEFAULT_LAYOUT_ORDER;
+    const layoutOrder = layoutOrderRaw.filter((id: unknown) => typeof id === "string" && validIds.has(id as typeof LAYOUT_SECTION_IDS[number]));
+    const layoutOrderFinal = layoutOrder.length > 0 ? layoutOrder as string[] : DEFAULT_LAYOUT_ORDER;
     const items = Array.isArray(raw.carouselItems)
       ? (raw.carouselItems as unknown[]).map((x: unknown, i: number) => {
           const o = x as Record<string, unknown>;
@@ -83,11 +97,18 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       seoTitle: typeof raw.seoTitle === "string" ? raw.seoTitle : null,
       seoKeywords: typeof raw.seoKeywords === "string" ? raw.seoKeywords : null,
       seoDescription: typeof raw.seoDescription === "string" ? raw.seoDescription : null,
+      seoFaviconUrl: typeof raw.seoFaviconUrl === "string" ? raw.seoFaviconUrl : null,
       linePayApi: typeof raw.linePayApi === "string" ? raw.linePayApi : null,
       thirdPartyApi: typeof raw.thirdPartyApi === "string" ? raw.thirdPartyApi : null,
       atmBankName: typeof raw.atmBankName === "string" ? raw.atmBankName : null,
       atmBankAccount: typeof raw.atmBankAccount === "string" ? raw.atmBankAccount : null,
       atmBankCode: raw.atmBankCode != null ? String(raw.atmBankCode) : null,
+      paymentNewebpayEnabled: raw.paymentNewebpayEnabled === true,
+      paymentEcpayEnabled: raw.paymentEcpayEnabled === true,
+      paymentLinepayEnabled: raw.paymentLinepayEnabled === true,
+      paymentAtmEnabled: raw.paymentAtmEnabled === true,
+      layoutOrder: layoutOrderFinal,
+      fullWidthImageUrl: typeof raw.fullWidthImageUrl === "string" ? raw.fullWidthImageUrl : null,
     };
   } catch {
     return {
@@ -104,12 +125,140 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
       seoTitle: null,
       seoKeywords: null,
       seoDescription: null,
+      seoFaviconUrl: null,
       linePayApi: null,
       thirdPartyApi: null,
       atmBankName: null,
       atmBankAccount: null,
       atmBankCode: null,
+      paymentNewebpayEnabled: false,
+      paymentEcpayEnabled: false,
+      paymentLinepayEnabled: false,
+      paymentAtmEnabled: false,
+      layoutOrder: DEFAULT_LAYOUT_ORDER,
+      fullWidthImageUrl: null,
     };
+  }
+}
+
+/** 更新首頁區塊順序（寫入 frontend_settings.layout_order） */
+export async function updateLayoutOrder(order: string[]): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const validIds = new Set(LAYOUT_SECTION_IDS);
+    const sanitized = order.filter((id) => typeof id === "string" && validIds.has(id as typeof LAYOUT_SECTION_IDS[number]));
+    const uniqueOrder = Array.from(new Set(sanitized));
+    if (uniqueOrder.length === 0) return { success: false, error: "至少需保留一個區塊" };
+    const existing = await getFrontendSettings();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const merged = {
+      ...existing,
+      layoutOrder: uniqueOrder,
+    };
+    const frontendSettings: Record<string, unknown> = {
+      heroImageUrl: merged.heroImageUrl,
+      heroTitle: merged.heroTitle,
+      carouselItems: merged.carouselItems,
+      navAboutLabel: merged.navAboutLabel,
+      navCoursesLabel: merged.navCoursesLabel,
+      navBookingLabel: merged.navBookingLabel,
+      navFaqLabel: merged.navFaqLabel,
+      memberIconGallery: merged.memberIconGallery,
+      memberIconSelectedIndex: merged.memberIconSelectedIndex,
+      aboutContent: merged.aboutContent ?? null,
+      seoTitle: merged.seoTitle ?? null,
+      seoKeywords: merged.seoKeywords ?? null,
+      seoDescription: merged.seoDescription ?? null,
+      seoFaviconUrl: merged.seoFaviconUrl ?? null,
+      linePayApi: merged.linePayApi ?? null,
+      thirdPartyApi: merged.thirdPartyApi ?? null,
+      atmBankName: merged.atmBankName ?? null,
+      atmBankAccount: merged.atmBankAccount ?? null,
+      atmBankCode: merged.atmBankCode ?? null,
+      paymentNewebpayEnabled: merged.paymentNewebpayEnabled ?? false,
+      paymentEcpayEnabled: merged.paymentEcpayEnabled ?? false,
+      paymentLinepayEnabled: merged.paymentLinepayEnabled ?? false,
+      paymentAtmEnabled: merged.paymentAtmEnabled ?? false,
+      layout_order: uniqueOrder,
+      fullWidthImageUrl: merged.fullWidthImageUrl ?? null,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "首頁版面已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 更新單張大圖區塊的圖片網址（用於「單張大圖」積木） */
+export async function updateFullWidthImageUrl(url: string | null): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const value = typeof url === "string" && url.trim() ? url.trim() : null;
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      heroImageUrl: existing.heroImageUrl,
+      heroTitle: existing.heroTitle,
+      carouselItems: existing.carouselItems,
+      navAboutLabel: existing.navAboutLabel,
+      navCoursesLabel: existing.navCoursesLabel,
+      navBookingLabel: existing.navBookingLabel,
+      navFaqLabel: existing.navFaqLabel,
+      memberIconGallery: existing.memberIconGallery,
+      memberIconSelectedIndex: existing.memberIconSelectedIndex,
+      aboutContent: existing.aboutContent ?? null,
+      seoTitle: existing.seoTitle ?? null,
+      seoKeywords: existing.seoKeywords ?? null,
+      seoDescription: existing.seoDescription ?? null,
+      seoFaviconUrl: existing.seoFaviconUrl ?? null,
+      linePayApi: existing.linePayApi ?? null,
+      thirdPartyApi: existing.thirdPartyApi ?? null,
+      atmBankName: existing.atmBankName ?? null,
+      atmBankAccount: existing.atmBankAccount ?? null,
+      atmBankCode: existing.atmBankCode ?? null,
+      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      layout_order: existing.layoutOrder,
+      fullWidthImageUrl: value,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "單張大圖網址已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
   }
 }
 
@@ -118,6 +267,7 @@ export async function updateFrontendSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
 
@@ -210,6 +360,8 @@ export async function updateFrontendSettings(formData: FormData): Promise<
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            layout_order: existing.layoutOrder ?? DEFAULT_LAYOUT_ORDER,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -234,6 +386,7 @@ export async function updateAboutPage(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();
@@ -265,6 +418,8 @@ export async function updateAboutPage(formData: FormData): Promise<
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            layout_order: existing.layoutOrder ?? DEFAULT_LAYOUT_ORDER,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -283,26 +438,38 @@ export async function getSeoSettings(): Promise<{
   seoTitle: string | null;
   seoKeywords: string | null;
   seoDescription: string | null;
+  seoFaviconUrl: string | null;
 }> {
   const s = await getFrontendSettings();
   return {
     seoTitle: s.seoTitle ?? null,
     seoKeywords: s.seoKeywords ?? null,
     seoDescription: s.seoDescription ?? null,
+    seoFaviconUrl: s.seoFaviconUrl ?? null,
   };
 }
 
-/** SEO 設定頁：僅更新網頁標題、關鍵字、描述 */
+/** SEO 設定頁：更新網頁標題、關鍵字、描述、分頁圖示（Favicon） */
 export async function updateSeoSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();
     const seoTitle = (formData.get("seo_title") as string)?.trim() || null;
     const seoKeywords = (formData.get("seo_keywords") as string)?.trim() || null;
     const seoDescription = (formData.get("seo_description") as string)?.trim() || null;
+    const faviconUrlForm = (formData.get("seo_favicon_url") as string)?.trim() || null;
+    const faviconFile = formData.get("seo_favicon") as File | null;
+    let seoFaviconUrl = existing.seoFaviconUrl ?? null;
+    if (faviconUrlForm) {
+      seoFaviconUrl = faviconUrlForm;
+    } else if (faviconFile && faviconFile instanceof File && faviconFile.size > 0) {
+      const url = await uploadOneToR2(formData, "seo_favicon");
+      if (url) seoFaviconUrl = url;
+    }
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -324,11 +491,18 @@ export async function updateSeoSettings(formData: FormData): Promise<
             seoTitle,
             seoKeywords,
             seoDescription,
+            seoFaviconUrl,
             linePayApi: existing.linePayApi ?? null,
             thirdPartyApi: existing.thirdPartyApi ?? null,
             atmBankName: existing.atmBankName ?? null,
             atmBankAccount: existing.atmBankAccount ?? null,
             atmBankCode: existing.atmBankCode ?? null,
+            paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
+            paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
+            paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
+            paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+            layout_order: existing.layoutOrder ?? DEFAULT_LAYOUT_ORDER,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },
@@ -342,13 +516,17 @@ export async function updateSeoSettings(formData: FormData): Promise<
   }
 }
 
-/** 金流設定：供後台金流設定頁與結帳頁 ATM 顯示使用 */
+/** 金流設定：供後台金流設定頁與結帳頁使用（開關與 ATM 銀行資訊） */
 export async function getPaymentSettings(): Promise<{
   linePayApi: string | null;
   thirdPartyApi: string | null;
   atmBankName: string | null;
   atmBankCode: string | null;
   atmBankAccount: string | null;
+  paymentNewebpayEnabled: boolean;
+  paymentEcpayEnabled: boolean;
+  paymentLinepayEnabled: boolean;
+  paymentAtmEnabled: boolean;
 }> {
   const s = await getFrontendSettings();
   return {
@@ -357,19 +535,26 @@ export async function getPaymentSettings(): Promise<{
     atmBankName: s.atmBankName ?? null,
     atmBankCode: s.atmBankCode ?? null,
     atmBankAccount: s.atmBankAccount ?? null,
+    paymentNewebpayEnabled: s.paymentNewebpayEnabled ?? false,
+    paymentEcpayEnabled: s.paymentEcpayEnabled ?? false,
+    paymentLinepayEnabled: s.paymentLinepayEnabled ?? false,
+    paymentAtmEnabled: s.paymentAtmEnabled ?? false,
   };
 }
 
-/** 金流設定頁：僅更新 Line Pay / 第三方金流 / ATM API */
+/** 金流設定頁：更新各金流開關與 ATM 銀行資訊（不讓用戶填 API，僅開關；ATM 開啟時填銀行資訊） */
 export async function updatePaymentSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();
-    const linePayApi = (formData.get("line_pay_api") as string)?.trim() || null;
-    const thirdPartyApi = (formData.get("third_party_api") as string)?.trim() || null;
+    const paymentNewebpayEnabled = formData.get("payment_newebpay_enabled") === "1";
+    const paymentEcpayEnabled = formData.get("payment_ecpay_enabled") === "1";
+    const paymentLinepayEnabled = formData.get("payment_linepay_enabled") === "1";
+    const paymentAtmEnabled = formData.get("payment_atm_enabled") === "1";
     const atmBankName = (formData.get("atm_bank_name") as string)?.trim() || null;
     const atmBankCode = (formData.get("atm_bank_code") as string)?.trim() || null;
     const atmBankAccount = (formData.get("atm_bank_account") as string)?.trim() || null;
@@ -394,11 +579,17 @@ export async function updatePaymentSettings(formData: FormData): Promise<
             seoTitle: existing.seoTitle ?? null,
             seoKeywords: existing.seoKeywords ?? null,
             seoDescription: existing.seoDescription ?? null,
-            linePayApi,
-            thirdPartyApi,
-            atmBankName,
-            atmBankCode,
-            atmBankAccount,
+            linePayApi: existing.linePayApi ?? null,
+            thirdPartyApi: existing.thirdPartyApi ?? null,
+            atmBankName: paymentAtmEnabled ? atmBankName : (existing.atmBankName ?? null),
+            atmBankCode: paymentAtmEnabled ? atmBankCode : (existing.atmBankCode ?? null),
+            atmBankAccount: paymentAtmEnabled ? atmBankAccount : (existing.atmBankAccount ?? null),
+            paymentNewebpayEnabled,
+            paymentEcpayEnabled,
+            paymentLinepayEnabled,
+            paymentAtmEnabled,
+            layout_order: existing.layoutOrder ?? DEFAULT_LAYOUT_ORDER,
+            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
           },
           updated_at: new Date().toISOString(),
         },

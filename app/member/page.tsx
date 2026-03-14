@@ -35,15 +35,17 @@ function useIsMember() {
   return isMember;
 }
 
-/** 後台 status：upcoming=即將上課, completed=已完成, cancelled=已取消 → 顯示用 */
-type DisplayStatus = "PAID" | "PENDING" | "REFUNDED";
+/** 後台 status：unpaid, paid, completed, cancelled → 顯示用 */
+type DisplayStatus = "UNPAID" | "PAID" | "COMPLETED" | "REFUNDED";
 
 function getStatusBadgeClass(status: DisplayStatus): string {
   switch (status) {
+    case "UNPAID":
+      return "bg-amber-100 text-amber-700";
     case "PAID":
       return "bg-green-100 text-green-700";
-    case "PENDING":
-      return "bg-orange-100 text-orange-700";
+    case "COMPLETED":
+      return "bg-blue-100 text-blue-700";
     case "REFUNDED":
       return "bg-gray-100 text-gray-700";
     default:
@@ -53,10 +55,12 @@ function getStatusBadgeClass(status: DisplayStatus): string {
 
 function getStatusLabel(status: DisplayStatus): string {
   switch (status) {
+    case "UNPAID":
+      return "未付款";
     case "PAID":
       return "已付款";
-    case "PENDING":
-      return "待現場繳費";
+    case "COMPLETED":
+      return "已完成課程";
     case "REFUNDED":
       return "已退款";
     default:
@@ -66,9 +70,10 @@ function getStatusLabel(status: DisplayStatus): string {
 
 /** 將後台訂單轉成顯示用狀態 */
 function bookingToDisplayStatus(status: string): DisplayStatus {
-  if (status === "completed" || status === "paid") return "PAID";
+  if (status === "completed") return "COMPLETED";
+  if (status === "paid") return "PAID";
   if (status === "cancelled") return "REFUNDED";
-  return "PENDING"; // unpaid, upcoming
+  return "UNPAID"; // unpaid, upcoming 等
 }
 
 function formatBookingDate(createdAt: string): string {
@@ -92,6 +97,8 @@ type OrderDisplay = {
   amount: number;
   status: DisplayStatus;
   imageUrl: string | null;
+  /** 加購明細，例如「課程 800 + 珍珠奶茶 50 + 雞排 60」 */
+  addonSummary: string | null;
 };
 
 function OrderCard({
@@ -138,6 +145,12 @@ function OrderCard({
             <dt className="text-gray-500 shrink-0 w-12">參加者</dt>
             <dd>{order.participant}</dd>
           </div>
+          {order.addonSummary && (
+            <div className="flex items-start gap-1.5">
+              <dt className="text-gray-500 shrink-0 w-12">加購</dt>
+              <dd className="text-gray-700">{order.addonSummary}</dd>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2 -mt-0.5 min-h-[1.25rem]">
             <div className="flex items-center gap-1.5">
               <dt className="text-gray-500 shrink-0 w-12">金額</dt>
@@ -164,6 +177,25 @@ function OrderCard({
   );
 }
 
+function buildAddonSummary(b: BookingWithClass): string | null {
+  const total = b.class_price ?? 0;
+  const indices = b.addon_indices;
+  const addonPrices = b.class_addon_prices;
+  if (!indices?.length || !addonPrices?.length) return null;
+  let addonTotal = 0;
+  const parts: string[] = [];
+  for (const i of indices) {
+    const addon = addonPrices[i];
+    if (addon) {
+      addonTotal += addon.price;
+      parts.push(`${addon.name} ${addon.price}`);
+    }
+  }
+  if (parts.length === 0) return null;
+  const base = Math.max(0, total - addonTotal);
+  return `課程 ${base.toLocaleString()} + ${parts.join(" + ")}`;
+}
+
 function mapBookingToOrder(b: BookingWithClass): OrderDisplay {
   return {
     id: b.id,
@@ -174,6 +206,7 @@ function mapBookingToOrder(b: BookingWithClass): OrderDisplay {
     amount: b.class_price ?? 0,
     status: bookingToDisplayStatus(b.status),
     imageUrl: b.class_image_url ?? null,
+    addonSummary: buildAddonSummary(b),
   };
 }
 
@@ -211,20 +244,22 @@ export default function MemberDashboardPage() {
     : "你好";
 
   const ordersDisplay = bookings.map(mapBookingToOrder);
-  const upcomingOrders = ordersDisplay.filter((o) => o.status === "PENDING");
-  const historyOrders = ordersDisplay.filter((o) => o.status === "PAID" || o.status === "REFUNDED");
+  /** 我的預約：未付款 + 已付款 */
+  const upcomingOrders = ordersDisplay.filter((o) => o.status === "UNPAID" || o.status === "PAID");
+  /** 歷史訂單：已完成課程 + 已退款（後台點選完成課程後才跳至此處） */
+  const historyOrders = ordersDisplay.filter((o) => o.status === "COMPLETED" || o.status === "REFUNDED");
 
   // 需註冊為會員才能進入，未登入顯示註冊引導
   if (isMember === null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>
       </div>
     );
   }
   if (!isMember) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-page flex flex-col">
         <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
           <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
             <Link href="/" className="text-xl font-bold text-brand hover:opacity-90 transition-colors">
@@ -282,10 +317,10 @@ export default function MemberDashboardPage() {
   };
 
   const canRefund = (status: DisplayStatus) =>
-    status === "PAID" || status === "PENDING";
+    status === "UNPAID" || status === "PAID";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link
@@ -334,7 +369,7 @@ export default function MemberDashboardPage() {
           </button>
         </div>
 
-        {/* Content：我的預約 = 待現場繳費，歷史訂單 = 已付款 / 已退款 */}
+        {/* Content：我的預約 = 未付款 + 已付款，歷史訂單 = 已完成課程 + 已退款 */}
         {loading && (
           <p className="text-gray-500 py-8 text-center">載入訂單中…</p>
         )}
@@ -344,7 +379,7 @@ export default function MemberDashboardPage() {
         {!loading && !loadError && activeTab === "orders" && (
           <div className="space-y-4">
             {upcomingOrders.length === 0 ? (
-              <p className="text-gray-500 py-8 text-center">目前沒有即將上課的預約</p>
+              <p className="text-gray-500 py-8 text-center">目前沒有預約中的訂單</p>
             ) : (
               upcomingOrders.map((order) => (
                 <OrderCard

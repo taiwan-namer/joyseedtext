@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { useParams, useSearchParams, notFound } from "next/navigation";
 import { CreditCard, Building, Smartphone, Loader2 } from "lucide-react";
 import { HeaderMember } from "@/app/components/HeaderMember";
+import LoginModal from "@/app/components/LoginModal";
 import { createClient } from "@/lib/supabase/client";
 import { getCourseBySlug } from "../../course-data";
 import { getCourseById } from "@/app/actions/productActions";
@@ -18,7 +19,25 @@ import type { CourseDetail } from "../../course-data";
 
 type CourseForDisplay = CourseForPublic | CourseDetail;
 
-type PaymentMethod = "card" | "linepay" | "transfer";
+type PaymentMethod = "card" | "linepay" | "transfer" | "ecpay" | "newebpay";
+
+const CHECKOUT_PENDING_KEY = "checkout_pending";
+
+type PendingCheckoutData = {
+  slug: string;
+  date: string | null;
+  time: string | null;
+  total: number;
+  addonIndices: number[];
+  parentName: string;
+  parentPhone: string;
+  memberEmail: string;
+  childName: string;
+  hasAllergyOrGenetic: boolean;
+  childAllergyDetail: string;
+  childAge: string;
+  paymentMethod: PaymentMethod;
+};
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -35,11 +54,25 @@ export default function CheckoutPage() {
   const [hasAllergyOrGenetic, setHasAllergyOrGenetic] = useState<boolean>(true);
   const [childAllergyDetail, setChildAllergyDetail] = useState("");
   const [childAge, setChildAge] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("ecpay");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [atmBankName, setAtmBankName] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
+  const [paymentEnabled, setPaymentEnabled] = useState<{
+    newebpay: boolean;
+    ecpay: boolean;
+    linepay: boolean;
+    atm: boolean;
+  }>({ newebpay: false, ecpay: false, linepay: false, atm: false });
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [completingPending, setCompletingPending] = useState(false);
+  const [triggerSubmitAfterLogin, setTriggerSubmitAfterLogin] = useState(false);
+  const [submitAfterLoginReady, setSubmitAfterLoginReady] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [successBookingId, setSuccessBookingId] = useState<string | null>(null);
+  const hasHandledPendingRef = useRef(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -61,6 +94,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }) => {
+      setHasSession(!!session?.user);
       if (session?.user?.email) setMemberEmail(session.user.email.trim());
     });
   }, []);
@@ -69,8 +103,140 @@ export default function CheckoutPage() {
     getPaymentSettings().then((data) => {
       setAtmBankName(data.atmBankName ?? "");
       setAtmBankAccount(data.atmBankAccount ?? "");
+      setPaymentEnabled({
+        newebpay: data.paymentNewebpayEnabled ?? false,
+        ecpay: data.paymentEcpayEnabled ?? false,
+        linepay: data.paymentLinepayEnabled ?? false,
+        atm: data.paymentAtmEnabled ?? false,
+      });
+      const first: PaymentMethod[] = [];
+      if (data.paymentEcpayEnabled) first.push("ecpay");
+      if (data.paymentNewebpayEnabled) first.push("newebpay");
+      if (data.paymentLinepayEnabled) first.push("linepay");
+      if (data.paymentAtmEnabled) first.push("transfer");
+      if (first.length > 0) setPaymentMethod(first[0]);
     });
   }, []);
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    const msg = searchParams.get("message");
+    if (err === "payment_cancelled") {
+      setSubmitError("您已取消 LINE Pay 付款，可重新選擇付款方式或稍後再試。");
+    } else if (err === "linepay_confirm") {
+      setSubmitError(msg ? decodeURIComponent(msg) : "支付失敗，請重新嘗試。");
+    }
+  }, [searchParams]);
+
+  /** 登入返回後：若有暫存的報名資料且與目前網址一致，自動完成報名（無痛註冊購買） */
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      hasSession !== true ||
+      !course ||
+      !("id" in course) ||
+      !slug ||
+      hasHandledPendingRef.current
+    ) {
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem(CHECKOUT_PENDING_KEY);
+      if (!raw) return;
+      const pending: PendingCheckoutData = JSON.parse(raw);
+      const currentDate = searchParams.get("date") ?? null;
+      const currentTime = searchParams.get("time") ?? null;
+      if (
+        pending.slug !== slug ||
+        pending.date !== currentDate ||
+        pending.time !== currentTime
+      ) {
+        return;
+      }
+      hasHandledPendingRef.current = true;
+      sessionStorage.removeItem(CHECKOUT_PENDING_KEY);
+      setCompletingPending(true);
+      (async () => {
+        try {
+          // 使用目前登入者信箱，會員中心才能正確連動（避免暫存表單信箱與登入帳號不一致）
+          const { data: sessionData } = await createClient().auth.getSession();
+          const emailToUse =
+            sessionData.session?.user?.email?.trim() || pending.memberEmail.trim();
+          const ensureRes = await ensureMemberForBooking({
+            name: pending.parentName.trim(),
+            phone: pending.parentPhone.trim(),
+            email: emailToUse,
+          });
+          if (!ensureRes.success) {
+            setSubmitError(ensureRes.error);
+            setCompletingPending(false);
+            return;
+          }
+          const allergyNote = pending.hasAllergyOrGenetic
+            ? (pending.childAllergyDetail.trim() || "有（未填寫說明）")
+            : "無";
+          const bookRes = await createBooking(
+            course.id,
+            emailToUse,
+            pending.parentName.trim(),
+            pending.parentPhone.trim(),
+            pending.date,
+            pending.time,
+            allergyNote,
+            pending.childName.trim() || null,
+            pending.childAge.trim() || null,
+            Array.isArray(pending.addonIndices) && pending.addonIndices.length > 0 ? pending.addonIndices : undefined,
+            pending.paymentMethod,
+            pending.total,
+            course.title ?? null,
+            slug ?? null
+          );
+          if (!bookRes.success) {
+            setSubmitError(bookRes.error);
+            setCompletingPending(false);
+            return;
+          }
+          if (bookRes.paymentUrl) {
+            console.log("跳轉至 LINE Pay:", bookRes.paymentUrl);
+            window.location.href = bookRes.paymentUrl;
+            return;
+          }
+          setSuccessBookingId(bookRes.bookingId);
+          setIsSuccessModalOpen(true);
+          setCompletingPending(false);
+        } catch (e) {
+          setSubmitError(e instanceof Error ? e.message : "完成報名時發生錯誤");
+          setCompletingPending(false);
+        }
+      })();
+    } catch {
+      sessionStorage.removeItem(CHECKOUT_PENDING_KEY);
+    }
+  }, [hasSession, course, slug, searchParams, router]);
+
+  /** 在彈窗內 E-mail 登入成功後：重新取得 session 並觸發送出報名 */
+  useEffect(() => {
+    if (!triggerSubmitAfterLogin) return;
+    let cancelled = false;
+    createClient()
+      .auth.getSession()
+      .then(({ data }) => {
+        if (cancelled || !data.session) return;
+        setHasSession(true);
+        setTriggerSubmitAfterLogin(false);
+        setSubmitAfterLoginReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [triggerSubmitAfterLogin]);
+
+  useEffect(() => {
+    if (submitAfterLoginReady && hasSession) {
+      setSubmitAfterLoginReady(false);
+      handleSubmit();
+    }
+  }, [submitAfterLoginReady, hasSession]);
 
   const dateTimeFromUrl = useMemo(() => {
     const date = searchParams.get("date");
@@ -104,6 +270,16 @@ export default function CheckoutPage() {
     return base;
   }, [searchParams, course]);
 
+  /** URL 加購參數 addon=0,1 → [0, 1]，結帳與下單時傳給後端 */
+  const addonIndicesFromUrl = useMemo(() => {
+    const addonParam = searchParams.get("addon");
+    if (addonParam == null || addonParam === "") return [];
+    return addonParam
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => !Number.isNaN(n) && n >= 0);
+  }, [searchParams]);
+
   const orderSummary = {
     courseName: course?.title ?? "—",
     dateTime: dateTimeFromUrl,
@@ -112,22 +288,82 @@ export default function CheckoutPage() {
 
   if (!course) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>
       </div>
     );
   }
 
+  if (hasSession === null) {
+    return (
+      <div className="min-h-screen bg-page flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      </div>
+    );
+  }
+
+  const loginNext = `/course/${slug}/checkout?${searchParams.toString()}`;
+
+  if (completingPending) {
+    return (
+      <div className="min-h-screen bg-page flex flex-col">
+        <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+            <Link href="/" className="text-xl font-bold text-brand">
+              {siteName}
+            </Link>
+            <HeaderMember />
+          </div>
+        </header>
+        <div className="flex-1 flex items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-500 shrink-0" />
+          <span className="text-gray-600">正在完成報名…</span>
+        </div>
+      </div>
+    );
+  }
+
+  /** 僅寫入暫存，不導向（給 LoginModal 內 Google 登入前呼叫） */
+  const savePendingOnly = () => {
+    const pending: PendingCheckoutData = {
+      slug: slug ?? "",
+      date: searchParams.get("date") ?? null,
+      time: searchParams.get("time") ?? null,
+      total: totalFromUrl,
+      addonIndices: addonIndicesFromUrl,
+      parentName: parentName.trim(),
+      parentPhone: parentPhone.trim(),
+      memberEmail: memberEmail.trim(),
+      childName: childName.trim(),
+      hasAllergyOrGenetic: hasAllergyOrGenetic,
+      childAllergyDetail: childAllergyDetail.trim(),
+      childAge: childAge.trim(),
+      paymentMethod,
+    };
+    sessionStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(pending));
+  };
+
+  const hasPaymentOption = paymentEnabled.ecpay || paymentEnabled.newebpay || paymentEnabled.linepay || paymentEnabled.atm;
   const buttonText =
-    paymentMethod === "card"
+    paymentMethod === "ecpay"
       ? "前往付款"
       : paymentMethod === "linepay"
         ? "使用 Line Pay 付款"
-        : "確認預約並取得帳號";
+        : paymentMethod === "newebpay"
+          ? "前往 ATM 付款"
+          : paymentMethod === "transfer"
+            ? "確認預約並取得帳號"
+            : "前往付款";
 
   const handleSubmit = async () => {
     setSubmitError(null);
-    const email = memberEmail.trim();
+    // 已登入時一律用「目前登入者信箱」作為訂單／會員信箱，會員中心才能正確連動顯示
+    let email = memberEmail.trim();
+    if (hasSession === true) {
+      const { data } = await createClient().auth.getSession();
+      const sessionEmail = data.session?.user?.email?.trim();
+      if (sessionEmail) email = sessionEmail;
+    }
     if (!email) {
       setSubmitError("請填寫報名信箱");
       return;
@@ -140,12 +376,32 @@ export default function CheckoutPage() {
       setSubmitError("請填寫家長手機");
       return;
     }
+    if (!childName.trim()) {
+      setSubmitError("請填寫小孩暱稱");
+      return;
+    }
+    if (hasAllergyOrGenetic && !childAllergyDetail.trim()) {
+      setSubmitError("請填寫過敏或遺傳疾病說明");
+      return;
+    }
+    if (!childAge.trim()) {
+      setSubmitError("請填寫小孩年齡");
+      return;
+    }
     if (!course || !("id" in course) || !course.id) {
       setSubmitError("課程資料不完整，請重新選擇");
       return;
     }
     if (slotInvalid) {
       setSubmitError("所選日期或時段不在本課程的開課場次中，請回到課程頁重新選擇場次。");
+      return;
+    }
+    if (hasSession === false) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    if (!paymentEnabled.ecpay && !paymentEnabled.newebpay && !paymentEnabled.linepay && !paymentEnabled.atm) {
+      setSubmitError("目前沒有可用的付款方式，請聯絡店家。");
       return;
     }
     setSubmitLoading(true);
@@ -174,14 +430,25 @@ export default function CheckoutPage() {
         slotTime || null,
         allergyNote || null,
         childName.trim() || null,
-        childAge.trim() || null
+        childAge.trim() || null,
+        addonIndicesFromUrl.length > 0 ? addonIndicesFromUrl : undefined,
+        paymentMethod,
+        totalFromUrl,
+        course.title ?? null,
+        slug ?? null
       );
       if (!bookRes.success) {
         setSubmitError(bookRes.error);
         setSubmitLoading(false);
         return;
       }
-      router.push(`/booking/success?bookingId=${encodeURIComponent(bookRes.bookingId)}`);
+      if (bookRes.paymentUrl) {
+        window.location.href = bookRes.paymentUrl;
+        return;
+      }
+      setSuccessBookingId(bookRes.bookingId);
+      setIsSuccessModalOpen(true);
+      setSubmitLoading(false);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "送出失敗，請稍後再試");
       setSubmitLoading(false);
@@ -197,7 +464,7 @@ export default function CheckoutPage() {
     "w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold text-brand">
@@ -209,6 +476,39 @@ export default function CheckoutPage() {
           </div>
         </div>
       </header>
+
+      {/* 填完報名資料後送出時未登入：使用與首頁相同的登入／註冊彈窗，完成後自動送出報名 */}
+      <LoginModal
+        isOpen={showLoginPrompt}
+        onClose={() => setShowLoginPrompt(false)}
+        returnTo={loginNext}
+        onBeforeGoogleRedirect={savePendingOnly}
+        onSuccess={() => {
+          setShowLoginPrompt(false);
+          setTriggerSubmitAfterLogin(true);
+        }}
+      />
+
+      {/* 預約已送出彈窗：僅在無支付網址（ATM／現場等）時顯示，有 paymentUrl 時直接跳轉 LINE Pay 不顯示 */}
+      {isSuccessModalOpen && successBookingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="success-modal-title">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
+            <h2 id="success-modal-title" className="text-lg font-bold text-gray-900 mb-2">預約已送出</h2>
+            <p className="text-gray-600 text-sm mb-6">請依所選付款方式完成付款，或至會員中心查看訂單。</p>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSuccessModalOpen(false);
+                setSuccessBookingId(null);
+                router.push(`/booking/success?bookingId=${encodeURIComponent(successBookingId)}`);
+              }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 rounded-lg transition-colors"
+            >
+              查看訂單
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         {slotInvalid && (
@@ -231,6 +531,7 @@ export default function CheckoutPage() {
             loading={submitLoading}
             atmBankName={atmBankName}
             atmBankAccount={atmBankAccount}
+            submitDisabled={!hasPaymentOption}
           />
         </div>
 
@@ -248,7 +549,7 @@ export default function CheckoutPage() {
                     htmlFor="parentName"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    家長姓名
+                    家長姓名 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="parentName"
@@ -257,6 +558,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setParentName(e.target.value)}
                     placeholder="請輸入家長姓名"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
@@ -264,7 +566,7 @@ export default function CheckoutPage() {
                     htmlFor="parentPhone"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    家長手機
+                    家長手機 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="parentPhone"
@@ -273,6 +575,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setParentPhone(e.target.value)}
                     placeholder="請輸入手機號碼"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
@@ -280,7 +583,7 @@ export default function CheckoutPage() {
                     htmlFor="memberEmail"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    報名信箱 <span className="text-amber-600">（必填，用於訂單查詢與會員資料）</span>
+                    報名信箱 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="memberEmail"
@@ -289,6 +592,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setMemberEmail(e.target.value)}
                     placeholder="請輸入常用 E-mail"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
@@ -296,7 +600,7 @@ export default function CheckoutPage() {
                     htmlFor="childName"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    小孩暱稱
+                    小孩暱稱 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="childName"
@@ -305,11 +609,12 @@ export default function CheckoutPage() {
                     onChange={(e) => setChildName(e.target.value)}
                     placeholder="請輸入小孩暱稱（例：小米）"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    小孩有無過敏或其他遺傳疾病
+                    小孩有無過敏或其他遺傳疾病 <span className="text-amber-600">（必填）</span>
                   </label>
                   <div className="flex gap-4 mb-2">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -338,9 +643,10 @@ export default function CheckoutPage() {
                       type="text"
                       value={childAllergyDetail}
                       onChange={(e) => setChildAllergyDetail(e.target.value)}
-                      placeholder="例：蠶豆症"
+                      placeholder="例：蠶豆症（必填）"
                       className={inputBase}
                       aria-label="過敏或遺傳疾病說明"
+                      required
                     />
                   )}
                 </div>
@@ -349,7 +655,7 @@ export default function CheckoutPage() {
                     htmlFor="childAge"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    小孩年齡
+                    小孩年齡 <span className="text-amber-600">（必填）</span>
                   </label>
                   <input
                     id="childAge"
@@ -358,96 +664,103 @@ export default function CheckoutPage() {
                     onChange={(e) => setChildAge(e.target.value)}
                     placeholder="請填寫小孩年齡，例：5 歲"
                     className={inputBase}
+                    required
                   />
                 </div>
               </div>
             </section>
 
-            {/* 2. 選擇付款方式 */}
+            {/* 2. 選擇付款方式（僅顯示後台已開啟的選項） */}
             <section className="bg-white p-6 rounded-xl shadow-sm">
               <h2 className="text-lg font-bold text-gray-900 mb-6">
                 選擇付款方式
               </h2>
-              <div className="space-y-3">
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "card"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="card"
-                    checked={paymentMethod === "card"}
-                    onChange={() => setPaymentMethod("card")}
-                    className="sr-only"
-                  />
-                  <CreditCard
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "card"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    線上刷卡 (第三方金流)
-                  </span>
-                </label>
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "linepay"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="linepay"
-                    checked={paymentMethod === "linepay"}
-                    onChange={() => setPaymentMethod("linepay")}
-                    className="sr-only"
-                  />
-                  <Smartphone
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "linepay"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    Line Pay
-                  </span>
-                </label>
-                <label
-                  className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
-                    paymentMethod === "transfer"
-                      ? "border-orange-500 bg-orange-50/50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="transfer"
-                    checked={paymentMethod === "transfer"}
-                    onChange={() => setPaymentMethod("transfer")}
-                    className="sr-only"
-                  />
-                  <Building
-                    className={`w-6 h-6 shrink-0 ${
-                      paymentMethod === "transfer"
-                        ? "text-orange-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                  <span className="font-medium text-gray-900">
-                    ATM 銀行轉帳
-                  </span>
-                </label>
-              </div>
+              {!paymentEnabled.ecpay && !paymentEnabled.newebpay && !paymentEnabled.linepay && !paymentEnabled.atm ? (
+                <p className="text-gray-500 text-sm">目前沒有可用的付款方式，請稍後再試或聯絡店家。</p>
+              ) : (
+                <div className="space-y-3">
+                  {paymentEnabled.ecpay && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "ecpay"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="ecpay"
+                        checked={paymentMethod === "ecpay"}
+                        onChange={() => setPaymentMethod("ecpay")}
+                        className="sr-only"
+                      />
+                      <CreditCard className={`w-6 h-6 shrink-0 ${paymentMethod === "ecpay" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">信用卡 (綠界)</span>
+                    </label>
+                  )}
+                  {paymentEnabled.newebpay && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "newebpay"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="newebpay"
+                        checked={paymentMethod === "newebpay"}
+                        onChange={() => setPaymentMethod("newebpay")}
+                        className="sr-only"
+                      />
+                      <Building className={`w-6 h-6 shrink-0 ${paymentMethod === "newebpay" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">ATM (藍新)</span>
+                    </label>
+                  )}
+                  {paymentEnabled.linepay && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "linepay"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="linepay"
+                        checked={paymentMethod === "linepay"}
+                        onChange={() => setPaymentMethod("linepay")}
+                        className="sr-only"
+                      />
+                      <Smartphone className={`w-6 h-6 shrink-0 ${paymentMethod === "linepay" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">Line Pay</span>
+                    </label>
+                  )}
+                  {paymentEnabled.atm && (
+                    <label
+                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                        paymentMethod === "transfer"
+                          ? "border-orange-500 bg-orange-50/50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="transfer"
+                        checked={paymentMethod === "transfer"}
+                        onChange={() => setPaymentMethod("transfer")}
+                        className="sr-only"
+                      />
+                      <Building className={`w-6 h-6 shrink-0 ${paymentMethod === "transfer" ? "text-orange-500" : "text-gray-400"}`} />
+                      <span className="font-medium text-gray-900">ATM 銀行轉帳</span>
+                    </label>
+                  )}
+                </div>
+              )}
               {/* ATM 轉帳資訊：選 ATM 時顯示 */}
               {paymentMethod === "transfer" && (atmBankName || atmBankAccount) && (
                 <div className="mt-4 p-5 rounded-xl bg-slate-50 border border-slate-200">
@@ -482,6 +795,7 @@ export default function CheckoutPage() {
                 loading={submitLoading}
                 atmBankName={atmBankName}
                 atmBankAccount={atmBankAccount}
+                submitDisabled={!hasPaymentOption}
               />
             </div>
           </div>
@@ -499,6 +813,7 @@ function OrderSummaryCard({
   loading = false,
   atmBankName = "",
   atmBankAccount = "",
+  submitDisabled = false,
 }: {
   orderSummary: { courseName: string; dateTime: string; totalAmount: number };
   paymentMethod: PaymentMethod;
@@ -507,6 +822,7 @@ function OrderSummaryCard({
   loading?: boolean;
   atmBankName?: string;
   atmBankAccount?: string;
+  submitDisabled?: boolean;
 }) {
   const showAtmBlock = paymentMethod === "transfer" && (atmBankName || atmBankAccount);
   return (
@@ -554,7 +870,7 @@ function OrderSummaryCard({
       <button
         type="button"
         onClick={onSubmit}
-        disabled={loading}
+        disabled={loading || submitDisabled}
         className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-70 disabled:cursor-not-allowed text-white py-4 rounded-lg font-bold text-lg transition-colors flex items-center justify-center gap-2"
       >
         {loading && <Loader2 className="w-5 h-5 animate-spin shrink-0" />}

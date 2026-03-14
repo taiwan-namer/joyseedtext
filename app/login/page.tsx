@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
@@ -30,6 +31,8 @@ function GoogleIcon({ className }: { className?: string }) {
 }
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const nextUrl = searchParams.get("next") ?? "/";
   const { siteName } = useStoreSettings();
   const [loading, setLoading] = useState<"google" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +43,10 @@ export default function LoginPage() {
     setError(null);
     setLoading("google");
     try {
+      const redirectTo = `${location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`;
       const { error: err } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${location.origin}/auth/callback` },
+        options: { redirectTo },
       });
       if (err) {
         setError(err.message);
@@ -94,6 +98,20 @@ export default function LoginPage() {
               <GoogleIcon className="w-6 h-6 shrink-0" />
               {loading === "google" ? "處理中…" : "以 Google 帳號繼續"}
             </button>
+
+            <div className="relative my-4">
+              <span className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-200" />
+              </span>
+              <span className="relative flex justify-center text-xs text-gray-500 bg-white px-2">或</span>
+            </div>
+
+            <Link
+              href={`/register?next=${encodeURIComponent(nextUrl)}`}
+              className="block w-full py-3 px-4 rounded-xl border-2 border-amber-200 bg-amber-50 text-amber-800 font-medium hover:bg-amber-100 hover:border-amber-300 text-center transition-colors"
+            >
+              使用 E-mail 註冊
+            </Link>
           </div>
 
           <p className="mt-6 text-center text-xs text-gray-500">

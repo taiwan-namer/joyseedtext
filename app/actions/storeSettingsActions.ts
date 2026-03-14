@@ -3,6 +3,7 @@
 import { unstable_noStore } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { FAQ_DATA } from "@/app/data/faq";
+import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -11,16 +12,36 @@ function envTrim(key: string): string {
 
 const DEFAULT_SITE_NAME = "童趣島";
 const DEFAULT_PRIMARY_COLOR = "#F59E0B"; // Tailwind amber-500
+const DEFAULT_BACKGROUND_COLOR = "#fafaf9"; // 淺色柔和
+const DEFAULT_ABOUT_SECTION_BG = "#ffffff";
+
+/** 後台設定的發票品項一筆 */
+export type InvoiceItemSetting = {
+  name: string;
+  word: string;
+  /** 固定金額（選填）；若填則此品項為固定金額，其餘金額歸第一筆或未填的那一筆 */
+  amount?: number;
+};
 
 export type StoreSettings = {
   siteName: string;
   primaryColor: string;
+  backgroundColor: string;
+  aboutSectionBackgroundColor: string;
   socialFbUrl: string;
   socialIgUrl: string;
   socialLineUrl: string;
   contactEmail: string;
   contactPhone: string;
   contactAddress: string;
+  /** 是否在前台顯示 AI 客服 Widget，預設 true */
+  aiChatEnabled: boolean;
+  /** AI 客服歡迎訊息，null 時用預設 */
+  aiChatWelcomeMessage: string | null;
+  /** 發票品項設定，null 時開立發票用預設一筆「課程預約」 */
+  invoiceItems: InvoiceItemSetting[] | null;
+  /** 發票開立廠商：'ecpay' 綠界、'ezpay' 藍新 ezPay（選 ezpay 尚未串接時會略過開立） */
+  invoiceProvider: "ecpay" | "ezpay";
 };
 
 export type FaqItem = { id: string; question: string; answer: string };
@@ -34,51 +55,99 @@ function getDefaultFaqItems(): FaqItem[] {
   }));
 }
 
+/** 較早 migration 已存在的欄位（production 未跑新 migration 時仍可讀取） */
+const STORE_SETTINGS_SELECT_LEGACY =
+  "site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address";
+
+const STORE_SETTINGS_SELECT_FULL =
+  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address, ai_chat_enabled, ai_chat_welcome_message, invoice_items, invoice_provider";
+
+function parseInvoiceItems(raw: unknown): InvoiceItemSetting[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: InvoiceItemSetting[] = [];
+  for (const x of raw) {
+    if (typeof x !== "object" || x == null || !("name" in x)) continue;
+    const name = String((x as { name?: unknown }).name ?? "").trim();
+    if (!name) continue;
+    out.push({
+      name,
+      word: String((x as { word?: unknown }).word ?? "式").trim().slice(0, 6),
+      amount:
+        typeof (x as { amount?: unknown }).amount === "number" && Number.isFinite((x as { amount?: unknown }).amount)
+          ? Number((x as { amount?: unknown }).amount)
+          : undefined,
+    });
+  }
+  return out.length > 0 ? out : null;
+}
+
+function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
+  const trim = (v: unknown) => (typeof v === "string" ? v.trim() : "") || "";
+  return {
+    siteName: trim(raw.site_name) || DEFAULT_SITE_NAME,
+    primaryColor: trim(raw.primary_color) || DEFAULT_PRIMARY_COLOR,
+    backgroundColor: trim(raw.background_color) || DEFAULT_BACKGROUND_COLOR,
+    aboutSectionBackgroundColor: trim(raw.about_section_background_color) || DEFAULT_ABOUT_SECTION_BG,
+    socialFbUrl: trim(raw.social_fb_url),
+    socialIgUrl: trim(raw.social_ig_url),
+    socialLineUrl: trim(raw.social_line_url),
+    contactEmail: trim(raw.contact_email),
+    contactPhone: trim(raw.contact_phone),
+    contactAddress: trim(raw.contact_address),
+    aiChatEnabled: raw.ai_chat_enabled === false ? false : true,
+    aiChatWelcomeMessage: typeof raw.ai_chat_welcome_message === "string" && raw.ai_chat_welcome_message.trim() ? raw.ai_chat_welcome_message.trim() : null,
+    invoiceItems: parseInvoiceItems(raw.invoice_items),
+    invoiceProvider: raw.invoice_provider === "ezpay" ? "ezpay" : "ecpay",
+  };
+}
+
 /** 取得目前店家的基本資料（網站名字、主色系、社群連結），無則回傳預設 */
 export async function getStoreSettings(): Promise<StoreSettings> {
   unstable_noStore();
+  const fallback = (): StoreSettings => ({
+    siteName: DEFAULT_SITE_NAME,
+    primaryColor: DEFAULT_PRIMARY_COLOR,
+    backgroundColor: DEFAULT_BACKGROUND_COLOR,
+    aboutSectionBackgroundColor: DEFAULT_ABOUT_SECTION_BG,
+    socialFbUrl: "",
+    socialIgUrl: "",
+    socialLineUrl: "",
+    contactEmail: "",
+    contactPhone: "",
+    contactAddress: "",
+    aiChatEnabled: true,
+    aiChatWelcomeMessage: null,
+    invoiceItems: null,
+    invoiceProvider: "ecpay",
+  });
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  const supabase = createServerSupabase();
+
   try {
-    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("store_settings")
-      .select("site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address")
+      .select(STORE_SETTINGS_SELECT_FULL)
+      .eq("merchant_id", merchantId || "")
+      .maybeSingle();
+    if (!error && data) {
+      return parseStoreSettingsRow(data as Record<string, unknown>);
+    }
+  } catch {
+    /* 可能為新欄位尚未存在，改試僅基本欄位 */
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("store_settings")
+      .select(STORE_SETTINGS_SELECT_LEGACY)
       .eq("merchant_id", merchantId || "")
       .maybeSingle();
     if (error || !data) {
-      return {
-        siteName: DEFAULT_SITE_NAME,
-        primaryColor: DEFAULT_PRIMARY_COLOR,
-        socialFbUrl: "",
-        socialIgUrl: "",
-        socialLineUrl: "",
-        contactEmail: "",
-        contactPhone: "",
-        contactAddress: "",
-      };
+      return fallback();
     }
-    const trim = (v: unknown) => (typeof v === "string" ? v.trim() : "") || "";
-    return {
-      siteName: trim(data.site_name) || DEFAULT_SITE_NAME,
-      primaryColor: trim(data.primary_color) || DEFAULT_PRIMARY_COLOR,
-      socialFbUrl: trim(data.social_fb_url),
-      socialIgUrl: trim(data.social_ig_url),
-      socialLineUrl: trim(data.social_line_url),
-      contactEmail: trim(data.contact_email),
-      contactPhone: trim(data.contact_phone),
-      contactAddress: trim(data.contact_address),
-    };
+    return parseStoreSettingsRow(data as Record<string, unknown>);
   } catch {
-    return {
-      siteName: DEFAULT_SITE_NAME,
-      primaryColor: DEFAULT_PRIMARY_COLOR,
-      socialFbUrl: "",
-      socialIgUrl: "",
-      socialLineUrl: "",
-      contactEmail: "",
-      contactPhone: "",
-      contactAddress: "",
-    };
+    return fallback();
   }
 }
 
@@ -116,6 +185,7 @@ export async function updateFaqItems(
   items: FaqItem[]
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const list = items.filter((i) => (i.question?.trim() || i.answer?.trim()) !== "");
@@ -138,10 +208,12 @@ export async function updateFaqItems(
   }
 }
 
-/** 更新基本資料（網站名字、主色系、社群連結、聯絡資訊） */
+/** 更新基本資料（網站名字、主色系、背景色、關於我們區塊背景色、社群連結、聯絡資訊） */
 export async function updateStoreSettings(
   siteName: string,
   primaryColor: string,
+  backgroundColor: string,
+  aboutSectionBackgroundColor: string,
   socialFbUrl?: string,
   socialIgUrl?: string,
   socialLineUrl?: string,
@@ -150,12 +222,15 @@ export async function updateStoreSettings(
   contactAddress?: string
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     }
     const name = siteName?.trim() || DEFAULT_SITE_NAME;
     const color = primaryColor?.trim() || DEFAULT_PRIMARY_COLOR;
+    const bgColor = backgroundColor?.trim() || DEFAULT_BACKGROUND_COLOR;
+    const aboutBg = aboutSectionBackgroundColor?.trim() || DEFAULT_ABOUT_SECTION_BG;
     const trim = (s: string | undefined) => (typeof s === "string" ? s.trim() : "") || null;
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -165,6 +240,8 @@ export async function updateStoreSettings(
           merchant_id: merchantId,
           site_name: name,
           primary_color: color,
+          background_color: bgColor,
+          about_section_background_color: aboutBg,
           social_fb_url: trim(socialFbUrl),
           social_ig_url: trim(socialIgUrl),
           social_line_url: trim(socialLineUrl),
@@ -183,4 +260,76 @@ export async function updateStoreSettings(
     const msg = e instanceof Error ? e.message : "儲存失敗";
     return { success: false, error: msg };
   }
+}
+
+/** 更新 AI 客服設定（開關、歡迎訊息） */
+export async function updateAiChatSettings(
+  aiChatEnabled: boolean,
+  aiChatWelcomeMessage: string | null
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) {
+      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    }
+    const supabase = createServerSupabase();
+    const { error } = await supabase
+      .from("store_settings")
+      .update({
+        ai_chat_enabled: !!aiChatEnabled,
+        ai_chat_welcome_message: typeof aiChatWelcomeMessage === "string" && aiChatWelcomeMessage.trim() ? aiChatWelcomeMessage.trim() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("merchant_id", merchantId);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, message: "AI 客服設定已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 更新發票設定（後台發票設定頁：廠商 + 品項） */
+export async function updateInvoiceSettings(
+  invoiceProvider: "ecpay" | "ezpay",
+  items: InvoiceItemSetting[]
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) {
+      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    }
+    const list = items.filter((i) => (i.name ?? "").trim() !== "").map((i) => ({
+      name: String(i.name).trim().slice(0, 500),
+      word: String(i.word ?? "式").trim().slice(0, 6),
+      amount: typeof i.amount === "number" && Number.isFinite(i.amount) && i.amount >= 0 ? i.amount : undefined,
+    }));
+    const supabase = createServerSupabase();
+    const { error } = await supabase
+      .from("store_settings")
+      .update({
+        invoice_provider: invoiceProvider === "ezpay" ? "ezpay" : "ecpay",
+        invoice_items: list.length > 0 ? list : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("merchant_id", merchantId);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, message: "發票設定已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** @deprecated 請改用 updateInvoiceSettings(provider, items) */
+export async function updateInvoiceItems(
+  items: InvoiceItemSetting[]
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  return updateInvoiceSettings("ecpay", items);
 }

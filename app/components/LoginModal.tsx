@@ -23,11 +23,24 @@ export type LoginModalProps = {
   onClose: () => void;
   /** 從網址 ?openLogin=email 進來時傳 2，直接顯示 E-mail 登入表單 */
   initialStep?: 1 | 2 | 3;
+  /** 登入／註冊成功後呼叫（例如結帳頁用來觸發完成報名） */
+  onSuccess?: () => void;
+  /** OAuth 導向時帶上的 next，回站時導回此網址 */
+  returnTo?: string;
+  /** 使用 Google 登入、即將導出前呼叫（例如結帳頁寫入暫存） */
+  onBeforeGoogleRedirect?: () => void;
 };
 
 type Step = 1 | 2 | 3;
 
-export default function LoginModal({ isOpen, onClose, initialStep }: LoginModalProps) {
+export default function LoginModal({
+  isOpen,
+  onClose,
+  initialStep,
+  onSuccess,
+  returnTo,
+  onBeforeGoogleRedirect,
+}: LoginModalProps) {
   const [step, setStep] = useState<Step>(1);
   const [formError, setFormError] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
@@ -47,10 +60,16 @@ export default function LoginModal({ isOpen, onClose, initialStep }: LoginModalP
     setFormError(null);
     setOauthLoading(true);
     try {
+      onBeforeGoogleRedirect?.();
+      const origin = typeof location !== "undefined" ? location.origin : "";
+      if (returnTo && typeof document !== "undefined") {
+        document.cookie = `auth_return_to=${encodeURIComponent(returnTo)}; path=/; max-age=600; SameSite=Lax`;
+      }
       const supabase = createClient();
+      const redirectTo = `${origin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${typeof location !== "undefined" ? location.origin : ""}/auth/callback` },
+        options: { redirectTo },
       });
       if (error) {
         setFormError(error.message);
@@ -60,7 +79,7 @@ export default function LoginModal({ isOpen, onClose, initialStep }: LoginModalP
     } finally {
       setOauthLoading(false);
     }
-  }, []);
+  }, [returnTo, onBeforeGoogleRedirect]);
 
   const handleLoginSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -81,11 +100,12 @@ export default function LoginModal({ isOpen, onClose, initialStep }: LoginModalP
         return;
       }
       await syncAuthUserToMembers();
+      onSuccess?.();
       onClose();
     } finally {
       setLoginLoading(false);
     }
-  }, [onClose]);
+  }, [onClose, onSuccess]);
 
   const handleRegisterSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -109,19 +129,25 @@ export default function LoginModal({ isOpen, onClose, initialStep }: LoginModalP
     setRegisterLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) {
         setFormError(error.message);
         return;
       }
       await syncAuthUserToMembers();
+      // Supabase 若已關閉「確認信箱」，signUp 會直接回傳 session，視為註冊完成
+      if (data.session) {
+        onSuccess?.();
+        onClose();
+        return;
+      }
       setFormError(null);
       setStep(2);
       setFormError("請至信箱收取驗證信完成註冊");
     } finally {
       setRegisterLoading(false);
     }
-  }, []);
+  }, [onClose, onSuccess]);
 
   const { siteName } = useStoreSettings();
   function ModalHeader({ title }: { title?: string }) {

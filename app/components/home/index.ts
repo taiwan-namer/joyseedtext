@@ -1,0 +1,9 @@
+export { default as HeroSection } from "./HeroSection";
+export { default as HeroCarouselSection } from "./HeroCarouselSection";
+export { default as CarouselSection } from "./CarouselSection";
+export { default as FullWidthImageSection } from "./FullWidthImageSection";
+export { default as CoursesSection } from "./CoursesSection";
+export { default as AboutSection } from "./AboutSection";
+export { default as FAQSection } from "./FAQSection";
+export { default as ContactSection } from "./ContactSection";
+export { default as FooterSection } from "./FooterSection";

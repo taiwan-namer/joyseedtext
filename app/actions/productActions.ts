@@ -1,6 +1,7 @@
 "use server";
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -126,6 +127,7 @@ export async function createClass(formData: FormData): Promise<
   | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return {
@@ -230,6 +232,7 @@ export async function updateCourseCapacity(
   | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     if (!Number.isInteger(capacity) || capacity < 1) {
@@ -250,6 +253,88 @@ export async function updateCourseCapacity(
   }
 }
 
+/**
+ * 報名進度查詢用：更新「單一場次」的名額。
+ * 若該場次來自 scheduled_slots，則更新該 slot 的 capacity；若來自 class_date/class_time，則更新課程的 capacity。
+ */
+export async function updateSessionCapacity(
+  classId: string,
+  slotDate: string,
+  slotTime: string,
+  capacity: number
+): Promise<
+  | { success: true; message?: string }
+  | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    if (!Number.isInteger(capacity) || capacity < 1) {
+      return { success: false, error: "名額須為 1 以上的整數" };
+    }
+    const dateStr = String(slotDate).slice(0, 10);
+    const timeStr = String(slotTime).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5);
+
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const { data: row, error: fetchError } = await supabase
+      .from("classes")
+      .select("scheduled_slots, class_date, class_time, capacity")
+      .eq("id", classId)
+      .eq("merchant_id", merchantId)
+      .single();
+
+    if (fetchError || !row) return { success: false, error: "課程不存在或非本店家" };
+
+    const r = row as {
+      scheduled_slots?: { date?: string; time?: string; capacity?: number }[] | null;
+      class_date?: string | null;
+      class_time?: string | null;
+      capacity?: number | null;
+    };
+
+    if (Array.isArray(r.scheduled_slots)) {
+      let found = false;
+      const newSlots = (r.scheduled_slots as { date?: string; time?: string; capacity?: number }[]).map((s) => {
+        const sDate = String(s?.date ?? "").slice(0, 10);
+        const sTime = String(s?.time ?? "").replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5);
+        if (sDate === dateStr && sTime === timeStr) {
+          found = true;
+          return { ...s, date: s.date ?? dateStr, time: s.time ?? timeStr, capacity };
+        }
+        return s;
+      });
+      if (found) {
+        const { error: updateError } = await supabase
+          .from("classes")
+          .update({ scheduled_slots: newSlots })
+          .eq("id", classId)
+          .eq("merchant_id", merchantId);
+        if (updateError) return { success: false, error: updateError.message };
+        return { success: true, message: "場次名額已更新" };
+      }
+    }
+
+    const classDateStr = r.class_date ? String(r.class_date).slice(0, 10) : "";
+    const classTimeStr = r.class_time ? String(r.class_time).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5) : "00:00";
+    if (classDateStr === dateStr && classTimeStr === timeStr) {
+      const { error: updateError } = await supabase
+        .from("classes")
+        .update({ capacity })
+        .eq("id", classId)
+        .eq("merchant_id", merchantId);
+      if (updateError) return { success: false, error: updateError.message };
+      return { success: true, message: "名額已更新" };
+    }
+
+    return { success: false, error: "找不到對應的場次" };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "更新名額失敗";
+    return { success: false, error: message };
+  }
+}
+
 /** 後台刪除課程（依 id，僅限本 merchant） */
 export async function deleteClasses(ids: string[]): Promise<
   | { success: true; message?: string }
@@ -257,6 +342,7 @@ export async function deleteClasses(ids: string[]): Promise<
 > {
   if (ids.length === 0) return { success: false, error: "請選擇要刪除的項目" };
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const { createServerSupabase } = await import("@/lib/supabase/server");
@@ -299,6 +385,7 @@ export async function createCourseFull(formData: FormData): Promise<
   | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
@@ -350,7 +437,9 @@ export async function createCourseFull(formData: FormData): Promise<
       try {
         const arr = JSON.parse(scheduledSlotsRaw) as unknown;
         if (!Array.isArray(arr)) return [];
-        return arr.filter((x): x is { date: string; time: string } => typeof x === "object" && x != null && "date" in x && "time" in x && typeof (x as { date: unknown }).date === "string" && typeof (x as { time: unknown }).time === "string");
+        return arr
+          .filter((x): x is { date: string; time: string; capacity?: number } => typeof x === "object" && x != null && "date" in x && "time" in x && typeof (x as { date: unknown }).date === "string" && typeof (x as { time: unknown }).time === "string")
+          .map((s) => ({ date: s.date.slice(0, 10), time: String(s.time).slice(0, 5), capacity: typeof s.capacity === "number" && s.capacity >= 1 ? s.capacity : Math.floor(capacity) }));
       } catch {
         return [];
       }
@@ -547,7 +636,7 @@ export type CourseForEdit = {
   post_content: string | null;
   notes: string | null;
   sidebar_option: string[] | null;
-  scheduled_slots: { date: string; time: string }[] | null;
+  scheduled_slots: { date: string; time: string; capacity?: number }[] | null;
   class_date: string | null;
   class_time: string | null;
   sale_price: number | null;
@@ -586,7 +675,13 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       post_content: row.post_content != null ? String(row.post_content) : null,
       notes: row.notes != null ? String(row.notes) : null,
       sidebar_option: Array.isArray(row.sidebar_option) ? (row.sidebar_option as string[]) : null,
-      scheduled_slots: Array.isArray(row.scheduled_slots) ? (row.scheduled_slots as { date: string; time: string }[]) : null,
+      scheduled_slots: Array.isArray(row.scheduled_slots)
+        ? (row.scheduled_slots as { date?: string; time?: string; capacity?: number }[]).map((s) => ({
+            date: String(s?.date ?? "").slice(0, 10),
+            time: String(s?.time ?? "09:00").slice(0, 5),
+            capacity: typeof s?.capacity === "number" && s.capacity >= 1 ? s.capacity : (row.capacity != null ? Number(row.capacity) : 10),
+          }))
+        : null,
       class_date: class_date || null,
       class_time: class_time || null,
       sale_price: row.sale_price != null ? Number(row.sale_price) : null,
@@ -609,6 +704,7 @@ export async function updateCourseFull(
   | { success: false; error: string }
 > {
   try {
+    await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
 

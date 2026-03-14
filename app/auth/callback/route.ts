@@ -8,22 +8,26 @@ function envTrim(key: string): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
+const AUTH_RETURN_TO_COOKIE = "auth_return_to";
+
 /**
  * OAuth 登入回呼：交換 code 取得 session，並以 upsert 同步寫入 members 表。
- * merchant_id 強制使用 process.env.NEXT_PUBLIC_CLIENT_ID。
- * 使用 upsert 避免重複登入／註冊觸發 UNIQUE 錯誤，僅保留一筆最新紀錄。
- * 完成後導向首頁 (/) 或會員中心 (/profile)，可透過 ?next=/profile 指定。
+ * 導向目標優先從 cookie auth_return_to 讀取（避免 OAuth 導回時 query 被 stripping 導致結帳頁遺失），
+ * 其次 ?next=，否則為首頁。
  */
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") ?? "/";
+  const cookieStore = await cookies();
+  const cookieNext = cookieStore.get(AUTH_RETURN_TO_COOKIE)?.value;
+  const decodedCookie = typeof cookieNext === "string" && cookieNext ? decodeURIComponent(cookieNext) : "";
+  const paramNext = requestUrl.searchParams.get("next") ?? "";
+  const nextRaw = decodedCookie || paramNext || "/";
+  const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=missing_code", requestUrl.origin));
   }
-
-  const cookieStore = await cookies();
 
   const supabaseAuth = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,5 +77,7 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(new URL(next, requestUrl.origin));
+  const response = NextResponse.redirect(new URL(next, requestUrl.origin));
+  response.cookies.set(AUTH_RETURN_TO_COOKIE, "", { path: "/", maxAge: 0 });
+  return response;
 }
