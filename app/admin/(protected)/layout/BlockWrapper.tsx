@@ -90,21 +90,26 @@ export default function BlockWrapper({
       >
         {children}
       </div>
-      {/* 選中時顯示區塊名稱 */}
+      {/* 選中時顯示區塊名稱與目前高度（畫布上即時顯示） */}
       {isSelected && (
-        <div className="absolute top-2 left-2 z-10 rounded bg-amber-500/90 px-2 py-1 text-xs font-medium text-white shadow">
-          {blockLabel}
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
+          <span className="rounded bg-amber-500/90 px-2 py-1 text-xs font-medium text-white shadow">
+            {blockLabel}
+          </span>
+          <span className="rounded bg-gray-800/90 px-2 py-1 text-xs font-medium text-white shadow">
+            高度: {block.heightPx != null && block.heightPx > 0 ? `${block.heightPx} px` : "自動"}
+          </span>
         </div>
       )}
-      {/* 底部拖曳條：調整高度 */}
+      {/* 底部拖曳條：調整高度（即時顯示目前高度） */}
       <div
         data-resize-handle
         onMouseDown={handleResizeMouseDown}
         className="absolute bottom-0 left-0 right-0 h-4 cursor-n-resize bg-amber-500/60 hover:bg-amber-500 flex items-center justify-center z-20 group"
         title="拖曳以調整區塊高度"
       >
-        <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-          拖曳調整高度
+        <span className="text-white text-xs font-medium">
+          {block.heightPx != null && block.heightPx > 0 ? `${block.heightPx} px` : "自動"} · 拖曳調整
         </span>
       </div>
     </div>

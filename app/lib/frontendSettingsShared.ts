@@ -67,6 +67,7 @@ export type LayoutBlock = {
 
 /** 首頁區塊 ID（與前台區塊一一對應） */
 export const LAYOUT_SECTION_IDS = [
+  "header",
   "hero",
   "hero_carousel",
   "carousel",
@@ -83,7 +84,7 @@ export const LAYOUT_SECTION_IDS = [
 export type LayoutSectionId = (typeof LAYOUT_SECTION_IDS)[number];
 
 /** 預設首頁區塊順序 */
-export const DEFAULT_LAYOUT_ORDER: string[] = ["hero", "carousel", "courses", "about", "faq", "contact", "footer"];
+export const DEFAULT_LAYOUT_ORDER: string[] = ["header", "hero", "carousel", "courses", "about", "faq", "contact", "footer"];
 
 /** 預設畫布區塊（由 DEFAULT_LAYOUT_ORDER 產生，高度與背景圖為預設） */
 export function getDefaultLayoutBlocks(): LayoutBlock[] {
@@ -97,6 +98,7 @@ export function getDefaultLayoutBlocks(): LayoutBlock[] {
 
 /** 區塊 ID 對應中文標籤（後台畫布顯示用） */
 export const LAYOUT_SECTION_LABELS: Record<string, string> = {
+  header: "上方導覽列",
   hero: "首頁大圖",
   hero_carousel: "首頁大圖（輪播）",
   carousel: "輪播牆",

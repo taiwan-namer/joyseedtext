@@ -24,6 +24,7 @@ const CANVAS_MAX_WIDTH_PX = 1280;
 
 /** 依 block id 對應到「編輯內容」的後台頁面 */
 const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
+  header: { href: "/admin/frontend-settings", label: "前台設定（導覽列）" },
   hero: { href: "/admin/frontend-settings", label: "前台設定（首頁大圖）" },
   hero_carousel: { href: "/admin/frontend-settings", label: "前台設定（輪播）" },
   carousel: { href: "/admin/frontend-settings", label: "前台設定（輪播）" },
@@ -249,10 +250,11 @@ export default function AdminLayoutPage() {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* 左側：可加入的積木 + 目前的積木（固定，捲動時不消失） */}
-        <aside className="lg:w-56 shrink-0 space-y-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      {/* 三欄：僅中間可捲動，左右欄固定不隨畫布捲動 */}
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:h-[calc(100vh-14rem)] lg:min-h-[420px]">
+        {/* 左側：可加入的積木 + 目前的積木（不隨中間捲動，固定可見） */}
+        <aside className="lg:w-56 shrink-0 flex flex-col gap-4 overflow-y-auto lg:overflow-y-auto lg:max-h-full">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shrink-0">
             <h2 className="text-sm font-semibold text-gray-800 mb-3">可加入的積木</h2>
             <ul className="space-y-1.5">
               {availableToAdd.length === 0 ? (
@@ -273,32 +275,43 @@ export default function AdminLayoutPage() {
               )}
             </ul>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">目前的積木</h2>
-            <p className="text-xs text-gray-500 mb-2">拖曳項目可調整順序</p>
-            <ul className="space-y-1">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex-1 min-h-0 flex flex-col">
+            <h2 className="text-sm font-semibold text-gray-800 mb-3 shrink-0">目前的積木</h2>
+            <p className="text-xs text-gray-500 mb-2 shrink-0">拖曳左側 ⋮⋮ 可調整順序</p>
+            <ul className="space-y-1 overflow-y-auto flex-1 min-h-0">
               {blocks.map((b, i) => (
                 <li
                   key={`${b.id}-${i}`}
-                  draggable
-                  onDragStart={handleDragStart(i)}
-                  onDragOver={handleDragOver(i)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop(i)}
-                  onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 cursor-grab active:cursor-grabbing transition-colors ${
-                    dragOverIndex === i ? "border-amber-400 bg-amber-50" : "border-transparent hover:bg-gray-100"
+                  className={`flex items-center gap-0 rounded-lg border transition-colors ${
+                    dragOverIndex === i ? "border-amber-400 bg-amber-50" : "border-transparent"
                   }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    setDragOverIndex(i);
+                  }}
+                  onDragLeave={() => setDragOverIndex(null)}
+                  onDrop={handleDrop(i)}
                 >
-                  <GripVertical className="h-4 w-4 text-gray-400 shrink-0" aria-hidden />
-                  <span className="flex-1 text-sm text-gray-700 truncate">
-                    {LAYOUT_SECTION_LABELS[b.id] ?? b.id}
-                  </span>
+                  <div
+                    draggable
+                    onDragStart={handleDragStart(i)}
+                    onDragEnd={handleDragEnd}
+                    className={`flex items-center gap-2 flex-1 min-w-0 py-1.5 pl-2 pr-1 cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-l-lg ${
+                      dragOverIndex === i ? "bg-amber-50" : ""
+                    }`}
+                    title="拖曳此處以調整順序"
+                  >
+                    <GripVertical className="h-4 w-4 text-gray-500 shrink-0" aria-hidden />
+                    <span className="flex-1 text-sm text-gray-700 truncate">
+                      {LAYOUT_SECTION_LABELS[b.id] ?? b.id}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeBlock(i)}
                     disabled={blocks.length <= 1}
-                    className="p-1 rounded hover:bg-red-100 text-red-600 disabled:opacity-40 text-xs shrink-0"
+                    className="p-1.5 rounded-r-lg hover:bg-red-100 text-red-600 disabled:opacity-40 text-xs shrink-0"
                     aria-label="移除"
                   >
                     移除
@@ -309,10 +322,10 @@ export default function AdminLayoutPage() {
           </div>
         </aside>
 
-        {/* 中間：畫布（目前前台畫面） */}
-        <div className="flex-1 min-w-0 flex flex-col items-center">
+        {/* 中間：畫布（僅此區可捲動，左右欄不會跟著跑） */}
+        <div className="flex-1 min-w-0 flex flex-col items-center overflow-y-auto overflow-x-hidden">
           <div
-            className="w-full rounded-xl border border-gray-200 bg-gray-100 overflow-hidden shadow-lg"
+            className="w-full rounded-xl border border-gray-200 bg-gray-100 overflow-hidden shadow-lg shrink-0"
             style={{ maxWidth: CANVAS_MAX_WIDTH_PX }}
           >
             <div className="px-3 py-2 bg-gray-200 border-b border-gray-300 text-xs text-gray-600 text-center">
@@ -337,7 +350,7 @@ export default function AdminLayoutPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex items-center gap-3 shrink-0 pb-4">
             <button
               type="button"
               onClick={handleSave}
@@ -351,8 +364,8 @@ export default function AdminLayoutPage() {
           </div>
         </div>
 
-        {/* 右側：編輯此區塊（選中時顯示，固定，捲動時不消失） */}
-        <aside className="lg:w-64 shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+        {/* 右側：編輯此區塊（固定可見，不隨畫布捲動） */}
+        <aside className="lg:w-64 shrink-0 overflow-y-auto lg:max-h-full flex flex-col">
           {selectedBlock && selectedIndex >= 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-4">
               <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
