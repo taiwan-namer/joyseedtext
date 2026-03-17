@@ -14,6 +14,7 @@ import {
   寵物攜帶規定選項,
   未達人數處置選項,
 } from "@/lib/courseFormOptions";
+import { MARKETPLACE_CATEGORIES, CITY_REGIONS } from "@/lib/constants";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i + 9); // 9～21
@@ -644,6 +645,28 @@ export default function CourseEditForm({
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">標題</label>
                   <input name="title" type="text" required className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder="課程名稱" disabled={isPending} defaultValue={initialData?.title ?? ""} />
+                </div>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">總站主題分類</label>
+                  <select name="marketplace_category" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" disabled={isPending} defaultValue={initialData?.marketplace_category ?? ""}>
+                    <option value="">請選擇</option>
+                    {MARKETPLACE_CATEGORIES.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">分站自訂分類</label>
+                  <input name="store_category" type="text" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder="例如：蒙特梭利" disabled={isPending} defaultValue={initialData?.store_category ?? ""} />
+                </div>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">上課地區</label>
+                  <select name="city_region" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" disabled={isPending} defaultValue={initialData?.city_region ?? ""}>
+                    <option value="">請選擇</option>
+                    {CITY_REGIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
                   <h3 className="mb-1 text-sm font-semibold text-gray-800">選擇時間（課程可預約場次）</h3>

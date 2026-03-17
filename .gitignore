@@ -1,5 +1,10 @@
 node_modules/
 .next/
+
+# 勿推播 .env（含敏感資訊）；.env.example 可提交作範本
 .env
 .env.local
 .env.*.local
+
+# macOS
+.DS_Store

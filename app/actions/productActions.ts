@@ -495,6 +495,10 @@ export async function createCourseFull(formData: FormData): Promise<
     const class_date = classDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(classDateRaw) ? classDateRaw : null;
     const class_time = classTimeRaw && /^\d{2}:\d{2}(:\d{2})?$/.test(classTimeRaw) ? classTimeRaw.slice(0, 5) : null;
 
+    const marketplace_category = (formData.get("marketplace_category") as string)?.trim() || null;
+    const store_category = (formData.get("store_category") as string)?.trim() || null;
+    const city_region = (formData.get("city_region") as string)?.trim() || null;
+
     const row: Record<string, unknown> = {
       merchant_id: merchantId,
       title,
@@ -512,6 +516,9 @@ export async function createCourseFull(formData: FormData): Promise<
       class_time,
       sale_price: hasSalePrice ? Math.round(salePrice) : null,
       addon_prices: addonPrices.length ? addonPrices : null,
+      marketplace_category,
+      store_category,
+      city_region,
     };
     const { data: inserted, error } = await supabase.from("classes").insert(row).select("id").single();
 
@@ -660,6 +667,12 @@ export type CourseForEdit = {
   customer_notice: CustomerNoticeForm | null;
   image_url: string | null;
   gallery_urls: string[] | null;
+  /** 總站主題分類（與總站 DB 對齊） */
+  marketplace_category: string | null;
+  /** 分站自訂標籤（如：蒙特梭利） */
+  store_category: string | null;
+  /** 上課地區 */
+  city_region: string | null;
 };
 
 export async function getCourseForEdit(id: string): Promise<CourseForEdit | null> {
@@ -705,6 +718,9 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       customer_notice: notice as CustomerNoticeForm | null,
       image_url: row.image_url != null ? String(row.image_url) : null,
       gallery_urls: Array.isArray(row.gallery_urls) ? (row.gallery_urls as string[]) : null,
+      marketplace_category: row.marketplace_category != null ? String(row.marketplace_category) : null,
+      store_category: row.store_category != null ? String(row.store_category) : null,
+      city_region: row.city_region != null ? String(row.city_region) : null,
     };
   } catch {
     return null;
@@ -817,6 +833,10 @@ export async function updateCourseFull(
     const class_date = classDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(classDateRaw) ? classDateRaw : null;
     const class_time = classTimeRaw && /^\d{2}:\d{2}(:\d{2})?$/.test(classTimeRaw) ? classTimeRaw.slice(0, 5) : null;
 
+    const marketplace_category = (formData.get("marketplace_category") as string)?.trim() || null;
+    const store_category = (formData.get("store_category") as string)?.trim() || null;
+    const city_region = (formData.get("city_region") as string)?.trim() || null;
+
     const row: Record<string, unknown> = {
       title,
       price: Math.round(price),
@@ -833,6 +853,9 @@ export async function updateCourseFull(
       class_time,
       sale_price: hasSalePrice ? Math.round(salePrice) : null,
       addon_prices: addonPrices.length ? addonPrices : null,
+      marketplace_category,
+      store_category,
+      city_region,
     };
 
     const { error } = await supabase.from("classes").update(row).eq("id", id).eq("merchant_id", merchantId);
