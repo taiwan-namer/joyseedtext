@@ -120,23 +120,24 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     invoiceItems: null,
     invoiceProvider: "ecpay",
   });
-  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-  const supabase = createServerSupabase();
 
   try {
-    const { data, error } = await supabase
-      .from("store_settings")
-      .select(STORE_SETTINGS_SELECT_FULL)
-      .eq("merchant_id", merchantId || "")
-      .maybeSingle();
-    if (!error && data) {
-      return parseStoreSettingsRow(data as Record<string, unknown>);
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    const supabase = createServerSupabase();
+
+    try {
+      const { data, error } = await supabase
+        .from("store_settings")
+        .select(STORE_SETTINGS_SELECT_FULL)
+        .eq("merchant_id", merchantId || "")
+        .maybeSingle();
+      if (!error && data) {
+        return parseStoreSettingsRow(data as Record<string, unknown>);
+      }
+    } catch {
+      /* 可能為新欄位尚未存在，改試僅基本欄位 */
     }
-  } catch {
-    /* 可能為新欄位尚未存在，改試僅基本欄位 */
-  }
 
-  try {
     const { data, error } = await supabase
       .from("store_settings")
       .select(STORE_SETTINGS_SELECT_LEGACY)
@@ -147,6 +148,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     }
     return parseStoreSettingsRow(data as Record<string, unknown>);
   } catch {
+    /* Supabase 未設定（缺 NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY）或連線失敗時回傳預設，避免 layout 崩潰 */
     return fallback();
   }
 }
