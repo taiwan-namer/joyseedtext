@@ -153,6 +153,76 @@ export async function getStoreSettings(): Promise<StoreSettings> {
   }
 }
 
+/**
+ * 從總站（merchant_id = 'tongqudao_main'）讀取 global_categories 設定。
+ * 回傳已去除空白、去重後的字串陣列；若發生錯誤或尚未設定則回傳空陣列。
+ */
+export async function getGlobalCategoriesFromMain(): Promise<string[]> {
+  unstable_noStore();
+  try {
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from("store_settings")
+      .select("global_categories")
+      .eq("merchant_id", "tongqudao_main")
+      .maybeSingle();
+
+    if (error || !data || !("global_categories" in data)) {
+      return [];
+    }
+
+    const raw = (data as { global_categories?: unknown }).global_categories;
+    if (!raw) return [];
+
+    let list: string[] = [];
+
+    if (Array.isArray(raw)) {
+      list = raw
+        .map((item): string | null => {
+          if (typeof item === "string") return item.trim();
+          if (typeof item === "object" && item !== null) {
+            const obj = item as Record<string, unknown>;
+            const name = typeof obj.name === "string" ? obj.name.trim() : "";
+            const label = typeof obj.label === "string" ? obj.label.trim() : "";
+            return (name || label) || null;
+          }
+          return null;
+        })
+        .filter((v): v is string => !!v);
+    } else if (typeof raw === "object") {
+      // 若儲存為物件（例如 { categories: [...] }），嘗試從其中解析
+      const obj = raw as Record<string, unknown>;
+      const inner = Array.isArray(obj.categories) ? obj.categories : [];
+      list = inner
+        .map((item): string | null => {
+          if (typeof item === "string") return item.trim();
+          if (typeof item === "object" && item !== null) {
+            const o = item as Record<string, unknown>;
+            const name = typeof o.name === "string" ? o.name.trim() : "";
+            const label = typeof o.label === "string" ? o.label.trim() : "";
+            return (name || label) || null;
+          }
+          return null;
+        })
+        .filter((v): v is string => !!v);
+    }
+
+    // 去除重複與空字串
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const v of list) {
+      const key = v.trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(key);
+    }
+    return deduped;
+  } catch {
+    // 若因 RLS 或環境變數造成錯誤，一律回傳空陣列，交由前端 fallback 處理
+    return [];
+  }
+}
+
 /** 取得常見問題列表（後台編輯、前台顯示用），無則回傳預設 */
 export async function getFaqItems(): Promise<FaqItem[]> {
   try {

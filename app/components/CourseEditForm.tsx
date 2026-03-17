@@ -304,6 +304,36 @@ export default function CourseEditForm({
   const imageSlotsRef = useRef(imageSlots);
   imageSlotsRef.current = imageSlots;
 
+  // 總站主題分類（預設用本地靜態列表，成功抓到總站設定後再覆寫）
+  const [globalCategories, setGlobalCategories] = useState<string[]>(() => [...MARKETPLACE_CATEGORIES]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/global-categories", { method: "GET" });
+        if (!res.ok) throw new Error("failed to fetch global categories");
+        const data = (await res.json()) as { categories?: unknown };
+        const raw = data?.categories;
+        if (!Array.isArray(raw)) return;
+        const list = raw
+          .map((v): string | null => (typeof v === "string" ? v.trim() : null))
+          .filter((v): v is string => !!v);
+        if (!cancelled && list.length > 0) {
+          setGlobalCategories(Array.from(new Set(list)));
+        }
+      } catch {
+        // 失敗時維持預設 MARKETPLACE_CATEGORIES，確保表單可用
+        if (!cancelled) {
+          setGlobalCategories(() => [...MARKETPLACE_CATEGORIES]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const setSlot = (index: number, file: File | null) => {
     setImageSlots((prev) => {
       const next = [...prev];
@@ -650,7 +680,7 @@ export default function CourseEditForm({
                   <label className="mb-2 block text-sm font-medium text-gray-700">總站主題分類</label>
                   <select name="marketplace_category" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" disabled={isPending} defaultValue={initialData?.marketplace_category ?? ""}>
                     <option value="">請選擇</option>
-                    {MARKETPLACE_CATEGORIES.map((opt) => (
+                    {globalCategories.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
