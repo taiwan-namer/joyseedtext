@@ -6,6 +6,11 @@ import { getAppUrl } from "@/lib/appUrl";
 const ECPAY_STAGE_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5";
 const ECPAY_PRODUCTION_URL = "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5";
 
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 function getEcpayCreds() {
   const id = process.env.ECPAY_MERCHANT_ID?.trim();
   const key = process.env.ECPAY_HASH_KEY?.trim();
@@ -67,6 +72,11 @@ export async function GET(request: NextRequest) {
     return htmlErrorPage("參數錯誤", "缺少 pendingId，請從結帳流程重新進入。");
   }
 
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  if (!merchantId) {
+    return htmlErrorPage("系統設定錯誤", "未設定 NEXT_PUBLIC_CLIENT_ID，無法辨識店家。");
+  }
+
   const creds = getEcpayCreds();
   if (!creds) {
     return htmlErrorPage("金流未設定", "綠界金流未設定（請設定 ECPAY_MERCHANT_ID、ECPAY_HASH_KEY、ECPAY_HASH_IV）。");
@@ -84,6 +94,7 @@ export async function GET(request: NextRequest) {
       .from("pending_payments")
       .select("order_amount, gateway_key")
       .eq("id", pendingId)
+      .eq("merchant_id", merchantId)
       .eq("payment_method", "ecpay")
       .single();
     if (error || !pending) {
@@ -100,6 +111,7 @@ export async function GET(request: NextRequest) {
       .from("bookings")
       .select("id, merchant_id, order_amount, status")
       .eq("id", bookingIdLegacy)
+      .eq("merchant_id", merchantId)
       .single();
     if (error || !booking) {
       return htmlErrorPage("訂單不存在", "查無此訂單，請確認連結是否正確或重新下單。");
@@ -120,6 +132,7 @@ export async function GET(request: NextRequest) {
       .from("bookings")
       .update({ payment_method: "ecpay", ecpay_merchant_trade_no: tradeNo })
       .eq("id", bookingIdLegacy)
+      .eq("merchant_id", merchantId)
       .eq("status", "unpaid");
   }
 

@@ -6,6 +6,11 @@ import { logPaymentApi } from "@/lib/paymentLogs";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { getAppUrl } from "@/lib/appUrl";
 
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 /**
  * LINE Pay 使用者完成授權後會導向此 confirmUrl，並帶上 transactionId、orderId（= 我們的 booking id）。
  * 流程：從 URL 取得 transactionId / orderId → 呼叫 LINE Pay Confirm API →
@@ -39,12 +44,18 @@ export async function GET(request: NextRequest) {
     return redirectFail("缺少交易參數", "缺少 transactionId");
   }
 
+  const currentMerchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  if (!currentMerchantId) {
+    return redirectFail("系統設定錯誤", "未設定 NEXT_PUBLIC_CLIENT_ID");
+  }
+
   const supabase = createServerSupabase();
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .select("id, merchant_id, class_id, order_amount, status, payment_method, slot_date, slot_time")
     .eq("id", orderId)
+    .eq("merchant_id", currentMerchantId)
     .single();
 
   let merchantId: string;
@@ -136,6 +147,7 @@ export async function GET(request: NextRequest) {
       .from("pending_payments")
       .select("id, merchant_id, order_amount")
       .eq("id", orderId)
+      .eq("merchant_id", currentMerchantId)
       .eq("payment_method", "linepay")
       .maybeSingle();
 
@@ -230,7 +242,8 @@ export async function GET(request: NextRequest) {
     await supabase
       .from("bookings")
       .update({ line_pay_transaction_id: transactionId })
-      .eq("id", finalBookingId);
+      .eq("id", finalBookingId)
+      .eq("merchant_id", currentMerchantId);
   }
 
   revalidatePath("/member");

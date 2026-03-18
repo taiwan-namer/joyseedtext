@@ -7,6 +7,11 @@ import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 type ResultStatus = "paid" | "unpaid" | "not_found" | "error";
 
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 async function getBookingStatus(
   merchantOrderNo: string | null,
   bookingId: string | null,
@@ -15,12 +20,15 @@ async function getBookingStatus(
 ): Promise<ResultStatus> {
   if (hasError) return "error";
   if (statePending && !merchantOrderNo && !bookingId) return "unpaid";
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  if (!merchantId) return "not_found";
   const supabase = createServerSupabase();
   if (bookingId && bookingId.trim() !== "") {
     const { data, error } = await supabase
       .from("bookings")
       .select("status")
       .eq("id", bookingId.trim())
+      .eq("merchant_id", merchantId)
       .maybeSingle();
     if (!error && data) {
       const status = (data as { status?: string }).status ?? "";
@@ -34,6 +42,7 @@ async function getBookingStatus(
       .from("bookings")
       .select("status")
       .eq("newebpay_merchant_order_no", trimmed)
+      .eq("merchant_id", merchantId)
       .maybeSingle();
     if (!error && data) {
       const status = (data as { status?: string }).status ?? "";

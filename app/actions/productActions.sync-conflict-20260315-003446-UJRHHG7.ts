@@ -626,15 +626,17 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
 }
 
 /** 依 id 取得單一課程（供前台 /course/[id] 使用），含 capacity 供剩餘人數顯示 */
-export async function getCourseById(id: string): Promise<CourseForPublic | null> {
+export async function getCourseById(id: string, merchantId?: string): Promise<CourseForPublic | null> {
   try {
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
-    const { data, error } = await supabase
+    const q = supabase
       .from("classes")
       .select("id, title, price, sale_price, capacity, image_url, course_intro, post_content, gallery_urls, customer_notice, notes, sidebar_option, scheduled_slots, addon_prices")
-      .eq("id", id)
-      .single();
+      .eq("id", id);
+    const { data, error } = merchantId
+      ? await q.eq("merchant_id", merchantId).single()
+      : await q.single();
     if (error || !data) return null;
     return mapRowToCourseForPublic(data as Record<string, unknown>);
   } catch {

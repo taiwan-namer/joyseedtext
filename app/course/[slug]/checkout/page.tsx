@@ -78,7 +78,8 @@ export default function CheckoutPage() {
     if (!slug) return;
     let cancelled = false;
     (async () => {
-      const fromDb = await getCourseById(slug);
+      const currentMerchantId = process.env.NEXT_PUBLIC_CLIENT_ID;
+      const fromDb = await getCourseById(slug, currentMerchantId);
       if (cancelled) return;
       if (fromDb) {
         setCourse(fromDb);

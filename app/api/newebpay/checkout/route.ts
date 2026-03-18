@@ -4,6 +4,11 @@ import { getAppUrl } from "@/lib/appUrl";
 import { getNewebpayConfig } from "@/lib/newebpay/config";
 import { newebpayEncryptTradeInfo, newebpayGetTradeSha } from "@/lib/newebpay/encrypt";
 
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 function htmlErrorPage(title: string, message: string): NextResponse {
   const html = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -57,6 +62,11 @@ export async function GET(request: NextRequest) {
     return htmlErrorPage("參數錯誤", "缺少 pendingId，請從結帳流程重新進入。");
   }
 
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  if (!merchantId) {
+    return htmlErrorPage("系統設定錯誤", "未設定 NEXT_PUBLIC_CLIENT_ID，無法辨識店家。");
+  }
+
   const config = getNewebpayConfig();
   if (!config) {
     return htmlErrorPage("金流未設定", "藍新金流未設定（請設定 NEWEBPAY_MERCHANT_ID、NEWEBPAY_HASH_KEY、NEWEBPAY_HASH_IV）。");
@@ -71,6 +81,7 @@ export async function GET(request: NextRequest) {
       .from("pending_payments")
       .select("order_amount, gateway_key, member_email")
       .eq("id", pendingId)
+      .eq("merchant_id", merchantId)
       .eq("payment_method", "newebpay")
       .single();
     if (error || !pending) {
@@ -87,6 +98,7 @@ export async function GET(request: NextRequest) {
       .from("bookings")
       .select("id, order_amount, status, member_email")
       .eq("id", bookingIdLegacy)
+      .eq("merchant_id", merchantId)
       .single();
     if (error || !booking) {
       return htmlErrorPage("訂單不存在", "查無此訂單，請確認連結是否正確或重新下單。");
@@ -103,6 +115,7 @@ export async function GET(request: NextRequest) {
       .from("bookings")
       .update({ payment_method: "newebpay", newebpay_merchant_order_no: merchantOrderNo })
       .eq("id", bookingIdLegacy)
+      .eq("merchant_id", merchantId)
       .eq("status", "unpaid");
   }
 

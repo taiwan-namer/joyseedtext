@@ -6,8 +6,15 @@ import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 type ResultStatus = "paid" | "unpaid" | "not_found";
 
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultStatus> {
   if (!merchantTradeNo || merchantTradeNo.trim() === "") return "not_found";
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  if (!merchantId) return "not_found";
   const supabase = createServerSupabase();
   const trimmed = merchantTradeNo.trim();
 
@@ -15,6 +22,7 @@ async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultS
     .from("bookings")
     .select("status")
     .eq("ecpay_merchant_trade_no", trimmed)
+    .eq("merchant_id", merchantId)
     .maybeSingle();
 
   if (!error && booking) {

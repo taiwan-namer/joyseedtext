@@ -6,12 +6,23 @@ import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
 import { issueInvoice } from "@/lib/invoice/service";
 
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 /**
  * 藍新背景通知（NotifyURL）。
  * 完整 log 原始 payload；解密後依 Status / TradeStatus 判定成功並更新訂單。
  */
 export async function POST(request: NextRequest) {
   console.log("[NewebPay callback] route hit (NotifyURL)");
+
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  if (!merchantId) {
+    console.error("[NewebPay callback] 未設定 NEXT_PUBLIC_CLIENT_ID");
+    return NextResponse.json({ error: "未設定 NEXT_PUBLIC_CLIENT_ID" }, { status: 500 });
+  }
 
   const contentType = request.headers.get("content-type") ?? "";
   console.log("[NewebPay callback] request content-type:", contentType);
@@ -206,6 +217,7 @@ export async function POST(request: NextRequest) {
     .from("bookings")
     .select("id, class_id, merchant_id, slot_date, slot_time, status")
     .eq("newebpay_merchant_order_no", merchantOrderNo)
+    .eq("merchant_id", merchantId)
     .maybeSingle();
 
   if (!fetchError && booking) {
@@ -231,12 +243,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
       }
       console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
-      const invoiceResult = await issueInvoice(supabase, bookingRow.id);
+      const invoiceResult = await issueInvoice(supabase, bookingRow.id, bookingRow.merchant_id);
       if (!invoiceResult.ok) {
         console.error("[NewebPay callback] 發票開立失敗（不影響付款結果）bookingId:", bookingRow.id, "error:", invoiceResult.error);
-        await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", bookingRow.id);
+        await supabase
+          .from("bookings")
+          .update({ invoice_status: "failed" })
+          .eq("id", bookingRow.id)
+          .eq("merchant_id", bookingRow.merchant_id);
       } else {
-        await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", bookingRow.id);
+        await supabase
+          .from("bookings")
+          .update({ invoice_status: "issued" })
+          .eq("id", bookingRow.id)
+          .eq("merchant_id", bookingRow.merchant_id);
       }
       revalidatePath("/member");
       return NextResponse.json({ message: "OK" });
@@ -253,6 +273,7 @@ export async function POST(request: NextRequest) {
       .select("id")
       .eq("payment_method", "newebpay")
       .eq("gateway_key", merchantOrderNo)
+      .eq("merchant_id", merchantId)
       .maybeSingle();
 
     console.log("[NewebPay callback] pending lookup gateway_key:", JSON.stringify(merchantOrderNo), "pending found:", !!pending, "pendingErr:", pendingErr?.message ?? null);
@@ -267,14 +288,23 @@ export async function POST(request: NextRequest) {
           await supabase
             .from("bookings")
             .update({ newebpay_merchant_order_no: merchantOrderNo, newebpay_trade_no: tradeNo })
-            .eq("id", res.booking_id);
+            .eq("id", res.booking_id)
+            .eq("merchant_id", merchantId);
           console.log("[NewebPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id);
-          const invoiceResult = await issueInvoice(supabase, res.booking_id);
+          const invoiceResult = await issueInvoice(supabase, res.booking_id, merchantId);
           if (!invoiceResult.ok) {
             console.error("[NewebPay callback] 發票開立失敗（不影響付款結果）bookingId:", res.booking_id, "error:", invoiceResult.error);
-            await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", res.booking_id);
+            await supabase
+              .from("bookings")
+              .update({ invoice_status: "failed" })
+              .eq("id", res.booking_id)
+              .eq("merchant_id", merchantId);
           } else {
-            await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", res.booking_id);
+            await supabase
+              .from("bookings")
+              .update({ invoice_status: "issued" })
+              .eq("id", res.booking_id)
+              .eq("merchant_id", merchantId);
           }
         }
       }

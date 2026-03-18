@@ -11,18 +11,29 @@ export type IssueInvoiceResult =
   | { ok: true; raw?: string }
   | { ok: false; error: string };
 
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 /**
  * 依訂單 ID 開立電子發票（使用後台設定的品項與綠界發票 API）。
  * 若發票金鑰未設定、訂單無金額或開立失敗，回傳 { ok: false }，不拋錯。
  */
 export async function issueInvoice(
   supabase: SupabaseClient,
-  bookingId: string
+  bookingId: string,
+  merchantId?: string
 ): Promise<IssueInvoiceResult> {
+  const safeMerchantId = (merchantId ?? envTrim("NEXT_PUBLIC_CLIENT_ID")).trim();
+  if (!safeMerchantId) {
+    return { ok: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+  }
   const { data: booking, error: fetchErr } = await supabase
     .from("bookings")
     .select("id, member_email, parent_name, parent_phone, order_amount, ecpay_merchant_trade_no, newebpay_merchant_order_no")
     .eq("id", bookingId)
+    .eq("merchant_id", safeMerchantId)
     .maybeSingle();
 
   if (fetchErr || !booking) {
