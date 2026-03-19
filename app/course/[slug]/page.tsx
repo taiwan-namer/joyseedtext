@@ -63,6 +63,11 @@ function DateTimeModal({
   slotRemainingList?: SlotRemaining[];
 }) {
   const today = useMemo(() => new Date(), []);
+  const todayAtMidnight = useMemo(() => {
+    const t = new Date(today);
+    t.setHours(0, 0, 0, 0);
+    return t;
+  }, [today]);
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState<{ y: number; m: number; d: number } | null>(null);
@@ -107,6 +112,13 @@ function DateTimeModal({
   const isSelected = (d: number) =>
     selectedDate?.y === viewYear && selectedDate?.m === viewMonth && selectedDate?.d === d;
 
+  // 過去日期禁止選擇（即使該天有場次）
+  const isPastDay = (d: number) => {
+    const candidate = new Date(viewYear, viewMonth - 1, d);
+    candidate.setHours(0, 0, 0, 0);
+    return candidate.getTime() < todayAtMidnight.getTime();
+  };
+
   const dateStr = selectedDate
     ? formatDateKey(selectedDate.y, selectedDate.m, selectedDate.d)
     : null;
@@ -118,6 +130,7 @@ function DateTimeModal({
 
   const onDayClick = (d: number) => {
     if (!hasSlotsOnDay(d)) return;
+    if (isPastDay(d)) return;
     setSelectedDate({ y: viewYear, m: viewMonth, d });
     setSelectedTime(null);
   };
@@ -191,14 +204,16 @@ function DateTimeModal({
                   <div key={`e-${i}`} />
                 ) : (() => {
                   const hasSlots = hasSlotsOnDay(d);
+                  const past = isPastDay(d);
+                  const disabled = !hasSlots || past;
                   return (
                     <button
                       key={d}
                       type="button"
                       onClick={() => onDayClick(d)}
-                      disabled={!hasSlots}
+                      disabled={disabled}
                       className={`py-2 rounded-full text-sm ${
-                        !hasSlots
+                        disabled
                           ? "text-gray-300 cursor-not-allowed"
                           : isSelected(d)
                             ? "bg-amber-500 text-white font-bold"
