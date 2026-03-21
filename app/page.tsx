@@ -70,9 +70,6 @@ export default function WonderVoyageHomePage() {
   const [aboutContent, setAboutContent] = useState<string | null>(null);
   const [layoutBlocks, setLayoutBlocks] = useState<LayoutBlock[]>(getDefaultLayoutBlocks());
 
-  // 下列兩個 useEffect 呼叫的皆為 Server Actions：Next 會對「目前網址」送 POST（在首頁即 POST /，Vercel Log 常見）。
-  // 與綠界無關；除錯金流請篩選路徑 /api/ecpay/callback、/api/ecpay/result、/api/ecpay/checkout。
-
   // 前台設定（大圖、輪播、導覽列、畫布區塊）
   useEffect(() => {
     getFrontendSettings().then((s) => {

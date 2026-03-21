@@ -18,9 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description,
     keywords: keywords ? keywords.split(",").map((k) => k.trim()).filter(Boolean) : undefined,
-    icons: {
-      icon: faviconUrl ? faviconUrl : [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    },
+    ...(faviconUrl && { icons: { icon: faviconUrl } }),
   };
 }
 
