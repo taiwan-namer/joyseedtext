@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getStoreSettings } from "@/app/actions/storeSettingsActions";
 import { HeaderMember } from "@/app/components/HeaderMember";
-import { bookingsVisibleToMerchantOrFilter } from "@/lib/bookingsMerchantFilter";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { EcpayResultAutoRefresh } from "./EcpayResultAutoRefresh";
 
@@ -20,15 +19,29 @@ async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultS
   const supabase = createServerSupabase();
   const trimmed = merchantTradeNo.trim();
 
-  // 列表課／代銷：訂單 merchant_id 為庫存課商家，sold_via_merchant_id 為結帳站台（與 callback 一致）
-  const { data: booking, error } = await supabase
+  // 總站自售：merchant_id＝本站；列表課／代銷：訂單 merchant_id 為庫存課商家，sold_via_merchant_id 為結帳站台
+  let booking: { status?: string } | null = null;
+  const byOwner = await supabase
     .from("bookings")
     .select("status")
     .eq("ecpay_merchant_trade_no", trimmed)
-    .or(bookingsVisibleToMerchantOrFilter(merchantId))
+    .eq("merchant_id", merchantId)
     .maybeSingle();
+  if (!byOwner.error && byOwner.data) {
+    booking = byOwner.data as { status?: string };
+  } else {
+    const bySoldVia = await supabase
+      .from("bookings")
+      .select("status")
+      .eq("ecpay_merchant_trade_no", trimmed)
+      .eq("sold_via_merchant_id", merchantId)
+      .maybeSingle();
+    if (!bySoldVia.error && bySoldVia.data) {
+      booking = bySoldVia.data as { status?: string };
+    }
+  }
 
-  if (!error && booking) {
+  if (booking) {
     const status = (booking as { status?: string }).status ?? "";
     if (status === "paid" || status === "completed") return "paid";
     return "unpaid";

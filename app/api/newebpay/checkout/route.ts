@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { resolvePublicBaseUrl } from "@/lib/appUrl";
+import { getAppUrl } from "@/lib/appUrl";
 import { getNewebpayConfig } from "@/lib/newebpay/config";
 import { newebpayEncryptTradeInfo, newebpayGetTradeSha } from "@/lib/newebpay/encrypt";
 
@@ -119,10 +119,10 @@ export async function GET(request: NextRequest) {
       .eq("status", "unpaid");
   }
 
-  const appUrl = resolvePublicBaseUrl(request.nextUrl.origin);
+  const appUrl = getAppUrl();
   if (!appUrl) {
-    console.error("[NewebPay checkout] 無法解析站點網址（APP_URL／請求 Host）");
-    return htmlErrorPage("設定錯誤", "無法產生藍新回傳網址，請設定 APP_URL 或 NEXT_PUBLIC_BASE_URL。");
+    console.error("[NewebPay checkout] 未設定 APP_URL 或 NEXT_PUBLIC_BASE_URL，無法產生回傳網址");
+    return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生藍新回傳網址。");
   }
 
   // ReturnURL 必須指向 API route，不可指向 /payment/newebpay/result page（POST 會觸發 500）
