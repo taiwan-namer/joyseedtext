@@ -2,7 +2,9 @@ import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getStoreSettings } from "@/app/actions/storeSettingsActions";
 import { HeaderMember } from "@/app/components/HeaderMember";
+import { bookingsVisibleToMerchantOrFilter } from "@/lib/bookingsMerchantFilter";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { EcpayResultAutoRefresh } from "./EcpayResultAutoRefresh";
 
 type ResultStatus = "paid" | "unpaid" | "not_found";
 
@@ -18,11 +20,12 @@ async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultS
   const supabase = createServerSupabase();
   const trimmed = merchantTradeNo.trim();
 
+  // 列表課／代銷：訂單 merchant_id 為庫存課商家，sold_via_merchant_id 為結帳站台（與 callback 一致）
   const { data: booking, error } = await supabase
     .from("bookings")
     .select("status")
     .eq("ecpay_merchant_trade_no", trimmed)
-    .eq("merchant_id", merchantId)
+    .or(bookingsVisibleToMerchantOrFilter(merchantId))
     .maybeSingle();
 
   if (!error && booking) {
@@ -37,6 +40,7 @@ async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultS
     .select("id")
     .eq("payment_method", "ecpay")
     .eq("gateway_key", trimmed)
+    .eq("merchant_id", merchantId)
     .maybeSingle();
 
   if (pending) return "unpaid";
@@ -56,6 +60,7 @@ export default async function EcpayResultPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-page">
+      <EcpayResultAutoRefresh active={status === "unpaid"} />
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm shrink-0">
         <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold text-brand">
@@ -78,6 +83,7 @@ export default async function EcpayResultPage({
               <Loader2 className="w-16 h-16 mx-auto text-amber-500 animate-spin" strokeWidth={1.5} />
               <h1 className="text-2xl font-bold mt-4 text-gray-800">處理中</h1>
               <p className="text-gray-600 mt-2">付款結果處理中，請稍後至會員中心確認訂單狀態。</p>
+              <p className="text-gray-500 text-sm mt-2">頁面將自動更新數次；若已扣款成功也可手動重新整理。</p>
             </>
           )}
           {status === "not_found" && (
