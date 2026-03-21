@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAppUrl } from "@/lib/appUrl";
+import { resolvePublicBaseUrl } from "@/lib/appUrl";
 
 /**
  * 綠界 OrderResultURL 專用：接收綠界 POST（付款完成後導回），不讓 POST 打到 page 造成 500。
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   console.log("[ECPay result route] POST received, raw keys:", Object.keys(params));
   console.log("[ECPay result route] MerchantTradeNo:", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
 
-  const appUrl = getAppUrl();
+  const appUrl = resolvePublicBaseUrl(request.nextUrl.origin);
   const resultPage = appUrl ? `${appUrl}/payment/ecpay/result` : "/payment/ecpay/result";
   const redirectTarget = merchantTradeNo
     ? `${resultPage}?MerchantTradeNo=${encodeURIComponent(merchantTradeNo)}`

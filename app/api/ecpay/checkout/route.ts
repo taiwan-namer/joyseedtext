@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ecpayCheckMacValue, ECPAY_SIGN_KEYS } from "@/lib/ecpay/checkmac";
-import { getAppUrl } from "@/lib/appUrl";
+import { resolvePublicBaseUrl } from "@/lib/appUrl";
 
 const ECPAY_STAGE_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5";
 const ECPAY_PRODUCTION_URL = "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5";
@@ -136,10 +136,10 @@ export async function GET(request: NextRequest) {
       .eq("status", "unpaid");
   }
 
-  const appUrl = getAppUrl();
+  const appUrl = resolvePublicBaseUrl(request.nextUrl.origin);
   if (!appUrl) {
-    console.error("[ECPay checkout] 未設定 APP_URL 或 NEXT_PUBLIC_BASE_URL，無法產生回傳網址");
-    return htmlErrorPage("設定錯誤", "未設定站點網址（APP_URL），無法產生綠界回傳網址。");
+    console.error("[ECPay checkout] 無法解析站點網址（APP_URL／請求 Host）");
+    return htmlErrorPage("設定錯誤", "無法產生綠界回傳網址，請設定 APP_URL 或 NEXT_PUBLIC_BASE_URL。");
   }
   const returnUrl = `${appUrl}/api/ecpay/callback`;
   const orderResultUrl = `${appUrl}/api/ecpay/result`;

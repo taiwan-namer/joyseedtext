@@ -7,7 +7,7 @@ import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { getFrontendSettings } from "@/app/actions/frontendSettingsActions";
 import { getLinePaySandboxCredentials, validateLinePayCredentials, requestLinePayPayment } from "@/lib/linepay";
 import { logPaymentApi } from "@/lib/paymentLogs";
-import { getAppUrl } from "@/lib/appUrl";
+import { resolvePaymentSiteBaseUrl } from "@/lib/appUrl";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import {
   bookingsVisibleToMerchantOrFilter,
@@ -223,7 +223,7 @@ export async function createBooking(
         ? Math.round(totalAmount)
         : null;
 
-    const appUrl = getAppUrl();
+    const siteBase = resolvePaymentSiteBaseUrl();
 
     if (pm === "linepay" || pm === "ecpay" || pm === "newebpay") {
       const pending = await createPendingPayment(supabase, {
@@ -253,8 +253,11 @@ export async function createBooking(
         if (!validation.ok) {
           return { success: false, error: validation.error };
         }
-        if (!appUrl) {
-          return { success: false, error: "未設定 APP_URL（或 NEXT_PUBLIC_BASE_URL），無法建立 LINE Pay 導向網址" };
+        if (!siteBase) {
+          return {
+            success: false,
+            error: "無法判定站點網址，請設定 APP_URL／NEXT_PUBLIC_BASE_URL，或從正式網域開啟結帳頁。",
+          };
         }
         const amount = orderAmount ?? 0;
         if (amount <= 0) {
@@ -263,8 +266,8 @@ export async function createBooking(
         const orderId = pending.pendingId;
         const productName = (courseTitle && String(courseTitle).trim()) || "課程報名";
         const slugForUrl = (courseSlug && String(courseSlug).trim()) || "course";
-        const confirmUrl = `${appUrl}/api/linepay/confirm`;
-        const cancelUrl = `${appUrl}/course/${slugForUrl}/checkout?error=payment_cancelled`;
+        const confirmUrl = `${siteBase}/api/linepay/confirm`;
+        const cancelUrl = `${siteBase}/course/${slugForUrl}/checkout?error=payment_cancelled`;
         const requestBody = {
           amount,
           orderId,
@@ -302,11 +305,14 @@ export async function createBooking(
       }
 
       if (pm === "ecpay" || pm === "newebpay") {
-        if (!appUrl) {
-          return { success: false, error: "未設定 APP_URL（或 NEXT_PUBLIC_BASE_URL），無法導向金流" };
+        if (!siteBase) {
+          return {
+            success: false,
+            error: "無法判定站點網址，請設定 APP_URL／NEXT_PUBLIC_BASE_URL，或從正式網域開啟結帳頁。",
+          };
         }
         const path = pm === "ecpay" ? "/api/ecpay/checkout" : "/api/newebpay/checkout";
-        const paymentUrl = `${appUrl}${path}?pendingId=${encodeURIComponent(pending.pendingId)}`;
+        const paymentUrl = `${siteBase}${path}?pendingId=${encodeURIComponent(pending.pendingId)}`;
         return { success: true, bookingId: "", paymentUrl };
       }
     }

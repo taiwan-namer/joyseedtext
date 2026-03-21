@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
-import { getAppUrl } from "@/lib/appUrl";
+import { resolvePublicBaseUrl } from "@/lib/appUrl";
 import { getNewebpayCreds } from "@/lib/newebpay/config";
 
 function envTrim(key: string): string {
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const tradeInfoEnc = (formData.get("TradeInfo") as string) ?? "";
   const tradeShaReceived = (formData.get("TradeSha") as string) ?? "";
 
-  const appUrl = getAppUrl();
+  const appUrl = resolvePublicBaseUrl(request.nextUrl.origin);
   const resultPage = appUrl ? `${appUrl}/payment/newebpay/result` : "/payment/newebpay/result";
   const failUrl = `${resultPage}?error=return`;
   const successPage = appUrl ? `${appUrl}/booking/success` : "/booking/success";
