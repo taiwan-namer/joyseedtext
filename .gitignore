@@ -1,6 +1,9 @@
 node_modules/
 .next/
 
+# TypeScript incremental（勿提交，避免 pull 被擋）
+*.tsbuildinfo
+
 # 勿推播 .env（含敏感資訊）；.env.example 可提交作範本
 .env
 .env.local
