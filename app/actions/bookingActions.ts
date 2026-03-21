@@ -9,7 +9,7 @@ import { getLinePaySandboxCredentials, validateLinePayCredentials, requestLinePa
 import { logPaymentApi } from "@/lib/paymentLogs";
 import { getAppUrl } from "@/lib/appUrl";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
-import { bookingsVisibleToMerchantOrFilter } from "@/lib/bookingsMerchantFilter";
+import { bookingsVisibleToMerchantOrFilter, buildAdminBookingsOrClause } from "@/lib/bookingsMerchantFilter";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -689,6 +689,22 @@ export type BookingWithClass = {
   class_addon_prices: { name: string; price: number }[] | null;
 };
 
+/** 後台：線上金流尚未轉成 bookings 的待付款列（callback 未跑完時會留在這裡） */
+export type AdminPendingPaymentRow = {
+  id: string;
+  member_email: string;
+  parent_name: string | null;
+  parent_phone: string | null;
+  class_id: string;
+  class_title: string | null;
+  order_amount: number | null;
+  payment_method: string;
+  gateway_key: string | null;
+  created_at: string;
+  slot_date: string | null;
+  slot_time: string | null;
+};
+
 /**
  * 會員中心：撈取該會員的訂單（member_email + 本站可見範圍），並 join 課程名稱與圖片。
  * 可見範圍含：庫存歸本商家，或經由本商家網站售出（sold_via）。
@@ -801,6 +817,7 @@ export async function getAdminBookings(): Promise<
     if (!merchantId) return { success: false, error: "未設定店家" };
 
     const supabase = createServerSupabase();
+    const orClause = await buildAdminBookingsOrClause(supabase, merchantId);
     const { data: rows, error } = await supabase
       .from("bookings")
       .select(`
@@ -818,7 +835,7 @@ export async function getAdminBookings(): Promise<
         addon_indices,
         classes ( title, image_url, price, addon_prices )
       `)
-      .or(bookingsVisibleToMerchantOrFilter(merchantId))
+      .or(orClause)
       .order("created_at", { ascending: false });
 
     if (error) return { success: false, error: error.message };
@@ -880,6 +897,120 @@ export async function getAdminBookings(): Promise<
     return { success: true, data: list };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "取得訂單失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 後台：線上金流待付款列（尚未寫入 bookings）。客戶若已付款但 callback 失敗，會卡在此表。
+ */
+export async function getAdminPendingPayments(): Promise<
+  | { success: true; data: AdminPendingPaymentRow[] }
+  | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+
+    const supabase = createServerSupabase();
+    const { data: rows, error } = await supabase
+      .from("pending_payments")
+      .select(
+        `
+        id,
+        member_email,
+        parent_name,
+        parent_phone,
+        class_id,
+        order_amount,
+        payment_method,
+        gateway_key,
+        created_at,
+        slot_date,
+        slot_time,
+        classes ( title )
+      `
+      )
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+
+    const list: AdminPendingPaymentRow[] = (rows ?? []).map((r: Record<string, unknown>) => {
+      const cls = r.classes as { title?: string } | null;
+      const slotDateRaw = r.slot_date;
+      const slotTimeRaw = r.slot_time;
+      const slot_date =
+        slotDateRaw != null && slotDateRaw !== ""
+          ? String(slotDateRaw).replace(/T.*$/, "").slice(0, 10)
+          : null;
+      const slot_time =
+        slotTimeRaw != null && String(slotTimeRaw).trim() !== ""
+          ? String(slotTimeRaw).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5)
+          : null;
+      return {
+        id: String(r.id),
+        member_email: String(r.member_email),
+        parent_name: r.parent_name != null ? String(r.parent_name) : null,
+        parent_phone: r.parent_phone != null ? String(r.parent_phone) : null,
+        class_id: String(r.class_id),
+        class_title: cls?.title != null ? String(cls.title) : null,
+        order_amount: r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null,
+        payment_method: r.payment_method != null ? String(r.payment_method) : "",
+        gateway_key: r.gateway_key != null ? String(r.gateway_key) : null,
+        created_at: String(r.created_at),
+        slot_date,
+        slot_time,
+      };
+    });
+
+    return { success: true, data: list };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "取得待付款失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 後台：手動將一筆 pending 轉成已付款訂單（等同金流 callback 成功）。請僅在確認客戶已付款後使用。
+ */
+export async function createBookingFromPendingForAdmin(
+  pendingId: string
+): Promise<{ success: true; bookingId: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    const id = (pendingId ?? "").trim();
+    if (!id) return { success: false, error: "缺少待付款編號" };
+
+    const supabase = createServerSupabase();
+    const { data: pending, error: pErr } = await supabase
+      .from("pending_payments")
+      .select("id")
+      .eq("id", id)
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
+
+    if (pErr || !pending) {
+      return { success: false, error: "找不到此筆待付款或非同店家資料" };
+    }
+
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc("create_booking_from_pending", {
+      p_pending_id: id,
+    });
+    if (rpcErr) {
+      return { success: false, error: rpcErr.message };
+    }
+    const res = rpcResult as { ok?: boolean; booking_id?: string; error?: string } | null;
+    if (!res?.ok || !res.booking_id) {
+      return { success: false, error: (res?.error as string) || "建立訂單失敗" };
+    }
+
+    return { success: true, bookingId: String(res.booking_id) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "建立訂單失敗";
     return { success: false, error: msg };
   }
 }
