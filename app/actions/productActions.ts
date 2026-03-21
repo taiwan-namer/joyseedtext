@@ -8,12 +8,6 @@ import { sidebarOptionToDisplayLabels } from "@/lib/sidebarAgeOption";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { pushInventoryBindToHqListing } from "@/lib/syncListingInventoryFromTeacher";
 import { syncListingInventoryFromBindToken } from "@/lib/syncListingInventoryFromBindToken";
-import {
-  isMissingListingBindTokenColumnError,
-  mintUniqueListingBindToken,
-} from "@/lib/listingBindToken";
-
-export { isMissingListingBindTokenColumnError, mintUniqueListingBindToken } from "@/lib/listingBindToken";
 
 /** 首頁課程列表等快取：與 model 對齊之集中 revalidate（joyseed 目前以 path 為主） */
 export async function revalidateHomepageCoursesListCache(): Promise<void> {
@@ -603,11 +597,14 @@ export async function createCourseFull(formData: FormData): Promise<
       ...hqListingForRow,
     };
 
+    /** 勿在檔案頂層 static import：含 sync 函式，會讓 "use server" 模組被 SWC 誤判；courseIntroActions 僅 import uploadOneToR2 也會整包解析此檔 */
+    const listingBindTokenLib = await import("@/lib/listingBindToken");
+
     let mintedListingToken: string | null = null;
     let attemptRow: Record<string, unknown> = { ...baseRow };
     if (shouldAutoMintListingToken) {
       try {
-        mintedListingToken = await mintUniqueListingBindToken(supabase);
+        mintedListingToken = await listingBindTokenLib.mintUniqueListingBindToken(supabase);
         attemptRow = { ...attemptRow, listing_bind_token: mintedListingToken };
       } catch (e) {
         const msg = e instanceof Error ? e.message : "產生配對碼失敗";
@@ -623,7 +620,10 @@ export async function createCourseFull(formData: FormData): Promise<
         break;
       }
       const errMsg = error?.message ?? "";
-      if (isMissingListingBindTokenColumnError(errMsg) && attemptRow.listing_bind_token != null) {
+      if (
+        listingBindTokenLib.isMissingListingBindTokenColumnError(errMsg) &&
+        attemptRow.listing_bind_token != null
+      ) {
         const { listing_bind_token: _lb, ...rest } = attemptRow;
         attemptRow = rest;
         mintedListingToken = null;
