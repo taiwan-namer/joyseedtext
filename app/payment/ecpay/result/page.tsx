@@ -31,11 +31,16 @@ async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultS
     console.error("[ECPay result page] bookings by trade no error:", tradeErr.message);
   }
 
-  const booking = (tradeRows ?? []).find(
+  let booking = (tradeRows ?? []).find(
     (r) =>
       (r as { merchant_id?: string }).merchant_id === merchantId ||
       (r as { sold_via_merchant_id?: string | null }).sold_via_merchant_id === merchantId
   ) as { status?: string } | undefined;
+
+  // 全庫此綠界編號僅一筆時直接採用（避免欄位未寫入 sold_via 等邊界仍卡在處理中）
+  if (!booking && tradeRows?.length === 1) {
+    booking = tradeRows[0] as { status?: string };
+  }
 
   if (booking) {
     const status = (booking as { status?: string }).status ?? "";

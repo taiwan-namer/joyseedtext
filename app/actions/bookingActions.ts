@@ -2,7 +2,7 @@
 
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { getFrontendSettings } from "@/app/actions/frontendSettingsActions";
 import { getLinePaySandboxCredentials, validateLinePayCredentials, requestLinePayPayment } from "@/lib/linepay";
@@ -27,6 +27,30 @@ function applyAdminBookingsAccess<T>(q: T, access: AdminBookingsAccessFilter): T
 function envTrim(key: string): string {
   const raw = process.env[key];
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+/** 金流 paymentUrl：正式站用 APP_URL；Vercel Preview 用 VERCEL_URL，避免與 checkout 表單網域不一致 */
+function paymentSiteBaseUrl(): string {
+  if (process.env.VERCEL_ENV === "preview") {
+    const vu = (process.env.VERCEL_URL ?? "").trim();
+    if (vu) {
+      if (/^https?:\/\//i.test(vu)) return vu.replace(/\/+$/, "");
+      return `https://${vu.replace(/\/+$/, "")}`;
+    }
+  }
+  const fromEnv = getAppUrl();
+  if (fromEnv) return fromEnv;
+  try {
+    const h = headers();
+    const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0]?.trim() ?? "";
+    if (!host) return "";
+    const rawProto = (h.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() ?? "https";
+    const proto = rawProto === "http" || rawProto === "https" ? rawProto : "https";
+    const base = `${proto}://${host}`.replace(/\/+$/, "");
+    return /^https?:\/\//i.test(base) ? base : `https://${base}`;
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -223,7 +247,7 @@ export async function createBooking(
         ? Math.round(totalAmount)
         : null;
 
-    const appUrl = getAppUrl();
+    const appUrl = paymentSiteBaseUrl();
 
     if (pm === "linepay" || pm === "ecpay" || pm === "newebpay") {
       const pending = await createPendingPayment(supabase, {
