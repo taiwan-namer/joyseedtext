@@ -93,3 +93,17 @@ export async function buildAdminBookingsOrClause(supabase: SupabaseClient): Prom
 
   return invFilters.length > 0 ? `${base},${invFilters.join(",")}` : base;
 }
+
+/**
+ * 儀表板營收 API：與 `getAdminBookings` 相同訂單可見範圍（class_creator / 多 merchant / 代銷庫存）。
+ * 請在 `.from('bookings').select(...)` 之後、`.eq/.in('status')` 與日期條件之前呼叫。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function applyAdminBookingsVisibilityToQuery(supabase: SupabaseClient, query: any): Promise<any | null> {
+  const access = await getAdminBookingsAccessFilter(supabase);
+  if (!access) return null;
+  if (access.mode === "class_creator") {
+    return query.eq("class_creator_merchant_id", access.merchantId);
+  }
+  return query.or(access.orClause);
+}

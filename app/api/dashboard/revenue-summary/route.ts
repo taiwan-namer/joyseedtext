@@ -1,24 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-
-function getMerchantId(): string | null {
-  const raw = process.env.NEXT_PUBLIC_CLIENT_ID;
-  return typeof raw === "string" ? raw.trim() || null : null;
-}
+import { applyAdminBookingsVisibilityToQuery } from "@/lib/bookingsMerchantFilter";
 
 /**
  * GET /api/dashboard/revenue-summary?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&course_id=xxx
- * 老師後台訂單金額總覽：總營收、總報名人數、課程數量、平均客單價（僅 status = paid）
+ * 老師後台訂單金額總覽：總營收、總報名人數、課程數量、平均客單價（status = paid 或 completed，與訂單列表可見範圍一致）
  * course_id 為選填，篩選指定課程。
  */
 export async function GET(request: NextRequest) {
   try {
     await verifyAdminSession();
-    const merchantId = getMerchantId();
-    if (!merchantId) {
-      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
-    }
 
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date")?.trim();
@@ -45,17 +37,19 @@ export async function GET(request: NextRequest) {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-    let query = supabase
-      .from("bookings")
-      .select("id, class_id, order_amount, classes(price)")
-      .eq("merchant_id", merchantId)
-      .eq("status", "paid")
+    let query = supabase.from("bookings").select("id, class_id, order_amount, classes(price)");
+    const scoped = await applyAdminBookingsVisibilityToQuery(supabase, query);
+    if (!scoped) {
+      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
+    }
+    let filtered = scoped
+      .in("status", ["paid", "completed"])
       .gte("created_at", startISO)
       .lt("created_at", endNextISO);
     if (courseId) {
-      query = query.eq("class_id", courseId);
+      filtered = filtered.eq("class_id", courseId);
     }
-    const { data: rows, error } = await query;
+    const { data: rows, error } = await filtered;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

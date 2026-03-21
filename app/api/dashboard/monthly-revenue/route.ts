@@ -1,23 +1,15 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-
-function getMerchantId(): string | null {
-  const raw = process.env.NEXT_PUBLIC_CLIENT_ID;
-  return typeof raw === "string" ? raw.trim() || null : null;
-}
+import { applyAdminBookingsVisibilityToQuery } from "@/lib/bookingsMerchantFilter";
 
 /**
  * GET /api/dashboard/monthly-revenue
- * 最近 6 個月的每月營收（僅 status = paid），回傳 { items: { month: "YYYY-MM", revenue: number }[] } 由舊到新
+ * 最近 6 個月的每月營收（status = paid 或 completed，可見範圍與訂單管理一致），回傳 { items: { month: "YYYY-MM", revenue: number }[] } 由舊到新
  */
 export async function GET() {
   try {
     await verifyAdminSession();
-    const merchantId = getMerchantId();
-    if (!merchantId) {
-      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
-    }
 
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -26,11 +18,13 @@ export async function GET() {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select("created_at, order_amount, classes(price)")
-      .eq("merchant_id", merchantId)
-      .eq("status", "paid")
+    let query = supabase.from("bookings").select("created_at, order_amount, classes(price)");
+    const scoped = await applyAdminBookingsVisibilityToQuery(supabase, query);
+    if (!scoped) {
+      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
+    }
+    const { data: rows, error } = await scoped
+      .in("status", ["paid", "completed"])
       .gte("created_at", startISO)
       .lt("created_at", endNextISO);
 

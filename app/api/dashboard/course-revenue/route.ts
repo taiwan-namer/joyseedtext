@@ -1,23 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-
-function getMerchantId(): string | null {
-  const raw = process.env.NEXT_PUBLIC_CLIENT_ID;
-  return typeof raw === "string" ? raw.trim() || null : null;
-}
+import { applyAdminBookingsVisibilityToQuery } from "@/lib/bookingsMerchantFilter";
 
 /**
  * GET /api/dashboard/course-revenue?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
- * 依課程彙總：課程名稱、報名人數、營收（僅 status = paid），依營收降序
+ * 依課程彙總：課程名稱、報名人數、營收（status = paid 或 completed，可見範圍與訂單管理一致），依營收降序
  */
 export async function GET(request: NextRequest) {
   try {
     await verifyAdminSession();
-    const merchantId = getMerchantId();
-    if (!merchantId) {
-      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
-    }
 
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date")?.trim();
@@ -43,11 +35,13 @@ export async function GET(request: NextRequest) {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select("class_id, order_amount, classes(id, title, price)")
-      .eq("merchant_id", merchantId)
-      .eq("status", "paid")
+    let query = supabase.from("bookings").select("class_id, order_amount, classes(id, title, price)");
+    const scoped = await applyAdminBookingsVisibilityToQuery(supabase, query);
+    if (!scoped) {
+      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
+    }
+    const { data: rows, error } = await scoped
+      .in("status", ["paid", "completed"])
       .gte("created_at", startISO)
       .lt("created_at", endNextISO);
 
