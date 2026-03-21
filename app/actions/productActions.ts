@@ -8,6 +8,17 @@ import { sidebarOptionToDisplayLabels } from "@/lib/sidebarAgeOption";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { pushInventoryBindToHqListing } from "@/lib/syncListingInventoryFromTeacher";
 import { syncListingInventoryFromBindToken } from "@/lib/syncListingInventoryFromBindToken";
+import {
+  isMissingListingBindTokenColumnError,
+  mintUniqueListingBindToken,
+} from "@/lib/listingBindToken";
+
+export { isMissingListingBindTokenColumnError, mintUniqueListingBindToken } from "@/lib/listingBindToken";
+
+/** 首頁課程列表等快取：與 model 對齊之集中 revalidate（joyseed 目前以 path 為主） */
+export async function revalidateHomepageCoursesListCache(): Promise<void> {
+  revalidatePath("/");
+}
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -418,13 +429,13 @@ export type CustomerNoticeForm = {
  * 需在 Supabase classes 表新增欄位：course_intro, post_content, gallery_urls (jsonb), customer_notice (jsonb), notes (text)。
  */
 export async function createCourseFull(formData: FormData): Promise<
-  | { success: true; message?: string; id?: string }
+  | { success: true; message?: string; id?: string; listing_bind_token?: string }
   | { success: false; error: string }
 > {
   try {
     await verifyAdminSession();
-    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    if (!merchantId) {
+    const envMerchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!envMerchantId) {
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     }
 
@@ -511,6 +522,25 @@ export async function createCourseFull(formData: FormData): Promise<
 
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
+
+    const formMerchantRaw = (formData.get("merchant_id") as string)?.trim() ?? "";
+    const { data: merchantRows } = await supabase.from("store_settings").select("merchant_id");
+    const allowedMids = new Set(
+      (merchantRows ?? [])
+        .map((r) => String((r as { merchant_id: unknown }).merchant_id ?? "").trim())
+        .filter(Boolean)
+    );
+    if (allowedMids.size === 0) {
+      allowedMids.add(envMerchantId);
+    }
+    let effectiveMerchantId = envMerchantId;
+    if (formMerchantRaw) {
+      if (!allowedMids.has(formMerchantRaw)) {
+        return { success: false, error: "無效的商家 ID（merchant_id）" };
+      }
+      effectiveMerchantId = formMerchantRaw;
+    }
+
     const classDateRaw = (formData.get("class_date") as string)?.trim() || null;
     const classTimeRaw = (formData.get("class_time") as string)?.trim() || null;
     const class_date = classDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(classDateRaw) ? classDateRaw : null;
@@ -539,8 +569,16 @@ export async function createCourseFull(formData: FormData): Promise<
             hq_listing_class_id: hq_listing_class_id || null,
           };
 
-    const row: Record<string, unknown> = {
-      merchant_id: merchantId,
+    const auto_listing_pairing_code = (formData.get("auto_listing_pairing_code") as string) === "on";
+    const hasInventoryBind = !!(inventory_merchant_id && inventory_class_id);
+    const shouldAutoMintListingToken =
+      effectiveMerchantId === envMerchantId &&
+      auto_listing_pairing_code &&
+      !hq_listing_bind_token &&
+      !hasInventoryBind;
+
+    const baseRow: Record<string, unknown> = {
+      merchant_id: effectiveMerchantId,
       title,
       price: Math.round(price),
       capacity: Math.floor(capacity),
@@ -564,15 +602,58 @@ export async function createCourseFull(formData: FormData): Promise<
       inventory_class_id: inventory_class_id || null,
       ...hqListingForRow,
     };
-    const { data: inserted, error } = await supabase.from("classes").insert(row).select("id").single();
 
-    if (error) {
-      return { success: false, error: error.message || "寫入課程失敗（若為欄位不存在，請在 Supabase 新增 course_intro, post_content, gallery_urls, customer_notice, notes）" };
+    let mintedListingToken: string | null = null;
+    let attemptRow: Record<string, unknown> = { ...baseRow };
+    if (shouldAutoMintListingToken) {
+      try {
+        mintedListingToken = await mintUniqueListingBindToken(supabase);
+        attemptRow = { ...attemptRow, listing_bind_token: mintedListingToken };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "產生配對碼失敗";
+        return { success: false, error: msg };
+      }
     }
+
+    let inserted: { id: unknown } | null = null;
+    for (;;) {
+      const { data, error } = await supabase.from("classes").insert(attemptRow).select("id").single();
+      if (!error && data) {
+        inserted = data as { id: unknown };
+        break;
+      }
+      const errMsg = error?.message ?? "";
+      if (isMissingListingBindTokenColumnError(errMsg) && attemptRow.listing_bind_token != null) {
+        const { listing_bind_token: _lb, ...rest } = attemptRow;
+        attemptRow = rest;
+        mintedListingToken = null;
+        continue;
+      }
+      return {
+        success: false,
+        error:
+          errMsg ||
+          "寫入課程失敗（若為欄位不存在，請在 Supabase 新增 course_intro, post_content, gallery_urls, customer_notice, notes）",
+      };
+    }
+
+    const actualTokenInRow = attemptRow.listing_bind_token;
+    let listingTokenForResponse: string | undefined;
+    if (
+      mintedListingToken &&
+      typeof actualTokenInRow === "string" &&
+      actualTokenInRow === mintedListingToken
+    ) {
+      listingTokenForResponse = mintedListingToken;
+    } else {
+      listingTokenForResponse = undefined;
+      mintedListingToken = null;
+    }
+
     const newId = inserted?.id != null ? String(inserted.id) : undefined;
-    if (newId && merchantId) {
+    if (newId && effectiveMerchantId) {
       const { backupCourseToIntro } = await import("@/app/actions/courseIntroActions");
-      await backupCourseToIntro(merchantId, newId, {
+      await backupCourseToIntro(effectiveMerchantId, newId, {
         title,
         imageUrl: mainUrl,
         galleryUrls,
@@ -580,33 +661,48 @@ export async function createCourseFull(formData: FormData): Promise<
       });
     }
     let message = "課程已新增";
+    let hqBindFailed = false;
     if (newId) {
       if (hq_listing_bind_token) {
         const sync = await syncListingInventoryFromBindToken(supabase, {
-          teacherMerchantId: merchantId,
+          teacherMerchantId: effectiveMerchantId,
           teacherClassId: newId,
           bindToken: hq_listing_bind_token,
         });
         if (!sync.ok) {
+          hqBindFailed = true;
           message = `課程已新增，但總站列表綁定失敗：${sync.error}`;
         } else {
           message = "課程已新增，且已將總站列表課綁定至本課庫存";
         }
       } else if (hq_listing_merchant_id && hq_listing_class_id) {
         const sync = await pushInventoryBindToHqListing(supabase, {
-          teacherMerchantId: merchantId,
+          teacherMerchantId: effectiveMerchantId,
           teacherClassId: newId,
           hqListingMerchantId: hq_listing_merchant_id,
           hqListingClassId: hq_listing_class_id,
         });
         if (!sync.ok) {
+          hqBindFailed = true;
           message = `課程已新增，但總站列表綁定失敗：${sync.error}`;
         } else {
           message = "課程已新增，且已將總站列表課綁定至本課庫存";
         }
       }
     }
-    return { success: true, message, id: newId };
+
+    if (listingTokenForResponse && !hqBindFailed && !message.includes("總站列表綁定失敗")) {
+      message += `\n\n已自動產生列表課配對碼（請複製給合作老師）：${listingTokenForResponse}`;
+    }
+
+    await revalidateHomepageCoursesListCache();
+
+    return {
+      success: true,
+      message,
+      id: newId,
+      ...(listingTokenForResponse ? { listing_bind_token: listingTokenForResponse } : {}),
+    };
   } catch (e) {
     const message = e instanceof Error ? e.message : "新增課程時發生錯誤";
     return { success: false, error: message };
@@ -866,6 +962,8 @@ export type CourseForEdit = {
   hq_listing_merchant_id: string | null;
   /** 老師填寫：總站列表課 UUID */
   hq_listing_class_id: string | null;
+  /** 課程所屬商家（與 classes.merchant_id 一致） */
+  merchant_id: string;
 };
 
 export async function getCourseForEdit(id: string): Promise<CourseForEdit | null> {
@@ -921,9 +1019,151 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       hq_listing_merchant_id:
         row.hq_listing_merchant_id != null ? String(row.hq_listing_merchant_id).trim() || null : null,
       hq_listing_class_id: row.hq_listing_class_id != null ? String(row.hq_listing_class_id) : null,
+      merchant_id:
+        row.merchant_id != null ? String(row.merchant_id).trim() || merchantId : merchantId,
     };
   } catch {
     return null;
+  }
+}
+
+export type MerchantSummaryRow = { merchant_id: string; site_name: string };
+
+/** 後台：所有 store_settings 商家（下拉／一鍵綁定用） */
+export async function getAllMerchantsForAdmin(): Promise<
+  { success: true; data: MerchantSummaryRow[] } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from("store_settings")
+      .select("merchant_id, site_name")
+      .order("merchant_id", { ascending: true })
+      .limit(500);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    const rows = (data ?? []) as { merchant_id: string; site_name?: string }[];
+    const list: MerchantSummaryRow[] = rows.map((r) => ({
+      merchant_id: String(r.merchant_id ?? "").trim(),
+      site_name: String(r.site_name ?? "").trim() || String(r.merchant_id ?? "").trim(),
+    })).filter((r) => r.merchant_id.length > 0);
+    return { success: true, data: list };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "取得商家列表失敗";
+    return { success: false, error: message };
+  }
+}
+
+export type ClassSummaryRow = { id: string; title: string | null };
+
+/** 後台：指定商家之課程精簡列表（一鍵綁定老師課用） */
+export async function getClassSummariesForMerchant(
+  merchantId: string
+): Promise<{ success: true; data: ClassSummaryRow[] } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const mid = merchantId.trim();
+    if (!mid) {
+      return { success: false, error: "請指定商家 ID" };
+    }
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from("classes")
+      .select("id, title")
+      .eq("merchant_id", mid)
+      .order("title", { ascending: true, nullsFirst: false })
+      .limit(300);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    const list: ClassSummaryRow[] = (data ?? []).map((r) => ({
+      id: String((r as { id: unknown }).id ?? ""),
+      title: (r as { title?: unknown }).title != null ? String((r as { title: unknown }).title) : null,
+    }));
+    return { success: true, data: list };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "取得課程列表失敗";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 總站後台：將列表課庫存綁定至指定老師課（inventory_* + 老師課 hq_listing_*）。
+ */
+export async function bindHqListingToTeacherClassFromAdmin(
+  listingClassId: string,
+  teacherMerchantId: string,
+  teacherClassId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const hqMid = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!hqMid) {
+      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    }
+    const lid = listingClassId.trim();
+    const tmid = teacherMerchantId.trim();
+    const tcid = teacherClassId.trim();
+    if (!lid || !tmid || !tcid) {
+      return { success: false, error: "請填寫列表課、老師商家與老師課程" };
+    }
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+
+    const { data: listing, error: le } = await supabase
+      .from("classes")
+      .select("id, merchant_id")
+      .eq("id", lid)
+      .maybeSingle();
+    if (le || !listing || String((listing as { merchant_id: unknown }).merchant_id) !== hqMid) {
+      return { success: false, error: "列表課不存在或不屬於本總站商家" };
+    }
+
+    const { data: teacherRow, error: te } = await supabase
+      .from("classes")
+      .select("id, merchant_id")
+      .eq("id", tcid)
+      .eq("merchant_id", tmid)
+      .maybeSingle();
+    if (te || !teacherRow) {
+      return { success: false, error: "找不到指定的老師課程或商家不符" };
+    }
+
+    const { error: invErr } = await supabase
+      .from("classes")
+      .update({
+        inventory_merchant_id: tmid,
+        inventory_class_id: tcid,
+      })
+      .eq("id", lid)
+      .eq("merchant_id", hqMid);
+    if (invErr) {
+      return { success: false, error: invErr.message };
+    }
+
+    const { error: hqErr } = await supabase
+      .from("classes")
+      .update({
+        hq_listing_merchant_id: hqMid,
+        hq_listing_class_id: lid,
+      })
+      .eq("id", tcid)
+      .eq("merchant_id", tmid);
+    if (hqErr) {
+      return { success: false, error: hqErr.message };
+    }
+
+    await revalidateHomepageCoursesListCache();
+    revalidatePath(`/course/${lid}`);
+    revalidatePath(`/course/${tcid}`);
+    return { success: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "綁定失敗";
+    return { success: false, error: message };
   }
 }
 
@@ -1119,7 +1359,7 @@ export async function updateCourseFull(
         introText: courseIntro,
       });
     }
-    revalidatePath("/");
+    await revalidateHomepageCoursesListCache();
     revalidatePath(`/course/${id}`);
     return { success: true, message: message ?? "課程已更新" };
   } catch (e) {

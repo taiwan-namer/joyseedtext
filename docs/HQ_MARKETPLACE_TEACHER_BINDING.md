@@ -1,5 +1,7 @@
 # 總站代銷：給總部的操作說明（老師端自動綁定）
 
+總站自動產碼與後台一鍵綁定說明另見：**[HQ_LISTING_BIND_TOKEN.md](./HQ_LISTING_BIND_TOKEN.md)**。
+
 ## 方式 A：配對碼（建議，與 model 對齊）
 
 1. 總站在列表課上設定 **`listing_bind_token`**（配對碼，與 model 流程相同）。  

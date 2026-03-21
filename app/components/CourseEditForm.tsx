@@ -2,7 +2,20 @@
 
 import React, { useState, useTransition, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { createCourseFull, updateCourseFull, type CourseForEdit } from "@/app/actions/productActions";
+import { useRouter } from "next/navigation";
+import {
+  bindHqListingToTeacherClassFromAdmin,
+  createCourseFull,
+  getAllMerchantsForAdmin,
+  getClassSummariesForMerchant,
+  updateCourseFull,
+  type ClassSummaryRow,
+  type CourseForEdit,
+  type MerchantSummaryRow,
+} from "@/app/actions/productActions";
+
+/** 與 DB 總站課程 merchant_id 一致（build 時寫入）；用於總站專屬 UI */
+const siteHqMerchantId = process.env.NEXT_PUBLIC_CLIENT_ID?.trim() ?? "";
 import { Loader2, ChevronRight, ChevronLeft, ChevronRight as ChevronRightArrow, X, Plus } from "lucide-react";
 import {
   活動場域類型選項,
@@ -281,6 +294,7 @@ export default function CourseEditForm({
   courseId?: string;
   initialData?: CourseForEdit | null;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -304,6 +318,13 @@ export default function CourseEditForm({
   const [cityDistrict, setCityDistrict] = useState(() => initialData?.city_district ?? "");
   const [hasSale, setHasSale] = useState(() => !!initialData?.sale_price);
   const [addonItems, setAddonItems] = useState<{ name: string; price: string }[]>(() => (initialData?.addon_prices ?? []).map((a) => ({ name: a.name, price: String(a.price) })));
+  const [merchants, setMerchants] = useState<MerchantSummaryRow[]>([]);
+  const [selectedCreateMerchantId, setSelectedCreateMerchantId] = useState(siteHqMerchantId);
+  const [bindTeacherMid, setBindTeacherMid] = useState("");
+  const [bindTeacherCid, setBindTeacherCid] = useState("");
+  const [bindClassOptions, setBindClassOptions] = useState<ClassSummaryRow[]>([]);
+  const [bindClassesLoading, setBindClassesLoading] = useState(false);
+  const [bindSubmitting, setBindSubmitting] = useState(false);
   const districtOptions = useMemo(() => getDistrictsForCity(cityRegion), [cityRegion]);
   const sidebarPreviewLabels = useMemo(
     () =>
@@ -340,6 +361,48 @@ export default function CourseEditForm({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const r = await getAllMerchantsForAdmin();
+      if (cancelled) return;
+      if (r.success && r.data.length > 0) {
+        setMerchants(r.data);
+        setSelectedCreateMerchantId((prev) => {
+          if (r.data.some((m) => m.merchant_id === prev)) return prev;
+          return r.data.find((m) => m.merchant_id === siteHqMerchantId)?.merchant_id ?? r.data[0].merchant_id;
+        });
+      } else {
+        setMerchants([{ merchant_id: siteHqMerchantId || "default", site_name: "本店" }]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bindTeacherMid.trim()) {
+      setBindClassOptions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setBindClassesLoading(true);
+      const r = await getClassSummariesForMerchant(bindTeacherMid);
+      if (cancelled) return;
+      setBindClassesLoading(false);
+      if (r.success) {
+        setBindClassOptions(r.data);
+      } else {
+        setBindClassOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bindTeacherMid]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
       try {
         const res = await fetch("/api/global-categories", { method: "GET" });
         if (!res.ok) throw new Error("failed to fetch global categories");
@@ -363,6 +426,32 @@ export default function CourseEditForm({
       cancelled = true;
     };
   }, []);
+
+  const teacherMerchantsForBind = useMemo(
+    () => merchants.filter((m) => m.merchant_id !== siteHqMerchantId),
+    [merchants]
+  );
+
+  const handleBindTeacherClass = async () => {
+    if (!courseId) return;
+    if (!bindTeacherMid.trim() || !bindTeacherCid.trim()) {
+      setError("請選擇老師店家與老師課程");
+      return;
+    }
+    setBindSubmitting(true);
+    setError(null);
+    try {
+      const r = await bindHqListingToTeacherClassFromAdmin(courseId, bindTeacherMid, bindTeacherCid);
+      if (r.success) {
+        setSuccess("已將列表課庫存綁定至所選老師課程");
+        router.refresh();
+      } else {
+        setError(r.error);
+      }
+    } finally {
+      setBindSubmitting(false);
+    }
+  };
 
   const setSlot = (index: number, file: File | null) => {
     setImageSlots((prev) => {
@@ -453,6 +542,9 @@ export default function CourseEditForm({
       .map((a) => ({ name: a.name.trim(), price: Number(a.price) }))
       .filter((a) => !Number.isNaN(a.price) && a.price >= 0);
     formData.set("addon_prices", JSON.stringify(addonPayload));
+    if (!isEdit) {
+      formData.set("merchant_id", selectedCreateMerchantId);
+    }
     startTransition(async () => {
       const result = isEdit
         ? await updateCourseFull(courseId!, formData)
@@ -498,7 +590,10 @@ export default function CourseEditForm({
             <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
           )}
           {success && (
-            <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <div
+              role="status"
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 whitespace-pre-wrap"
+            >
               <p>{success}</p>
               {courseId && (
                 <p className="mt-2 flex gap-4">
@@ -779,6 +874,89 @@ export default function CourseEditForm({
                   <label className="mb-2 block text-sm font-medium text-gray-700">分站自訂分類</label>
                   <input name="store_category" type="text" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder="例如：蒙特梭利" disabled={isPending} defaultValue={initialData?.store_category ?? ""} />
                 </div>
+                {!courseId && merchants.length > 1 && (
+                  <div className="mb-4">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">所屬商家</label>
+                    <select
+                      value={selectedCreateMerchantId}
+                      onChange={(e) => setSelectedCreateMerchantId(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                      disabled={isPending}
+                      aria-label="所屬商家"
+                    >
+                      {merchants.map((m) => (
+                        <option key={m.merchant_id} value={m.merchant_id}>
+                          {m.site_name}（{m.merchant_id}）
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">新增課程寫入的 merchant_id；總站代銷列表課請選總站商家。</p>
+                  </div>
+                )}
+                {!courseId && selectedCreateMerchantId === siteHqMerchantId && siteHqMerchantId !== "" && (
+                  <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="checkbox"
+                        name="auto_listing_pairing_code"
+                        value="on"
+                        className="mt-1 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                        disabled={isPending}
+                      />
+                      <span className="text-sm text-gray-800">
+                        <strong>代銷列表課</strong>：建立時<strong>自動產生配對碼</strong>（<code className="rounded bg-white/80 px-1">listing_bind_token</code>
+                        ）。僅在未填下方「庫存綁定」兩格、且未手填配對碼時生效。
+                      </span>
+                    </label>
+                  </div>
+                )}
+                {courseId && initialData?.merchant_id === siteHqMerchantId && siteHqMerchantId !== "" && (
+                  <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                    <p className="mb-2 text-sm font-medium text-gray-800">總站：一鍵綁定老師課程</p>
+                    <p className="mb-3 text-xs text-gray-600">
+                      將<strong>本列表課</strong>的庫存指向所選老師課，並寫回老師課的總站對應欄位。
+                    </p>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">老師店家</label>
+                    <select
+                      value={bindTeacherMid}
+                      onChange={(e) => {
+                        setBindTeacherMid(e.target.value);
+                        setBindTeacherCid("");
+                      }}
+                      className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                      disabled={isPending || bindSubmitting}
+                    >
+                      <option value="">請選擇（已排除本總站）</option>
+                      {teacherMerchantsForBind.map((m) => (
+                        <option key={m.merchant_id} value={m.merchant_id}>
+                          {m.site_name}（{m.merchant_id}）
+                        </option>
+                      ))}
+                    </select>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">老師課程</label>
+                    <select
+                      value={bindTeacherCid}
+                      onChange={(e) => setBindTeacherCid(e.target.value)}
+                      className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
+                      disabled={isPending || bindSubmitting || !bindTeacherMid || bindClassesLoading}
+                    >
+                      <option value="">{bindClassesLoading ? "載入中…" : bindTeacherMid ? "請選擇課程" : "請先選店家"}</option>
+                      {bindClassOptions.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {(c.title ?? "").trim() || c.id}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void handleBindTeacherClass()}
+                      disabled={isPending || bindSubmitting || !bindTeacherMid || !bindTeacherCid}
+                      className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {bindSubmitting ? "綁定中…" : "執行綁定"}
+                    </button>
+                  </div>
+                )}
                 <div className="mb-4 space-y-2">
                   <label className="mb-2 block text-sm font-medium text-gray-700">上課地區</label>
                   <select
