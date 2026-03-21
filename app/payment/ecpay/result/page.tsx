@@ -5,6 +5,8 @@ import { HeaderMember } from "@/app/components/HeaderMember";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { EcpayResultAutoRefresh } from "./EcpayResultAutoRefresh";
 
+export const dynamic = "force-dynamic";
+
 type ResultStatus = "paid" | "unpaid" | "not_found";
 
 function envTrim(key: string): string {
@@ -19,27 +21,21 @@ async function getBookingStatus(merchantTradeNo: string | null): Promise<ResultS
   const supabase = createServerSupabase();
   const trimmed = merchantTradeNo.trim();
 
-  // 總站自售：merchant_id＝本站；列表課／代銷：訂單 merchant_id 為庫存課商家，sold_via_merchant_id 為結帳站台
-  let booking: { status?: string } | null = null;
-  const byOwner = await supabase
+  // 一次依綠界訂單編號取回，再在程式內判斷是否為「本站／本站代銷」；避免分兩次 maybeSingle 在總站代銷情境漏單
+  const { data: tradeRows, error: tradeErr } = await supabase
     .from("bookings")
-    .select("status")
-    .eq("ecpay_merchant_trade_no", trimmed)
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
-  if (!byOwner.error && byOwner.data) {
-    booking = byOwner.data as { status?: string };
-  } else {
-    const bySoldVia = await supabase
-      .from("bookings")
-      .select("status")
-      .eq("ecpay_merchant_trade_no", trimmed)
-      .eq("sold_via_merchant_id", merchantId)
-      .maybeSingle();
-    if (!bySoldVia.error && bySoldVia.data) {
-      booking = bySoldVia.data as { status?: string };
-    }
+    .select("status, merchant_id, sold_via_merchant_id")
+    .eq("ecpay_merchant_trade_no", trimmed);
+
+  if (tradeErr) {
+    console.error("[ECPay result page] bookings by trade no error:", tradeErr.message);
   }
+
+  const booking = (tradeRows ?? []).find(
+    (r) =>
+      (r as { merchant_id?: string }).merchant_id === merchantId ||
+      (r as { sold_via_merchant_id?: string | null }).sold_via_merchant_id === merchantId
+  ) as { status?: string } | undefined;
 
   if (booking) {
     const status = (booking as { status?: string }).status ?? "";

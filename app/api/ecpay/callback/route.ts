@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { ecpayCheckMacValueFromReceived } from "@/lib/ecpay/checkmac";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { issueInvoice } from "@/lib/invoice/service";
+import { bookingsVisibleToMerchantOrFilter } from "@/lib/bookingsMerchantFilter";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     .from("bookings")
     .select("id, class_id, merchant_id, slot_date, slot_time, status")
     .eq("ecpay_merchant_trade_no", merchantTradeNo)
-    .eq("merchant_id", merchantId)
+    .or(bookingsVisibleToMerchantOrFilter(merchantId))
     .maybeSingle();
 
   if (!fetchError && booking) {
