@@ -68,9 +68,17 @@ export default async function EcpayResultPage({
 }) {
   const [params, settings] = await Promise.all([searchParams, getStoreSettings()]);
   const merchantTradeNo = typeof params.MerchantTradeNo === "string" ? params.MerchantTradeNo : null;
+  const ecpayErr = typeof params.ecpay_err === "string" ? params.ecpay_err : null;
   console.log("[ECPay result page] searchParams keys:", Object.keys(params), "MerchantTradeNo:", merchantTradeNo ?? "(empty)");
   const status = await getBookingStatus(merchantTradeNo);
   console.log("[ECPay result page] DB order status:", status);
+
+  const syncOrCheckmacHint =
+    ecpayErr === "sync"
+      ? "訂單建立或更新未完成（常見原因：名額已滿）。若已扣款請聯絡客服並提供綠界訂單編號。"
+      : ecpayErr === "checkmac"
+        ? "付款資料驗證失敗，請勿重複操作並聯絡客服。"
+        : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-page">
@@ -98,6 +106,11 @@ export default async function EcpayResultPage({
               <h1 className="text-2xl font-bold mt-4 text-gray-800">處理中</h1>
               <p className="text-gray-600 mt-2">付款結果處理中，請稍後至會員中心確認訂單狀態。</p>
               <p className="text-gray-500 text-sm mt-2">頁面將自動更新數次；若已扣款成功也可手動重新整理。</p>
+              {syncOrCheckmacHint && (
+                <p className="text-amber-800 text-sm mt-3 px-2 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                  {syncOrCheckmacHint}
+                </p>
+              )}
             </>
           )}
           {status === "not_found" && (

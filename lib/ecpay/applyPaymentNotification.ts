@@ -119,10 +119,14 @@ export async function applyEcpayPaymentNotification(paramsRaw: Record<string, st
   if (rpcErr) {
     return { status: "rpc_failed", detail: rpcErr.message };
   }
-  const res = rpcResult as { ok?: boolean; booking_id?: string } | null;
+  const res = rpcResult as { ok?: boolean; booking_id?: string; error?: string } | null;
   if (!res?.ok || !res.booking_id) {
-    revalidatePath("/member");
-    return { status: "success" };
+    const detail =
+      typeof res?.error === "string" && res.error.trim() !== ""
+        ? res.error.trim()
+        : "create_booking_from_pending 未建立訂單";
+    console.error("[ECPay apply] create_booking_from_pending 失敗:", detail, res);
+    return { status: "rpc_failed", detail };
   }
 
   await supabase
