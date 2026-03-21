@@ -3,8 +3,6 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { ecpayCheckMacValueFromReceived } from "@/lib/ecpay/checkmac";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { issueInvoice } from "@/lib/invoice/service";
-import { bookingsVisibleToMerchantOrFilter } from "@/lib/bookingsMerchantFilter";
-
 function envTrim(key: string): string {
   const raw = process.env[key];
   return typeof raw === "string" ? raw.trim() : "";
@@ -59,14 +57,25 @@ export async function applyEcpayPaymentNotification(paramsRaw: Record<string, st
   const supabase = createServerSupabase();
   let bookingRow: { id: string; class_id: string; merchant_id: string; slot_date: string | null; slot_time: string | null } | null = null;
 
-  const { data: booking, error: fetchError } = await supabase
+  // 勿使用 .eq(trade_no).or(merchant…) 鏈式寫法：PostgREST 易與預期 AND 組合不符，可能誤抓他筆訂單而略過 pending。
+  const { data: tradeRows, error: fetchError } = await supabase
     .from("bookings")
-    .select("id, class_id, merchant_id, slot_date, slot_time, status")
-    .eq("ecpay_merchant_trade_no", merchantTradeNo)
-    .or(bookingsVisibleToMerchantOrFilter(merchantId))
-    .maybeSingle();
+    .select("id, class_id, merchant_id, slot_date, slot_time, status, sold_via_merchant_id")
+    .eq("ecpay_merchant_trade_no", merchantTradeNo);
 
-  if (!fetchError && booking) {
+  if (fetchError) {
+    console.error("[ECPay apply] bookings by MerchantTradeNo:", fetchError.message);
+  }
+
+  const rows = tradeRows ?? [];
+  let booking =
+    (rows.find(
+      (r) =>
+        (r as { merchant_id?: string }).merchant_id === merchantId ||
+        (r as { sold_via_merchant_id?: string | null }).sold_via_merchant_id === merchantId
+    ) as (typeof rows)[0] | undefined) ?? (rows.length === 1 ? rows[0] : undefined);
+
+  if (booking) {
     const status = (booking as { status?: string }).status ?? "";
     if (status === "paid" || status === "completed") {
       revalidatePath("/member");
@@ -100,15 +109,23 @@ export async function applyEcpayPaymentNotification(paramsRaw: Record<string, st
     return { status: "success" };
   }
 
-  const { data: pending, error: pendingErr } = await supabase
+  const { data: pendingRows, error: pendingErr } = await supabase
     .from("pending_payments")
     .select("id")
     .eq("payment_method", "ecpay")
     .eq("gateway_key", merchantTradeNo)
     .eq("merchant_id", merchantId)
-    .maybeSingle();
+    .limit(2);
 
-  if (pendingErr || !pending) {
+  if (pendingErr) {
+    console.error("[ECPay apply] pending_payments lookup:", pendingErr.message);
+    return { status: "rpc_failed", detail: pendingErr.message };
+  }
+  const pending = pendingRows?.[0];
+  if ((pendingRows?.length ?? 0) > 1) {
+    console.warn("[ECPay apply] 多筆 pending 同 gateway_key，取第一筆:", merchantTradeNo);
+  }
+  if (!pending) {
     revalidatePath("/member");
     return { status: "success" };
   }
@@ -129,10 +146,14 @@ export async function applyEcpayPaymentNotification(paramsRaw: Record<string, st
     return { status: "rpc_failed", detail };
   }
 
-  await supabase
+  const { error: tradeUpErr } = await supabase
     .from("bookings")
     .update({ ecpay_merchant_trade_no: merchantTradeNo, ecpay_trade_no: tradeNo })
     .eq("id", res.booking_id);
+  if (tradeUpErr) {
+    console.error("[ECPay apply] 寫入 ecpay_merchant_trade_no 失敗:", tradeUpErr.message);
+    return { status: "update_booking_failed", detail: tradeUpErr.message };
+  }
 
   const { data: createdBooking } = await supabase.from("bookings").select("merchant_id").eq("id", res.booking_id).single();
   const bookingOwnerMerchant = (createdBooking as { merchant_id?: string } | null)?.merchant_id ?? merchantId;
