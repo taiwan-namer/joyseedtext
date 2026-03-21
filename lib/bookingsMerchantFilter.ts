@@ -14,6 +14,32 @@ export function bookingsVisibleToMerchantOrFilter(merchantId: string): string {
 }
 
 /**
+ * 若設定：後台訂單／匯出／待付款篩選**僅**顯示 `class_creator_merchant_id` 等於此值的訂單（開課商家 id），
+ * 不再用 `BOOKINGS_ADMIN_VISIBLE_MERCHANT_IDS` 整包撈 MODEL 下所有訂單。
+ */
+export function getOrderAdminClassCreatorMerchantIdFilter(): string | null {
+  const v = envTrim("BOOKINGS_ORDER_ADMIN_CLASS_CREATOR_MERCHANT_ID");
+  return v.length > 0 ? v : null;
+}
+
+export type AdminBookingsAccessFilter =
+  | { mode: "class_creator"; merchantId: string }
+  | { mode: "merchant_scope"; orClause: string };
+
+/**
+ * 後台訂單列／變更所用篩選：優先「開課商家」精準篩選，否則沿用多 merchant OR（含列表課庫存）。
+ */
+export async function getAdminBookingsAccessFilter(
+  supabase: SupabaseClient
+): Promise<AdminBookingsAccessFilter | null> {
+  const creator = getOrderAdminClassCreatorMerchantIdFilter();
+  if (creator) return { mode: "class_creator", merchantId: creator };
+  const orClause = await buildAdminBookingsOrClause(supabase);
+  if (!orClause) return null;
+  return { mode: "merchant_scope", orClause };
+}
+
+/**
  * 後台訂單／匯出：可見的商家 id 清單。
  * - 必含 `NEXT_PUBLIC_CLIENT_ID`
  * - 可選 `BOOKINGS_ADMIN_VISIBLE_MERCHANT_IDS`（逗號或換行分隔），用於同一 Supabase、多站台下單時合併顯示

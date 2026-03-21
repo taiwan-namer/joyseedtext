@@ -11,9 +11,18 @@ import { getAppUrl } from "@/lib/appUrl";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import {
   bookingsVisibleToMerchantOrFilter,
-  buildAdminBookingsOrClause,
   getAdminBookingMerchantScope,
+  getAdminBookingsAccessFilter,
+  getOrderAdminClassCreatorMerchantIdFilter,
+  type AdminBookingsAccessFilter,
 } from "@/lib/bookingsMerchantFilter";
+
+function applyAdminBookingsAccess<T>(q: T, access: AdminBookingsAccessFilter): T {
+  if (access.mode === "class_creator") {
+    return (q as { eq: (c: string, v: string) => T }).eq("class_creator_merchant_id", access.merchantId);
+  }
+  return (q as { or: (clause: string) => T }).or(access.orClause);
+}
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -440,14 +449,13 @@ export async function markBookingAsPaid(
   try {
     await verifyAdminSession();
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data, error } = await supabase
-      .from("bookings")
-      .update({ status: "paid" })
-      .eq("id", bookingId)
-      .or(orClause)
+    const { data, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").update({ status: "paid" }).eq("id", bookingId),
+      access
+    )
       .eq("status", "unpaid")
       .select("id")
       .single();
@@ -474,14 +482,13 @@ export async function completeBooking(
   try {
     await verifyAdminSession();
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data, error } = await supabase
-      .from("bookings")
-      .update({ status: "completed" })
-      .eq("id", bookingId)
-      .or(orClause)
+    const { data, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").update({ status: "completed" }).eq("id", bookingId),
+      access
+    )
       .eq("status", "paid")
       .select("id")
       .single();
@@ -511,13 +518,13 @@ export async function batchMarkBookingsAsPaid(
     if (ids.length === 0) return { success: true, updated: 0, message: "無符合的訂單" };
 
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data, error } = await supabase
-      .from("bookings")
-      .update({ status: "paid" })
-      .or(orClause)
+    const { data, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").update({ status: "paid" }),
+      access
+    )
       .in("status", ["unpaid", "upcoming"])
       .in("id", ids)
       .select("id");
@@ -546,13 +553,13 @@ export async function batchCompleteBookings(
     if (ids.length === 0) return { success: true, updated: 0, message: "無符合的訂單" };
 
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data, error } = await supabase
-      .from("bookings")
-      .update({ status: "completed" })
-      .or(orClause)
+    const { data, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").update({ status: "completed" }),
+      access
+    )
       .eq("status", "paid")
       .in("id", ids)
       .select("id");
@@ -578,26 +585,23 @@ export async function deleteBooking(
   try {
     await verifyAdminSession();
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data: booking, error: fetchError } = await supabase
-      .from("bookings")
-      .select("id, class_id, slot_date, slot_time, merchant_id")
-      .eq("id", bookingId)
-      .or(orClause)
-      .single();
+    const { data: booking, error: fetchError } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select("id, class_id, slot_date, slot_time, merchant_id").eq("id", bookingId),
+      access
+    ).single();
 
     if (fetchError || !booking) return { success: false, error: "訂單不存在或非本店家" };
 
     const classId = (booking as { class_id?: string }).class_id;
     const ownerMerchantId = String((booking as { merchant_id?: string }).merchant_id ?? "");
     const hadSlot = (booking as { slot_date?: string | null; slot_time?: string | null }).slot_date != null && (booking as { slot_time?: string | null }).slot_time != null;
-    const { error: deleteError } = await supabase
-      .from("bookings")
-      .delete()
-      .eq("id", bookingId)
-      .or(orClause);
+    const { error: deleteError } = await applyAdminBookingsAccess(
+      supabase.from("bookings").delete().eq("id", bookingId),
+      access
+    );
 
     if (deleteError) return { success: false, error: deleteError.message };
 
@@ -818,15 +822,12 @@ export async function getAdminBookings(): Promise<
   | { success: false; error: string }
 > {
   try {
-    if (getAdminBookingMerchantScope().length === 0) return { success: false, error: "未設定店家" };
-
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select(`
+    const { data: rows, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select(`
         id,
         member_email,
         parent_name,
@@ -840,9 +841,9 @@ export async function getAdminBookings(): Promise<
         order_amount,
         addon_indices,
         classes ( title, image_url, price, addon_prices )
-      `)
-      .or(orClause)
-      .order("created_at", { ascending: false });
+      `),
+      access
+    ).order("created_at", { ascending: false });
 
     if (error) return { success: false, error: error.message };
 
@@ -916,14 +917,52 @@ export async function getAdminPendingPayments(): Promise<
 > {
   try {
     await verifyAdminSession();
-    const scope = getAdminBookingMerchantScope();
-    if (scope.length === 0) return { success: false, error: "未設定店家" };
-
     const supabase = createServerSupabase();
-    const { data: rows, error } = await supabase
-      .from("pending_payments")
-      .select(
-        `
+    const creatorFilter = getOrderAdminClassCreatorMerchantIdFilter();
+    const scope = getAdminBookingMerchantScope();
+
+    let rows: Record<string, unknown>[] | null = null;
+    let error: { message: string } | null = null;
+
+    if (creatorFilter) {
+      const res = await supabase
+        .from("pending_payments")
+        .select(
+          `
+        id,
+        member_email,
+        parent_name,
+        parent_phone,
+        class_id,
+        order_amount,
+        payment_method,
+        gateway_key,
+        created_at,
+        slot_date,
+        slot_time,
+        merchant_id,
+        classes ( title, merchant_id, inventory_merchant_id )
+      `
+        )
+        .order("created_at", { ascending: false })
+        .limit(400);
+      error = res.error;
+      const raw = res.data ?? [];
+      rows = raw.filter((r) => {
+        const c = r.classes as
+          | { merchant_id?: string; inventory_merchant_id?: string | null }
+          | null
+          | undefined;
+        const inv = typeof c?.inventory_merchant_id === "string" ? c.inventory_merchant_id.trim() : "";
+        const owner = (inv || c?.merchant_id || "").trim();
+        return owner === creatorFilter;
+      }) as Record<string, unknown>[];
+    } else {
+      if (scope.length === 0) return { success: false, error: "未設定店家" };
+      const res = await supabase
+        .from("pending_payments")
+        .select(
+          `
         id,
         member_email,
         parent_name,
@@ -937,9 +976,12 @@ export async function getAdminPendingPayments(): Promise<
         slot_time,
         classes ( title )
       `
-      )
-      .in("merchant_id", scope)
-      .order("created_at", { ascending: false });
+        )
+        .in("merchant_id", scope)
+        .order("created_at", { ascending: false });
+      error = res.error;
+      rows = res.data as Record<string, unknown>[] | null;
+    }
 
     if (error) return { success: false, error: error.message };
 
@@ -986,20 +1028,42 @@ export async function createBookingFromPendingForAdmin(
 ): Promise<{ success: true; bookingId: string } | { success: false; error: string }> {
   try {
     await verifyAdminSession();
+    const creatorFilter = getOrderAdminClassCreatorMerchantIdFilter();
     const scope = getAdminBookingMerchantScope();
-    if (scope.length === 0) return { success: false, error: "未設定店家" };
+    if (!creatorFilter && scope.length === 0) return { success: false, error: "未設定店家" };
     const id = (pendingId ?? "").trim();
     if (!id) return { success: false, error: "缺少待付款編號" };
 
     const supabase = createServerSupabase();
-    const { data: pending, error: pErr } = await supabase
+    const { data: pendingRow, error: pErr } = await supabase
       .from("pending_payments")
-      .select("id")
+      .select("id, merchant_id, class_id, classes ( merchant_id, inventory_merchant_id, inventory_class_id )")
       .eq("id", id)
-      .in("merchant_id", scope)
       .maybeSingle();
 
-    if (pErr || !pending) {
+    if (pErr || !pendingRow) {
+      return { success: false, error: "找不到此筆待付款" };
+    }
+
+    const pr = pendingRow as {
+      id: string;
+      merchant_id: string;
+      class_id: string;
+      classes?: {
+        merchant_id?: string;
+        inventory_merchant_id?: string | null;
+        inventory_class_id?: string | null;
+      } | null;
+    };
+    const c = pr.classes;
+    const inv = typeof c?.inventory_merchant_id === "string" ? c.inventory_merchant_id.trim() : "";
+    const resolvedCreator = (inv || c?.merchant_id || "").trim();
+
+    if (creatorFilter) {
+      if (resolvedCreator !== creatorFilter) {
+        return { success: false, error: "此筆待付款不屬於目前設定的開課商家範圍" };
+      }
+    } else if (!scope.includes(pr.merchant_id)) {
       return { success: false, error: "找不到此筆待付款或非同店家資料" };
     }
 
@@ -1029,24 +1093,28 @@ export async function getEnrollmentCountsForAdmin(): Promise<
   | { success: false; error: string }
 > {
   try {
-    if (getAdminBookingMerchantScope().length === 0) return { success: false, error: "未設定店家" };
-
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select("class_id")
-      .or(orClause)
-      .in("status", ["paid", "completed"]);
+    const { data: rows, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select("class_id").in("status", ["paid", "completed"]),
+      access
+    );
 
     if (error) return { success: false, error: error.message };
 
-    const { data: classRows } = await supabase
-      .from("classes")
-      .select("id, inventory_class_id, inventory_merchant_id")
-      .in("merchant_id", getAdminBookingMerchantScope());
+    let classRowsQuery = supabase.from("classes").select("id, inventory_class_id, inventory_merchant_id");
+    if (access.mode === "class_creator") {
+      classRowsQuery = classRowsQuery
+        .eq("inventory_merchant_id", access.merchantId)
+        .not("inventory_class_id", "is", null);
+    } else {
+      const scope = getAdminBookingMerchantScope();
+      if (scope.length === 0) return { success: false, error: "未設定店家" };
+      classRowsQuery = classRowsQuery.in("merchant_id", scope);
+    }
+    const { data: classRows } = await classRowsQuery;
 
     const invClassToListingId = new Map<string, string>();
     for (const c of classRows ?? []) {
@@ -1083,17 +1151,14 @@ export async function getBookingCountsByMemberEmailForAdmin(): Promise<
   | { success: false; error: string }
 > {
   try {
-    if (getAdminBookingMerchantScope().length === 0) return { success: false, error: "未設定店家" };
-
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select("member_email")
-      .or(orClause)
-      .in("status", ["paid", "completed"]);
+    const { data: rows, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select("member_email").in("status", ["paid", "completed"]),
+      access
+    );
 
     if (error) return { success: false, error: error.message };
 
@@ -1119,17 +1184,15 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
   | { success: false; error: string }
 > {
   try {
-    if (getAdminBookingMerchantScope().length === 0) return { success: false, error: "未設定店家" };
     const email = (memberEmail ?? "").trim();
     if (!email) return { success: false, error: "請提供會員信箱" };
 
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select(`
+    const { data: rows, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select(`
         id,
         member_email,
         parent_name,
@@ -1143,8 +1206,9 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
         order_amount,
         addon_indices,
         classes ( title, image_url, price, addon_prices )
-      `)
-      .or(orClause)
+      `),
+      access
+    )
       .eq("member_email", email)
       .order("created_at", { ascending: false });
 
@@ -1618,14 +1682,18 @@ export async function getBookingsForSession(
       }
     }
 
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) return { success: false, error: "未設定店家" };
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
 
-    const { data: bookingsRows, error: bookingsError } = await supabase
-      .from("bookings")
-      .select("id, member_email, parent_name, parent_phone, kid_name, kid_age, allergy_or_special_note, addon_indices, status, created_at")
-      .or(orClause)
-      .eq("class_id", countClassId)
+    const { data: bookingsRows, error: bookingsError } = await applyAdminBookingsAccess(
+      supabase
+        .from("bookings")
+        .select(
+          "id, member_email, parent_name, parent_phone, kid_name, kid_age, allergy_or_special_note, addon_indices, status, created_at"
+        )
+        .eq("class_id", countClassId),
+      access
+    )
       .eq("slot_date", dateStr)
       .eq("slot_time", timeStr)
       .order("created_at", { ascending: true });

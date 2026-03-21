@@ -11,6 +11,7 @@ select
   b.payment_method,
   b.order_amount,
   b.merchant_id as booking_merchant_id,
+  b.class_creator_merchant_id,
   b.sold_via_merchant_id,
   b.member_email,
   b.parent_name,

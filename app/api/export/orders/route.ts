@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-import { buildAdminBookingsOrClause, getAdminBookingMerchantScope } from "@/lib/bookingsMerchantFilter";
+import { getAdminBookingsAccessFilter } from "@/lib/bookingsMerchantFilter";
 
 function escapeCsvCell(value: string): string {
   if (/[",\n\r]/.test(value)) {
@@ -32,9 +32,6 @@ function formatOrderDate(iso: string): string {
 export async function GET(request: NextRequest) {
   try {
     await verifyAdminSession();
-    if (getAdminBookingMerchantScope().length === 0) {
-      return new Response("未設定店家", { status: 500 });
-    }
 
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date")?.trim();
@@ -57,14 +54,19 @@ export async function GET(request: NextRequest) {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-    const orClause = await buildAdminBookingsOrClause(supabase);
-    if (!orClause) {
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) {
       return new Response("未設定店家", { status: 500 });
     }
-    const { data: rows, error } = await supabase
+    let bookingsQuery = supabase
       .from("bookings")
-      .select("id, created_at, order_amount, status, parent_name, member_email, classes(title, price)")
-      .or(orClause)
+      .select("id, created_at, order_amount, status, parent_name, member_email, classes(title, price)");
+    if (access.mode === "class_creator") {
+      bookingsQuery = bookingsQuery.eq("class_creator_merchant_id", access.merchantId);
+    } else {
+      bookingsQuery = bookingsQuery.or(access.orClause);
+    }
+    const { data: rows, error } = await bookingsQuery
       .eq("status", "paid")
       .gte("created_at", startISO)
       .lt("created_at", endNextISO)
