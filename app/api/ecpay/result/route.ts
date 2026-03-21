@@ -1,35 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
+import { applyEcpayPaymentNotification } from "@/lib/ecpay/applyPaymentNotification";
 
 export const dynamic = "force-dynamic";
 
 /**
- * 綠界 OrderResultURL 專用：接收綠界 POST（付款完成後導回），不讓 POST 打到 page 造成 500。
- * 解析後 redirect 到結果頁 GET /payment/ecpay/result?MerchantTradeNo=xxx
+ * 綠界 OrderResultURL：瀏覽器 POST 付款結果至此。
+ * 須與 ReturnURL 做**相同**建單／更新邏輯；若僅 redirect 而背景通知未到，pending 永在 → 結果頁永遠「處理中」。
  *
- * 導向網址**必須**用本請求的 host（request.nextUrl.origin），不可用 getAppUrl()：
- * 否則 Preview／與 APP_URL 不同網域時，會把使用者導到正式站，NEXT_PUBLIC_CLIENT_ID／建置版本不一致 → 永遠「處理中」。
+ * 導向結果頁一律用本請求 origin，避免 Preview 與 APP_URL 混用。
  */
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
-  const params: Record<string, string> = {};
+  const paramsRaw: Record<string, string> = {};
   formData.forEach((value, key) => {
-    params[key] = typeof value === "string" ? value.trim() : value instanceof File ? value.name : String(value);
+    const raw = typeof value === "string" ? value : value instanceof File ? value.name : String(value);
+    paramsRaw[key] = raw;
   });
 
-  const merchantTradeNo = params.MerchantTradeNo ?? "";
-  const rtnCode = params.RtnCode ?? "";
-  const tradeAmt = params.TradeAmt ?? "";
+  const paramsTrimmed: Record<string, string> = {};
+  for (const k of Object.keys(paramsRaw)) {
+    paramsTrimmed[k] = paramsRaw[k].trim();
+  }
+  const merchantTradeNo = paramsTrimmed.MerchantTradeNo ?? "";
+  const rtnCode = paramsTrimmed.RtnCode ?? "";
 
-  console.log("[ECPay result route] POST received, raw keys:", Object.keys(params));
-  console.log("[ECPay result route] MerchantTradeNo:", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
+  console.log("[ECPay result route] POST OrderResultURL MerchantTradeNo:", merchantTradeNo, "RtnCode:", rtnCode);
+
+  const outcome = await applyEcpayPaymentNotification(paramsRaw);
+  console.log("[ECPay result route] apply outcome:", outcome.status);
 
   const origin = request.nextUrl.origin.replace(/\/+$/, "");
   const resultPage = `${origin}/payment/ecpay/result`;
-  const redirectTarget = merchantTradeNo
-    ? `${resultPage}?MerchantTradeNo=${encodeURIComponent(merchantTradeNo)}`
-    : resultPage;
+  const q = new URLSearchParams();
+  if (merchantTradeNo) q.set("MerchantTradeNo", merchantTradeNo);
+  if (outcome.status === "checkmac_invalid") q.set("ecpay_err", "checkmac");
+  if (outcome.status === "rpc_failed" || outcome.status === "update_booking_failed") q.set("ecpay_err", "sync");
 
-  console.log("[ECPay result route] redirect target:", redirectTarget);
-
+  const redirectTarget = q.toString() ? `${resultPage}?${q.toString()}` : resultPage;
   return NextResponse.redirect(redirectTarget, 302);
 }
