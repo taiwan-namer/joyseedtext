@@ -4,9 +4,9 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getLinePaySandboxCredentials, validateLinePayCredentials, confirmLinePayPayment } from "@/lib/linepay";
 import { logPaymentApi } from "@/lib/paymentLogs";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
-import { getAppUrl } from "@/lib/appUrl";
+import { resolvePublicBaseUrl } from "@/lib/appUrl";
 
-/** 建置時不可靜態預渲染：會讀取 request.url / nextUrl，否則觸發 Dynamic server usage 且 catch 內 redirect 可能失敗 */
+/** 勿使用 request.url：建置預渲染會觸發 Dynamic server usage，catch 內 redirect 若 base 無 https 會 malformed */
 export const dynamic = "force-dynamic";
 
 function envTrim(key: string): string {
@@ -22,7 +22,7 @@ function envTrim(key: string): string {
  * 失敗時導向結帳頁（不導向首頁 /）。
  */
 export async function GET(request: NextRequest) {
-  const baseUrl = (getAppUrl() || request.nextUrl.origin).replace(/\/+$/, "");
+  const baseUrl = resolvePublicBaseUrl(request.nextUrl.origin);
   const checkoutFailPath = "/course/course/checkout";
   const redirectFail = (msg: string, detail?: string, slug?: string) => {
     const params = new URLSearchParams({ error: "linepay_confirm", message: msg });
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     NextResponse.redirect(`${baseUrl}${checkoutFailPath}?error=no_id_provided`);
 
   try {
-    const { searchParams } = new URL(request.url);
+    const searchParams = request.nextUrl.searchParams;
     const transactionId = searchParams.get("transactionId");
     const orderIdRaw =
       searchParams.get("orderId") || searchParams.get("bookingId") || searchParams.get("id");

@@ -15,3 +15,15 @@ export function getAppUrl(): string {
   const b = normalizeAbsoluteBaseUrl(process.env.NEXT_PUBLIC_BASE_URL ?? "");
   return a || b || "";
 }
+
+/**
+ * 組 redirect／金流網址用：優先 getAppUrl()，否則用 request.nextUrl.origin；
+ * 再保險將「僅主機名」補成 https://，避免 NextResponse.redirect 報 malformed。
+ */
+export function resolvePublicBaseUrl(originFallback: string): string {
+  const fromEnv = getAppUrl();
+  const merged = (fromEnv || originFallback || "").trim().replace(/\/+$/, "");
+  if (!merged) return "";
+  if (/^https?:\/\//i.test(merged)) return merged;
+  return `https://${merged}`;
+}
