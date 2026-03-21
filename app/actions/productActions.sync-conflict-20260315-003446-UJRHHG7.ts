@@ -13,6 +13,20 @@ function envTrim(key: string): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
+/**
+ * 單店 R2 路徑隔離：Object Key 最上層必須為商家 ID。
+ * 若 NEXT_PUBLIC_CLIENT_ID 未設定則拋錯，嚴禁寫入 bucket 根目錄。
+ */
+function requireMerchantIdForR2(): string {
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  if (!merchantId) {
+    throw new Error(
+      "系統設定錯誤：未設定 NEXT_PUBLIC_CLIENT_ID，無法上傳至 R2（請檢查 .env.local）"
+    );
+  }
+  return merchantId;
+}
+
 /** 金鑰用：trim + 移除換行／斷行，貼上時常會帶入導致簽章不符 */
 function cleanCredential(value: string | undefined): string {
   if (value == null) return "";
@@ -48,7 +62,7 @@ function getR2Client(): S3Client {
 
 /**
  * 執行順序 1：將圖片上傳至 Cloudflare R2（S3 協定），並回傳公開網址。
- * 公開網址 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL / 檔案名稱
+ * 公開網址 = NEXT_PUBLIC_R2_PUBLIC_URL / {merchantId}/classes/...
  */
 async function uploadImageToR2(formData: FormData): Promise<string> {
   const bucketName = cleanCredential(process.env.R2_BUCKET_NAME);
@@ -72,8 +86,9 @@ async function uploadImageToR2(formData: FormData): Promise<string> {
     throw new Error("圖片大小不可超過 10 MB");
   }
 
+  const merchantId = requireMerchantIdForR2();
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const fileName = `classes/${Date.now()}-${safeName}`;
+  const fileName = `${merchantId}/classes/${Date.now()}-${safeName}`;
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -110,11 +125,12 @@ export async function uploadOneToR2WithPrefix(
   if (!file || !(file instanceof File) || file.size === 0) return null;
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return null;
   if (file.size > MAX_IMAGE_SIZE) throw new Error(`圖片 ${key} 超過 10 MB`);
+  const merchantId = requireMerchantIdForR2();
   const bucketName = cleanCredential(process.env.R2_BUCKET_NAME);
   const publicBaseUrl = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.trim() ?? "").replace(/\/+$/, "");
   if (!bucketName || !publicBaseUrl) throw new Error("缺少 R2 環境變數");
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const fileName = `${pathPrefix}/${Date.now()}-${key}-${safeName}`;
+  const fileName = `${merchantId}/${pathPrefix}/${Date.now()}-${key}-${safeName}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   const client = getR2Client();
   await client.send(
