@@ -27,3 +27,27 @@ export function resolvePublicBaseUrl(originFallback: string): string {
   if (/^https?:\/\//i.test(merged)) return merged;
   return `https://${merged}`;
 }
+
+/**
+ * 綠界／結帳導向用公開網址：須與「實際處理 /api/ecpay/checkout 的網域」一致。
+ * - Preview：一律用目前請求網域（勿沿用正式站 APP_URL）。
+ * - 正式：若 APP_URL 的 host 與目前請求不同（www／apex／別名），以請求為準，避免 ReturnURL 打到無部署的網域。
+ */
+export function resolvePaymentPublicBaseUrl(currentRequestBase: string): string {
+  const cur = (currentRequestBase || "").trim().replace(/\/+$/, "");
+  if (!cur) return getAppUrl();
+  if (process.env.VERCEL_ENV === "preview") {
+    if (/^https?:\/\//i.test(cur)) return cur;
+    return `https://${cur}`;
+  }
+  const fromEnv = getAppUrl();
+  if (!fromEnv) return resolvePublicBaseUrl(cur);
+  try {
+    const curHost = new URL(cur.startsWith("http") ? cur : `https://${cur}`).host.toLowerCase();
+    const envHost = new URL(fromEnv).host.toLowerCase();
+    if (curHost !== envHost) return cur.startsWith("http") ? cur : `https://${cur}`;
+  } catch {
+    return fromEnv;
+  }
+  return fromEnv;
+}

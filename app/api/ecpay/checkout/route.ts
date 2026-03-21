@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ecpayCheckMacValue, ECPAY_SIGN_KEYS } from "@/lib/ecpay/checkmac";
-import { getAppUrl, resolvePublicBaseUrl } from "@/lib/appUrl";
+import { resolvePaymentPublicBaseUrl } from "@/lib/appUrl";
 
 const ECPAY_STAGE_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5";
 const ECPAY_PRODUCTION_URL = "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5";
@@ -25,12 +25,9 @@ function getEcpayActionUrl(): string {
     : ECPAY_STAGE_URL;
 }
 
-/** Preview 部署勿用繼承自正式站的 APP_URL，否則綠界回呼打到正式站、瀏覽器卻在 Preview → 永遠對不到單 */
+/** 與 `paymentSiteBaseUrl`（結帳導向）一致，避免 APP_URL 與實際網域不同時綠界 POST 打到錯站 */
 function ecpayCallbackBaseUrl(request: NextRequest): string {
-  if (process.env.VERCEL_ENV === "preview") {
-    return request.nextUrl.origin.replace(/\/+$/, "");
-  }
-  return getAppUrl() || resolvePublicBaseUrl(request.nextUrl.origin);
+  return resolvePaymentPublicBaseUrl(request.nextUrl.origin.replace(/\/+$/, ""));
 }
 
 function htmlErrorPage(title: string, message: string): NextResponse {

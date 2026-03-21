@@ -7,8 +7,9 @@ import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { getFrontendSettings } from "@/app/actions/frontendSettingsActions";
 import { getLinePaySandboxCredentials, validateLinePayCredentials, requestLinePayPayment } from "@/lib/linepay";
 import { logPaymentApi } from "@/lib/paymentLogs";
-import { getAppUrl } from "@/lib/appUrl";
+import { getAppUrl, resolvePaymentPublicBaseUrl } from "@/lib/appUrl";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
+import { normalizeSlotTime } from "@/lib/slotTime";
 import {
   bookingsVisibleToMerchantOrFilter,
   getAdminBookingMerchantScope,
@@ -29,28 +30,32 @@ function envTrim(key: string): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-/** 金流 paymentUrl：正式站用 APP_URL；Vercel Preview 用 VERCEL_URL，避免與 checkout 表單網域不一致 */
+/**
+ * 金流 paymentUrl 基底：優先目前請求的 Host（與綠界 ReturnURL 一致）；
+ * 無 Host 時 Preview 用 VERCEL_URL，否則退回 APP_URL。
+ */
 function paymentSiteBaseUrl(): string {
-  if (process.env.VERCEL_ENV === "preview") {
-    const vu = (process.env.VERCEL_URL ?? "").trim();
-    if (vu) {
-      if (/^https?:\/\//i.test(vu)) return vu.replace(/\/+$/, "");
-      return `https://${vu.replace(/\/+$/, "")}`;
-    }
-  }
-  const fromEnv = getAppUrl();
-  if (fromEnv) return fromEnv;
   try {
     const h = headers();
     const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0]?.trim() ?? "";
-    if (!host) return "";
-    const rawProto = (h.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() ?? "https";
-    const proto = rawProto === "http" || rawProto === "https" ? rawProto : "https";
-    const base = `${proto}://${host}`.replace(/\/+$/, "");
-    return /^https?:\/\//i.test(base) ? base : `https://${base}`;
+    if (host) {
+      const rawProto = (h.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() ?? "https";
+      const proto = rawProto === "http" || rawProto === "https" ? rawProto : "https";
+      let base = `${proto}://${host}`.replace(/\/+$/, "");
+      if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+      return resolvePaymentPublicBaseUrl(base);
+    }
   } catch {
-    return "";
+    /* ignore */
   }
+  if (process.env.VERCEL_ENV === "preview") {
+    const vu = (process.env.VERCEL_URL ?? "").trim();
+    if (vu) {
+      const withScheme = /^https?:\/\//i.test(vu) ? vu.replace(/\/+$/, "") : `https://${vu.replace(/\/+$/, "")}`;
+      return resolvePaymentPublicBaseUrl(withScheme);
+    }
+  }
+  return getAppUrl();
 }
 
 /**
@@ -414,7 +419,7 @@ export async function getSlotRemainingCounts(classId: string): Promise<
     if (Array.isArray(row.scheduled_slots)) {
       for (const s of row.scheduled_slots) {
         const dateStr = String(s?.date ?? "").slice(0, 10);
-        const timeStr = String(s?.time ?? "09:00").slice(0, 5);
+        const timeStr = normalizeSlotTime(s?.time != null ? String(s.time) : "09:00");
         const slotCap =
           typeof s?.capacity === "number" && s.capacity >= 1 ? s.capacity : classCapacity;
         if (dateStr && timeStr) {
@@ -426,7 +431,7 @@ export async function getSlotRemainingCounts(classId: string): Promise<
 
     if (row.class_date && row.class_time) {
       const dateStr = String(row.class_date).slice(0, 10);
-      const timeStr = String(row.class_time).slice(0, 5);
+      const timeStr = normalizeSlotTime(String(row.class_time));
       const key = `${dateStr}|${timeStr}`;
       if (!slotsMap.has(key)) slotsMap.set(key, { date: dateStr, time: timeStr, capacity: classCapacity });
     }
@@ -446,7 +451,7 @@ export async function getSlotRemainingCounts(classId: string): Promise<
     for (const b of bookings ?? []) {
       const br = b as { slot_date?: string | null; slot_time?: string | null };
       const d = br.slot_date ? String(br.slot_date).slice(0, 10) : "";
-      const t = br.slot_time ? String(br.slot_time).slice(0, 5) : "";
+      const t = br.slot_time ? normalizeSlotTime(String(br.slot_time)) : "";
       const key = `${d}|${t}`;
       countMap.set(key, (countMap.get(key) ?? 0) + 1);
     }

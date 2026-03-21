@@ -1,0 +1,27 @@
+---
+description: Vercel Log 解讀與綠界（ECPay）除錯，避免誤判 POST /
+globs: app/api/ecpay/**/*.ts
+alwaysApply: false
+---
+
+# Vercel Log 與綠界除錯
+
+## `POST /` 不是綠界
+
+首頁等 Client 元件呼叫 **Server Action** 時，Next 會對**目前頁面路徑**送 `POST`（在首頁即 `POST /`），**200 為正常**。與金流無關。
+
+除錯綠界請在 Vercel 篩選或搜尋：
+
+- `/api/ecpay/checkout`
+- `/api/ecpay/callback`（ReturnURL，背景）
+- `/api/ecpay/result`（OrderResultURL，瀏覽器 POST 後 302）
+
+Log 前綴可搜：`[ECPay checkout]`、`[ECPay callback]`、`[ECPay result route]`。
+
+## 回呼網域
+
+`ReturnURL`／`OrderResultURL` 須與使用者**實際開 checkout 的網域**一致；`APP_URL` 若與該網域不同（www／別名），程式會以請求網域為準（見 `lib/appUrl.ts` 的 `resolvePaymentPublicBaseUrl`）。綠界後台仍須允許該網域。
+
+## 結果頁一直「處理中」
+
+OrderResultURL 須與 callback **共用** `applyEcpayPaymentNotification`。若 URL 帶 `ecpay_err=checkmac` 或 `sync`，分別代表驗簽失敗或建單／更新失敗。
