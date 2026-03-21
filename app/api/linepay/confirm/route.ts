@@ -19,37 +19,57 @@ function envTrim(key: string): string {
  * 失敗時導向結帳頁（不導向首頁 /）。
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const transactionId = searchParams.get("transactionId");
-  const orderIdRaw =
-    searchParams.get("orderId") || searchParams.get("bookingId") || searchParams.get("id");
-  const orderId = typeof orderIdRaw === "string" ? orderIdRaw.trim() : "";
-
-  const appUrl = getAppUrl();
+  const baseUrl = (getAppUrl() || request.nextUrl.origin).replace(/\/+$/, "");
   const checkoutFailPath = "/course/course/checkout";
   const redirectFail = (msg: string, detail?: string, slug?: string) => {
     const params = new URLSearchParams({ error: "linepay_confirm", message: msg });
     if (detail) params.set("detail", detail);
-    const path = `${appUrl || ""}/course/${slug ?? "course"}/checkout?${params.toString()}`;
+    const path = `${baseUrl}/course/${slug ?? "course"}/checkout?${params.toString()}`;
     return NextResponse.redirect(path);
   };
   const redirectNoId = () =>
-    NextResponse.redirect(`${appUrl || ""}${checkoutFailPath}?error=no_id_provided`);
+    NextResponse.redirect(`${baseUrl}${checkoutFailPath}?error=no_id_provided`);
 
-  if (!orderId) {
-    return redirectNoId();
-  }
+  try {
+    const { searchParams } = new URL(request.url);
+    const transactionId = searchParams.get("transactionId");
+    const orderIdRaw =
+      searchParams.get("orderId") || searchParams.get("bookingId") || searchParams.get("id");
+    const orderId = typeof orderIdRaw === "string" ? orderIdRaw.trim() : "";
 
-  if (!transactionId) {
-    return redirectFail("缺少交易參數", "缺少 transactionId");
-  }
+    if (!orderId) {
+      return redirectNoId();
+    }
 
-  const currentMerchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-  if (!currentMerchantId) {
-    return redirectFail("系統設定錯誤", "未設定 NEXT_PUBLIC_CLIENT_ID");
-  }
+    if (!transactionId) {
+      return redirectFail("缺少交易參數", "缺少 transactionId");
+    }
 
-  const supabase = createServerSupabase();
+    const currentMerchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!currentMerchantId) {
+      return redirectFail("系統設定錯誤", "未設定 NEXT_PUBLIC_CLIENT_ID");
+    }
+
+    let supabase: ReturnType<typeof createServerSupabase>;
+    try {
+      supabase = createServerSupabase();
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      console.error("[LINE Pay Confirm] Supabase 初始化失敗", m);
+      return redirectFail("系統暫時無法處理付款回呼", m);
+    }
+
+    /** 已寫入交易編號的訂單：LINE 重複導向或使用者重新整理時直接導向成功頁，避免再次 Confirm 失敗 */
+    const { data: alreadyPaid } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("line_pay_transaction_id", transactionId)
+      .maybeSingle();
+    if (alreadyPaid && (alreadyPaid as { id?: string }).id) {
+      revalidatePath("/member");
+      const bid = (alreadyPaid as { id: string }).id;
+      return NextResponse.redirect(`${baseUrl}/booking/success?bookingId=${encodeURIComponent(bid)}`);
+    }
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
@@ -132,7 +152,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!confirmRes.success) {
-      return redirectFail("支付失敗，請重新嘗試", undefined, classIdForFail ?? "course");
+      return redirectFail(
+        "支付失敗，請重新嘗試",
+        `${confirmRes.returnCode}: ${confirmRes.returnMessage}`,
+        classIdForFail ?? "course"
+      );
     }
 
     const bookingRow = {
@@ -163,6 +187,16 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     if (pendingErr || !pending) {
+      const { data: paidAfterPending } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("line_pay_transaction_id", transactionId)
+        .maybeSingle();
+      if (paidAfterPending && (paidAfterPending as { id: string }).id) {
+        revalidatePath("/member");
+        const bid = (paidAfterPending as { id: string }).id;
+        return NextResponse.redirect(`${baseUrl}/booking/success?bookingId=${encodeURIComponent(bid)}`);
+      }
       return redirectFail("訂單或待付款不存在", pendingErr?.message ?? "");
     }
 
@@ -219,7 +253,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!confirmRes.success) {
-      return redirectFail("支付失敗");
+      return redirectFail("支付失敗，請重新嘗試", `${confirmRes.returnCode}: ${confirmRes.returnMessage}`);
     }
 
     const { data: rpcResult, error: rpcErr } = await supabase.rpc("create_booking_from_pending", {
@@ -242,7 +276,7 @@ export async function GET(request: NextRequest) {
         if (existingBooking && (existingBooking as { id: string }).id) {
           console.log("[LINE Pay Confirm] pending 已不存在，依 transactionId 找到已建立訂單，冪等導向 success bookingId:", (existingBooking as { id: string }).id);
           revalidatePath("/member");
-          const successUrl = `${appUrl || ""}/booking/success?bookingId=${encodeURIComponent((existingBooking as { id: string }).id)}`;
+          const successUrl = `${baseUrl}/booking/success?bookingId=${encodeURIComponent((existingBooking as { id: string }).id)}`;
           return NextResponse.redirect(successUrl);
         }
       }
@@ -252,8 +286,13 @@ export async function GET(request: NextRequest) {
     await supabase.from("bookings").update({ line_pay_transaction_id: transactionId }).eq("id", finalBookingId);
   }
 
-  revalidatePath("/member");
+    revalidatePath("/member");
 
-  const successUrl = `${appUrl || ""}/booking/success?bookingId=${encodeURIComponent(finalBookingId)}`;
-  return NextResponse.redirect(successUrl);
+    const successUrl = `${baseUrl}/booking/success?bookingId=${encodeURIComponent(finalBookingId)}`;
+    return NextResponse.redirect(successUrl);
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    console.error("[LINE Pay Confirm] 未預期錯誤", e);
+    return redirectFail("系統暫時無法處理付款回呼", m);
+  }
 }
