@@ -810,6 +810,62 @@ export default function CourseEditForm({
                     ))}
                   </select>
                 </div>
+                <div className="mb-4 rounded-lg border border-dashed border-sky-300 bg-sky-50/50 p-3">
+                  <label className="mb-1 block text-sm font-medium text-gray-800">總站列表對應（老師填）</label>
+                  <p className="mb-2 text-xs text-gray-600">
+                    總部先在總站建好「列表課」後，可給您<strong>配對碼</strong>（建議）或「總站商家 ID + 列表課 UUID」兩格。填寫並<strong>儲存課程</strong>後，系統會自動把該列表課綁到<strong>本門課</strong>的名額與訂單。
+                    有填配對碼時，下方兩格<strong>不會寫入資料庫</strong>（可留空）；僅在未填配對碼時才使用手動兩格。
+                  </p>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">配對碼（listing_bind_token）</label>
+                  <input
+                    name="hq_listing_bind_token"
+                    type="text"
+                    className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
+                    placeholder="總站提供的配對碼（可單獨填此欄完成綁定）"
+                    disabled={isPending}
+                    autoComplete="off"
+                  />
+                  <p className="mb-2 text-xs text-gray-500">或改用手動兩格（需一起填或一起留空）：</p>
+                  <input
+                    name="hq_listing_merchant_id"
+                    type="text"
+                    className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                    placeholder="總站商家 ID（總站的 NEXT_PUBLIC_CLIENT_ID）"
+                    disabled={isPending}
+                    defaultValue={initialData?.hq_listing_merchant_id ?? ""}
+                  />
+                  <input
+                    name="hq_listing_class_id"
+                    type="text"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
+                    placeholder="總站列表課 UUID（總站該筆 classes.id）"
+                    disabled={isPending}
+                    defaultValue={initialData?.hq_listing_class_id ?? ""}
+                  />
+                </div>
+                <div className="mb-4 rounded-lg border border-dashed border-amber-200 bg-amber-50/40 p-3">
+                  <label className="mb-1 block text-sm font-medium text-gray-800">庫存綁定（僅總站列表課）</label>
+                  <p className="mb-2 text-xs text-gray-600">
+                    <strong>總站後台</strong>編輯「列表課」時若老師尚未用上方自動綁定，可在此手動填老師的 <code className="rounded bg-white px-1">NEXT_PUBLIC_CLIENT_ID</code> 與老師課程 UUID。
+                    一般<strong>老師分站只需填上方藍框</strong>即可。
+                  </p>
+                  <input
+                    name="inventory_merchant_id"
+                    type="text"
+                    className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                    placeholder="庫存商家 ID（老師）"
+                    disabled={isPending}
+                    defaultValue={initialData?.inventory_merchant_id ?? ""}
+                  />
+                  <input
+                    name="inventory_class_id"
+                    type="text"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
+                    placeholder="庫存課程 UUID（老師端 classes.id）"
+                    disabled={isPending}
+                    defaultValue={initialData?.inventory_class_id ?? ""}
+                  />
+                </div>
                 <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
                   <h3 className="mb-1 text-sm font-semibold text-gray-800">選擇時間（課程可預約場次）</h3>
                   <p className="mb-3 text-xs text-gray-500">以下僅顯示此課程已設定的日期與時間，顧客前台報名時也只會看到這些選項。</p>

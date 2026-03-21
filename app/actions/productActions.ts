@@ -5,6 +5,9 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { COURSES_LIST_PAGE_SIZE, HOMEPAGE_COURSES_FETCH_LIMIT } from "@/lib/constants";
 import { sidebarOptionToDisplayLabels } from "@/lib/sidebarAgeOption";
+import { fetchInventoryResolution } from "@/lib/inventoryClass";
+import { pushInventoryBindToHqListing } from "@/lib/syncListingInventoryFromTeacher";
+import { syncListingInventoryFromBindToken } from "@/lib/syncListingInventoryFromBindToken";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -517,6 +520,24 @@ export async function createCourseFull(formData: FormData): Promise<
     const store_category = (formData.get("store_category") as string)?.trim() || null;
     const city_region = (formData.get("city_region") as string)?.trim() || null;
     const city_district = (formData.get("city_district") as string)?.trim() || null;
+    const inventory_merchant_id = (formData.get("inventory_merchant_id") as string)?.trim() || null;
+    const inventory_class_id_raw = (formData.get("inventory_class_id") as string)?.trim() || null;
+    const inventory_class_id =
+      inventory_merchant_id && inventory_class_id_raw ? inventory_class_id_raw : null;
+
+    const hq_listing_bind_token = (formData.get("hq_listing_bind_token") as string)?.trim() || "";
+    const hq_listing_merchant_id = (formData.get("hq_listing_merchant_id") as string)?.trim() || null;
+    const hq_listing_class_id_raw = (formData.get("hq_listing_class_id") as string)?.trim() || null;
+    const hq_listing_class_id =
+      hq_listing_merchant_id && hq_listing_class_id_raw ? hq_listing_class_id_raw : null;
+    /** 有配對碼時不依表單寫入手動兩欄，改由同步寫入 hq_listing_* */
+    const hqListingForRow =
+      hq_listing_bind_token
+        ? { hq_listing_merchant_id: null as string | null, hq_listing_class_id: null as string | null }
+        : {
+            hq_listing_merchant_id: hq_listing_merchant_id || null,
+            hq_listing_class_id: hq_listing_class_id || null,
+          };
 
     const row: Record<string, unknown> = {
       merchant_id: merchantId,
@@ -539,6 +560,9 @@ export async function createCourseFull(formData: FormData): Promise<
       store_category,
       city_region,
       city_district,
+      inventory_merchant_id: inventory_merchant_id || null,
+      inventory_class_id: inventory_class_id || null,
+      ...hqListingForRow,
     };
     const { data: inserted, error } = await supabase.from("classes").insert(row).select("id").single();
 
@@ -555,7 +579,34 @@ export async function createCourseFull(formData: FormData): Promise<
         introText: courseIntro,
       });
     }
-    return { success: true, message: "課程已新增", id: newId };
+    let message = "課程已新增";
+    if (newId) {
+      if (hq_listing_bind_token) {
+        const sync = await syncListingInventoryFromBindToken(supabase, {
+          teacherMerchantId: merchantId,
+          teacherClassId: newId,
+          bindToken: hq_listing_bind_token,
+        });
+        if (!sync.ok) {
+          message = `課程已新增，但總站列表綁定失敗：${sync.error}`;
+        } else {
+          message = "課程已新增，且已將總站列表課綁定至本課庫存";
+        }
+      } else if (hq_listing_merchant_id && hq_listing_class_id) {
+        const sync = await pushInventoryBindToHqListing(supabase, {
+          teacherMerchantId: merchantId,
+          teacherClassId: newId,
+          hqListingMerchantId: hq_listing_merchant_id,
+          hqListingClassId: hq_listing_class_id,
+        });
+        if (!sync.ok) {
+          message = `課程已新增，但總站列表綁定失敗：${sync.error}`;
+        } else {
+          message = "課程已新增，且已將總站列表課綁定至本課庫存";
+        }
+      }
+    }
+    return { success: true, message, id: newId };
   } catch (e) {
     const message = e instanceof Error ? e.message : "新增課程時發生錯誤";
     return { success: false, error: message };
@@ -746,12 +797,36 @@ export async function getCourseById(id: string, _legacyMerchantParam?: string): 
     const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
-      .select("id, title, price, sale_price, capacity, image_url, course_intro, post_content, gallery_urls, customer_notice, notes, sidebar_option, scheduled_slots, addon_prices")
+      .select(
+        "id, title, price, sale_price, capacity, image_url, course_intro, post_content, gallery_urls, customer_notice, notes, sidebar_option, scheduled_slots, addon_prices, inventory_merchant_id, inventory_class_id"
+      )
       .eq("id", id)
       .eq("merchant_id", merchantId)
       .single();
     if (error || !data) return null;
-    return mapRowToCourseForPublic(data as Record<string, unknown>);
+    const row = data as Record<string, unknown>;
+    const inv = await fetchInventoryResolution(supabase, merchantId, id);
+    if (inv && inv.inventoryClassId !== inv.listingClassId) {
+      const { data: invRow, error: invErr } = await supabase
+        .from("classes")
+        .select("capacity, scheduled_slots, class_date, class_time")
+        .eq("id", inv.inventoryClassId)
+        .eq("merchant_id", inv.inventoryMerchantId)
+        .single();
+      if (!invErr && invRow) {
+        const ir = invRow as {
+          capacity?: unknown;
+          scheduled_slots?: unknown;
+          class_date?: unknown;
+          class_time?: unknown;
+        };
+        row.capacity = ir.capacity;
+        row.scheduled_slots = ir.scheduled_slots;
+        row.class_date = ir.class_date;
+        row.class_time = ir.class_time;
+      }
+    }
+    return mapRowToCourseForPublic(row);
   } catch {
     return null;
   }
@@ -783,6 +858,14 @@ export type CourseForEdit = {
   city_region: string | null;
   /** 上課地區—鄉鎮市區 */
   city_district: string | null;
+  /** 庫存所屬商家（老師 NEXT_PUBLIC_CLIENT_ID），與 inventory_class_id 成對填寫 */
+  inventory_merchant_id: string | null;
+  /** 庫存所屬課程 UUID（老師端 classes.id） */
+  inventory_class_id: string | null;
+  /** 老師填寫：總站商家 ID（總站 NEXT_PUBLIC_CLIENT_ID） */
+  hq_listing_merchant_id: string | null;
+  /** 老師填寫：總站列表課 UUID */
+  hq_listing_class_id: string | null;
 };
 
 export async function getCourseForEdit(id: string): Promise<CourseForEdit | null> {
@@ -832,6 +915,12 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       store_category: row.store_category != null ? String(row.store_category) : null,
       city_region: row.city_region != null ? String(row.city_region) : null,
       city_district: row.city_district != null ? String(row.city_district) : null,
+      inventory_merchant_id:
+        row.inventory_merchant_id != null ? String(row.inventory_merchant_id).trim() || null : null,
+      inventory_class_id: row.inventory_class_id != null ? String(row.inventory_class_id) : null,
+      hq_listing_merchant_id:
+        row.hq_listing_merchant_id != null ? String(row.hq_listing_merchant_id).trim() || null : null,
+      hq_listing_class_id: row.hq_listing_class_id != null ? String(row.hq_listing_class_id) : null,
     };
   } catch {
     return null;
@@ -948,6 +1037,23 @@ export async function updateCourseFull(
     const store_category = (formData.get("store_category") as string)?.trim() || null;
     const city_region = (formData.get("city_region") as string)?.trim() || null;
     const city_district = (formData.get("city_district") as string)?.trim() || null;
+    const inventory_merchant_id = (formData.get("inventory_merchant_id") as string)?.trim() || null;
+    const inventory_class_id_raw = (formData.get("inventory_class_id") as string)?.trim() || null;
+    const inventory_class_id =
+      inventory_merchant_id && inventory_class_id_raw ? inventory_class_id_raw : null;
+
+    const hq_listing_bind_token = (formData.get("hq_listing_bind_token") as string)?.trim() || "";
+    const hq_listing_merchant_id = (formData.get("hq_listing_merchant_id") as string)?.trim() || null;
+    const hq_listing_class_id_raw = (formData.get("hq_listing_class_id") as string)?.trim() || null;
+    const hq_listing_class_id =
+      hq_listing_merchant_id && hq_listing_class_id_raw ? hq_listing_class_id_raw : null;
+    /** 有配對碼時 update 不帶手動兩欄，避免誤寫入；同步成功後由 sync 更新 hq_listing_* */
+    const hqListingPatch = hq_listing_bind_token
+      ? {}
+      : {
+          hq_listing_merchant_id: hq_listing_merchant_id || null,
+          hq_listing_class_id: hq_listing_class_id || null,
+        };
 
     const row: Record<string, unknown> = {
       title,
@@ -969,11 +1075,41 @@ export async function updateCourseFull(
       store_category,
       city_region,
       city_district,
+      inventory_merchant_id: inventory_merchant_id || null,
+      inventory_class_id: inventory_class_id || null,
+      ...hqListingPatch,
     };
 
     const { error } = await supabase.from("classes").update(row).eq("id", id).eq("merchant_id", merchantId);
 
     if (error) return { success: false, error: error.message };
+
+    let message: string | undefined = "課程已更新";
+    if (hq_listing_bind_token) {
+      const sync = await syncListingInventoryFromBindToken(supabase, {
+        teacherMerchantId: merchantId,
+        teacherClassId: id,
+        bindToken: hq_listing_bind_token,
+      });
+      if (!sync.ok) {
+        message = `課程已更新，但總站列表綁定失敗：${sync.error}`;
+      } else {
+        message = "課程已更新，且已將總站列表課綁定至本課庫存";
+      }
+    } else if (hq_listing_merchant_id && hq_listing_class_id) {
+      const sync = await pushInventoryBindToHqListing(supabase, {
+        teacherMerchantId: merchantId,
+        teacherClassId: id,
+        hqListingMerchantId: hq_listing_merchant_id,
+        hqListingClassId: hq_listing_class_id,
+      });
+      if (!sync.ok) {
+        message = `課程已更新，但總站列表綁定失敗：${sync.error}`;
+      } else {
+        message = "課程已更新，且已將總站列表課綁定至本課庫存";
+      }
+    }
+
     if (merchantId) {
       const { backupCourseToIntro } = await import("@/app/actions/courseIntroActions");
       await backupCourseToIntro(merchantId, id, {
@@ -985,7 +1121,7 @@ export async function updateCourseFull(
     }
     revalidatePath("/");
     revalidatePath(`/course/${id}`);
-    return { success: true, message: "課程已更新" };
+    return { success: true, message: message ?? "課程已更新" };
   } catch (e) {
     const message = e instanceof Error ? e.message : "更新課程時發生錯誤";
     return { success: false, error: message };

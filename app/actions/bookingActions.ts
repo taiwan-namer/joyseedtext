@@ -8,6 +8,8 @@ import { getFrontendSettings } from "@/app/actions/frontendSettingsActions";
 import { getLinePaySandboxCredentials, validateLinePayCredentials, requestLinePayPayment } from "@/lib/linepay";
 import { logPaymentApi } from "@/lib/paymentLogs";
 import { getAppUrl } from "@/lib/appUrl";
+import { fetchInventoryResolution } from "@/lib/inventoryClass";
+import { bookingsVisibleToMerchantOrFilter } from "@/lib/bookingsMerchantFilter";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -29,11 +31,14 @@ async function isSlotAllowed(
   const dateStr = slotDate.replace(/T.*$/, "").slice(0, 10);
   const timeStr = slotTime.replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5);
 
+  const inv = await fetchInventoryResolution(supabase, merchantId, classId);
+  if (!inv) return { allowed: false, error: "課程不存在或非本店家" };
+
   const { data: row, error } = await supabase
     .from("classes")
     .select("scheduled_slots, class_date, class_time")
-    .eq("id", classId)
-    .eq("merchant_id", merchantId)
+    .eq("id", inv.inventoryClassId)
+    .eq("merchant_id", inv.inventoryMerchantId)
     .single();
 
   if (error || !row) return { allowed: false, error: "課程不存在或非本店家" };
@@ -342,11 +347,14 @@ export async function getSlotRemainingCounts(classId: string): Promise<
     if (!merchantId) return { success: false, error: "未設定店家" };
 
     const supabase = createServerSupabase();
+    const inv = await fetchInventoryResolution(supabase, merchantId, classId);
+    if (!inv) return { success: false, error: "課程不存在" };
+
     const { data: classRow, error: classError } = await supabase
       .from("classes")
       .select("capacity, scheduled_slots, class_date, class_time")
-      .eq("id", classId)
-      .eq("merchant_id", merchantId)
+      .eq("id", inv.inventoryClassId)
+      .eq("merchant_id", inv.inventoryMerchantId)
       .single();
 
     if (classError || !classRow) return { success: false, error: "課程不存在" };
@@ -388,8 +396,7 @@ export async function getSlotRemainingCounts(classId: string): Promise<
     const { data: bookings, error: bookError } = await supabase
       .from("bookings")
       .select("slot_date, slot_time")
-      .eq("class_id", classId)
-      .eq("merchant_id", merchantId)
+      .eq("class_id", inv.inventoryClassId)
       .in("status", ["paid", "completed"]);
 
     if (bookError) return { success: false, error: bookError.message };
@@ -436,7 +443,7 @@ export async function markBookingAsPaid(
       .from("bookings")
       .update({ status: "paid" })
       .eq("id", bookingId)
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .eq("status", "unpaid")
       .select("id")
       .single();
@@ -470,7 +477,8 @@ export async function completeBooking(
       .from("bookings")
       .update({ status: "completed" })
       .eq("id", bookingId)
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
+      .eq("status", "paid")
       .select("id")
       .single();
 
@@ -504,7 +512,7 @@ export async function batchMarkBookingsAsPaid(
     const { data, error } = await supabase
       .from("bookings")
       .update({ status: "paid" })
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .in("status", ["unpaid", "upcoming"])
       .in("id", ids)
       .select("id");
@@ -538,7 +546,7 @@ export async function batchCompleteBookings(
     const { data, error } = await supabase
       .from("bookings")
       .update({ status: "completed" })
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .eq("status", "paid")
       .in("id", ids)
       .select("id");
@@ -570,36 +578,37 @@ export async function deleteBooking(
 
     const { data: booking, error: fetchError } = await supabase
       .from("bookings")
-      .select("id, class_id, slot_date, slot_time")
+      .select("id, class_id, slot_date, slot_time, merchant_id")
       .eq("id", bookingId)
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .single();
 
     if (fetchError || !booking) return { success: false, error: "訂單不存在或非本店家" };
 
     const classId = (booking as { class_id?: string }).class_id;
+    const ownerMerchantId = String((booking as { merchant_id?: string }).merchant_id ?? "");
     const hadSlot = (booking as { slot_date?: string | null; slot_time?: string | null }).slot_date != null && (booking as { slot_time?: string | null }).slot_time != null;
     const { error: deleteError } = await supabase
       .from("bookings")
       .delete()
       .eq("id", bookingId)
-      .eq("merchant_id", merchantId);
+      .or(bookingsVisibleToMerchantOrFilter(merchantId));
 
     if (deleteError) return { success: false, error: deleteError.message };
 
-    if (classId && !hadSlot) {
+    if (classId && !hadSlot && ownerMerchantId) {
       const { data: cls } = await supabase
         .from("classes")
         .select("capacity")
         .eq("id", classId)
-        .eq("merchant_id", merchantId)
+        .eq("merchant_id", ownerMerchantId)
         .single();
       const current = (cls as { capacity?: number } | null)?.capacity ?? 0;
       await supabase
         .from("classes")
         .update({ capacity: Math.max(0, current + 1) })
         .eq("id", classId)
-        .eq("merchant_id", merchantId);
+        .eq("merchant_id", ownerMerchantId);
     }
 
     return { success: true, message: "訂單已刪除" };
@@ -681,7 +690,8 @@ export type BookingWithClass = {
 };
 
 /**
- * 會員中心：撈取該會員的訂單（member_email + merchant_id），並 join 課程名稱與圖片。
+ * 會員中心：撈取該會員的訂單（member_email + 本站可見範圍），並 join 課程名稱與圖片。
+ * 可見範圍含：庫存歸本商家，或經由本商家網站售出（sold_via）。
  */
 export async function getMyBookings(): Promise<
   | { success: true; data: BookingWithClass[] }
@@ -711,7 +721,7 @@ export async function getMyBookings(): Promise<
         addon_indices,
         classes ( title, image_url, price, addon_prices )
       `)
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .eq("member_email", email)
       .order("created_at", { ascending: false });
 
@@ -808,7 +818,7 @@ export async function getAdminBookings(): Promise<
         addon_indices,
         classes ( title, image_url, price, addon_prices )
       `)
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .order("created_at", { ascending: false });
 
     if (error) return { success: false, error: error.message };
@@ -889,17 +899,35 @@ export async function getEnrollmentCountsForAdmin(): Promise<
     const { data: rows, error } = await supabase
       .from("bookings")
       .select("class_id")
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .in("status", ["paid", "completed"]);
 
     if (error) return { success: false, error: error.message };
 
+    const { data: classRows } = await supabase
+      .from("classes")
+      .select("id, inventory_class_id, inventory_merchant_id")
+      .eq("merchant_id", merchantId);
+
+    const invClassToListingId = new Map<string, string>();
+    for (const c of classRows ?? []) {
+      const rec = c as {
+        id?: string;
+        inventory_class_id?: string | null;
+        inventory_merchant_id?: string | null;
+      };
+      const im = typeof rec.inventory_merchant_id === "string" ? rec.inventory_merchant_id.trim() : "";
+      const ic = rec.inventory_class_id;
+      if (im && ic && rec.id) invClassToListingId.set(String(ic), String(rec.id));
+    }
+
     const counts: Record<string, number> = {};
     for (const r of rows ?? []) {
-      const id = (r as { class_id?: string }).class_id;
-      if (id) {
-        counts[id] = (counts[id] ?? 0) + 1;
-      }
+      const cid = (r as { class_id?: string }).class_id;
+      if (!cid) continue;
+      const listingId = invClassToListingId.get(String(cid));
+      const key = listingId ?? String(cid);
+      counts[key] = (counts[key] ?? 0) + 1;
     }
     return { success: true, data: counts };
   } catch (e) {
@@ -923,7 +951,7 @@ export async function getBookingCountsByMemberEmailForAdmin(): Promise<
     const { data: rows, error } = await supabase
       .from("bookings")
       .select("member_email")
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .in("status", ["paid", "completed"]);
 
     if (error) return { success: false, error: error.message };
@@ -973,7 +1001,7 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
         addon_indices,
         classes ( title, image_url, price, addon_prices )
       `)
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .eq("member_email", email)
       .order("created_at", { ascending: false });
 
@@ -1065,6 +1093,100 @@ export type SessionBookingsResult = {
   classAddonPrices: { name: string; price: number }[] | null;
 };
 
+/** 點名簿／日期彙總：列表課程 id 與實際計數用的課程 id（庫存課） */
+type RollcallSlotSource = {
+  displayClassId: string;
+  countClassId: string;
+  title: string | null;
+  capacity: number;
+  scheduled_slots: { date: string; time: string; capacity?: number }[];
+  class_date: string | null;
+  class_time: string | null;
+};
+
+async function loadRollcallSlotSources(
+  supabase: ReturnType<typeof createServerSupabase>,
+  merchantId: string
+): Promise<RollcallSlotSource[] | { error: string }> {
+  const { data: classesRows, error: classesError } = await supabase
+    .from("classes")
+    .select(
+      "id, title, capacity, scheduled_slots, class_date, class_time, inventory_merchant_id, inventory_class_id"
+    )
+    .eq("merchant_id", merchantId);
+
+  if (classesError) return { error: classesError.message };
+
+  const invKeys: { mid: string; cid: string }[] = [];
+  for (const r of classesRows ?? []) {
+    const row = r as {
+      inventory_merchant_id?: string | null;
+      inventory_class_id?: string | null;
+    };
+    const im = typeof row.inventory_merchant_id === "string" ? row.inventory_merchant_id.trim() : "";
+    const ic = row.inventory_class_id;
+    if (im && ic) invKeys.push({ mid: im, cid: String(ic) });
+  }
+
+  const invMap = new Map<string, Record<string, unknown>>();
+  if (invKeys.length > 0) {
+    const ids = Array.from(new Set(invKeys.map((k) => k.cid)));
+    const { data: invRows, error: invErr } = await supabase
+      .from("classes")
+      .select("id, merchant_id, capacity, scheduled_slots, class_date, class_time")
+      .in("id", ids);
+    if (invErr) return { error: invErr.message };
+    for (const row of invRows ?? []) {
+      const rec = row as Record<string, unknown>;
+      const id = rec.id != null ? String(rec.id) : "";
+      if (id) invMap.set(id, rec);
+    }
+  }
+
+  const out: RollcallSlotSource[] = [];
+  for (const r of classesRows ?? []) {
+    const row = r as {
+      id: string;
+      title: string | null;
+      capacity: number | null;
+      scheduled_slots?: { date: string; time: string; capacity?: number }[] | null;
+      class_date?: string | null;
+      class_time?: string | null;
+      inventory_merchant_id?: string | null;
+      inventory_class_id?: string | null;
+    };
+    const im = typeof row.inventory_merchant_id === "string" ? row.inventory_merchant_id.trim() : "";
+    const ic = row.inventory_class_id;
+    let countClassId = row.id;
+    let cap = row.capacity ?? 0;
+    let slots = Array.isArray(row.scheduled_slots) ? row.scheduled_slots : [];
+    let cdate = row.class_date ?? null;
+    let ctime = row.class_time ?? null;
+
+    if (im && ic) {
+      const inv = invMap.get(String(ic));
+      if (inv) {
+        countClassId = String(inv.id);
+        cap = inv.capacity != null ? Number(inv.capacity) : 0;
+        slots = Array.isArray(inv.scheduled_slots) ? (inv.scheduled_slots as typeof slots) : [];
+        cdate = inv.class_date != null ? String(inv.class_date).slice(0, 10) : null;
+        ctime = inv.class_time != null ? String(inv.class_time) : null;
+      }
+    }
+
+    out.push({
+      displayClassId: row.id,
+      countClassId,
+      title: row.title,
+      capacity: cap,
+      scheduled_slots: slots,
+      class_date: cdate,
+      class_time: ctime,
+    });
+  }
+  return out;
+}
+
 /** 從 DB 讀出的 addon_indices 可能是 array 或 Postgres 陣列字串 "{0,1}"，統一解析為 number[] */
 function parseAddonIndicesFromDb(v: unknown): number[] | null {
   if (v == null) return null;
@@ -1081,6 +1203,8 @@ function parseAddonIndicesFromDb(v: unknown): number[] | null {
 /** 點名簿（依日期）：單一場次 = 同 class 同日期同時間 */
 export type RollcallSession = {
   classId: string;
+  /** 與名額統計、bookings.class_id 對齊；有庫存綁定時為老師端課程 id */
+  countClassId: string;
   title: string | null;
   capacity: number;
   time: string;
@@ -1107,34 +1231,23 @@ export async function getRollcallDatesWithCounts(): Promise<
     if (!merchantId) return { success: false, error: "未設定店家" };
 
     const supabase = createServerSupabase();
-    const { data: classesRows, error: classesError } = await supabase
-      .from("classes")
-      .select("id, capacity, scheduled_slots, class_date, class_time")
-      .eq("merchant_id", merchantId);
-
-    if (classesError) return { success: false, error: classesError.message };
+    const sources = await loadRollcallSlotSources(supabase, merchantId);
+    if ("error" in sources) return { success: false, error: sources.error };
 
     // 與 getRollcallSessionsByDate、getSlotRemainingCounts 一致：同一 (class, date, time) 以 scheduled_slots 為準，再以 class_date 補齊
     const dateToSessions = new Map<string, { key: string; capacity: number }[]>();
 
-    for (const r of classesRows ?? []) {
-      const row = r as {
-        id: string;
-        capacity: number | null;
-        scheduled_slots?: { date: string; time: string; capacity?: number }[] | null;
-        class_date?: string | null;
-        class_time?: string | null;
-      };
+    for (const row of sources) {
       const classCapacity = row.capacity ?? 0;
 
-      const slots = Array.isArray(row.scheduled_slots) ? row.scheduled_slots : [];
+      const slots = row.scheduled_slots;
       for (const s of slots) {
         const dateStr = String(s?.date).slice(0, 10);
         const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
         const timeKey = time.length === 5 ? time : "00:00";
         const cap = (s as { capacity?: number }).capacity;
         const slotCap = typeof cap === "number" && cap >= 1 ? cap : classCapacity;
-        const key = `${row.id}|${dateStr}|${timeKey}`;
+        const key = `${row.displayClassId}|${dateStr}|${timeKey}|${row.countClassId}`;
         if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
         const arr = dateToSessions.get(dateStr)!;
         if (!arr.some((x) => x.key === key)) arr.push({ key, capacity: slotCap });
@@ -1144,29 +1257,21 @@ export async function getRollcallDatesWithCounts(): Promise<
         const dateStr = String(row.class_date).slice(0, 10);
         const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
         const timeKey = t.length === 5 ? t : "00:00";
-        const key = `${row.id}|${dateStr}|${timeKey}`;
+        const key = `${row.displayClassId}|${dateStr}|${timeKey}|${row.countClassId}`;
         if (!dateToSessions.has(dateStr)) dateToSessions.set(dateStr, []);
         const arr = dateToSessions.get(dateStr)!;
         if (!arr.some((x) => x.key === key)) arr.push({ key, capacity: classCapacity });
       }
     }
 
-    const allKeys = new Set<string>();
-    // 先用 Array.from 轉換 MapIterator
-    const sessionValues = Array.from(dateToSessions.values());
-    for (const arr of sessionValues) {
-      for (const { key } of arr) allKeys.add(key);
-    }
-    // 把外層的 [...] 也改成 Array.from
-    const classIds = Array.from(new Set(Array.from(allKeys).map((k) => k.split("|")[0])));
+    const countClassIds = Array.from(new Set(sources.map((s) => s.countClassId)));
 
     let countMap = new Map<string, number>();
-    if (classIds.length > 0) {
+    if (countClassIds.length > 0) {
       const { data: countRows, error: countError } = await supabase
         .from("bookings")
         .select("class_id, slot_date, slot_time")
-        .eq("merchant_id", merchantId)
-        .in("class_id", classIds)
+        .in("class_id", countClassIds)
         .in("status", ["paid", "completed"]);
 
       if (!countError && countRows) {
@@ -1187,7 +1292,13 @@ export async function getRollcallDatesWithCounts(): Promise<
       let enrolledCount = 0;
       for (const { key, capacity } of sessions) {
         totalCapacity += capacity;
-        enrolledCount += countMap.get(key) ?? 0;
+        const parts = key.split("|");
+        const displayId = parts[0] ?? "";
+        const datePart = parts[1] ?? "";
+        const timePart = parts[2] ?? "";
+        const countId = parts[3] ?? displayId;
+        const countKey = `${countId}|${datePart}|${timePart}`;
+        enrolledCount += countMap.get(countKey) ?? 0;
       }
       result.push({ date: dateStr, enrolledCount, totalCapacity });
     }
@@ -1216,40 +1327,28 @@ export async function getRollcallSessionsByDate(
     const dateStr = slotDate.slice(0, 10);
     const supabase = createServerSupabase();
 
-    const { data: classesRows, error: classesError } = await supabase
-      .from("classes")
-      .select("id, title, capacity, scheduled_slots, class_date, class_time")
-      .eq("merchant_id", merchantId);
+    const sources = await loadRollcallSlotSources(supabase, merchantId);
+    if ("error" in sources) return { success: false, error: sources.error };
 
-    if (classesError) return { success: false, error: classesError.message };
-
-    // 與 getRollcallDatesWithCounts、getSlotRemainingCounts 一致：同一 (class, date, time) 以 scheduled_slots 為準，再以 class_date 補齊，日期總名額與場次總名額才會一致
     const sessions: RollcallSession[] = [];
     const seen = new Set<string>();
 
-    for (const r of classesRows ?? []) {
-      const row = r as {
-        id: string;
-        title: string | null;
-        capacity: number | null;
-        scheduled_slots?: { date: string; time: string; capacity?: number }[] | null;
-        class_date?: string | null;
-        class_time?: string | null;
-      };
+    for (const row of sources) {
       const classCapacity = row.capacity ?? 0;
 
-      const slots = Array.isArray(row.scheduled_slots) ? row.scheduled_slots : [];
+      const slots = row.scheduled_slots;
       for (const s of slots) {
         if (String(s?.date).slice(0, 10) !== dateStr) continue;
         const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
         const timeKey = time.length === 5 ? time : "00:00";
         const cap = (s as { capacity?: number }).capacity;
         const slotCap = typeof cap === "number" && cap >= 1 ? cap : classCapacity;
-        const key = `${row.id}|${dateStr}|${timeKey}`;
+        const key = `${row.displayClassId}|${dateStr}|${timeKey}`;
         if (!seen.has(key)) {
           seen.add(key);
           sessions.push({
-            classId: row.id,
+            classId: row.displayClassId,
+            countClassId: row.countClassId,
             title: row.title,
             capacity: slotCap,
             time: timeKey,
@@ -1262,11 +1361,12 @@ export async function getRollcallSessionsByDate(
       if (row.class_date && String(row.class_date).slice(0, 10) === dateStr) {
         const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
         const timeKey = t.length === 5 ? t : "00:00";
-        const key = `${row.id}|${dateStr}|${timeKey}`;
+        const key = `${row.displayClassId}|${dateStr}|${timeKey}`;
         if (!seen.has(key)) {
           seen.add(key);
           sessions.push({
-            classId: row.id,
+            classId: row.displayClassId,
+            countClassId: row.countClassId,
             title: row.title,
             capacity: classCapacity,
             time: timeKey,
@@ -1277,15 +1377,14 @@ export async function getRollcallSessionsByDate(
       }
     }
 
-    const classIds = Array.from(new Set(sessions.map((s) => s.classId)));
+    const countClassIds = Array.from(new Set(sessions.map((s) => s.countClassId)));
 
     if (sessions.length === 0) return { success: true, data: [] };
 
     const { data: countRows, error: countError } = await supabase
       .from("bookings")
       .select("class_id, slot_date, slot_time")
-      .eq("merchant_id", merchantId)
-      .in("class_id", Array.from(new Set(classIds)))
+      .in("class_id", countClassIds)
       .in("status", ["paid", "completed"]);
 
     if (countError) return { success: false, error: countError.message };
@@ -1300,7 +1399,7 @@ export async function getRollcallSessionsByDate(
     }
 
     for (const s of sessions) {
-      const key = `${s.classId}|${s.slotDate}|${s.time}`;
+      const key = `${s.countClassId}|${s.slotDate}|${s.time}`;
       s.enrolledCount = countMap.get(key) ?? 0;
     }
 
@@ -1333,6 +1432,12 @@ export async function getBookingsForSession(
     const timeStr = slotTime.length >= 5 ? slotTime.slice(0, 5) : slotTime;
 
     const supabase = createServerSupabase();
+
+    const inv = await fetchInventoryResolution(supabase, merchantId, classId);
+    if (!inv) {
+      return { success: false, error: "課程不存在" };
+    }
+    const countClassId = inv.inventoryClassId;
 
     const { data: classRow, error: classError } = await supabase
       .from("classes")
@@ -1373,8 +1478,8 @@ export async function getBookingsForSession(
     const { data: bookingsRows, error: bookingsError } = await supabase
       .from("bookings")
       .select("id, member_email, parent_name, parent_phone, kid_name, kid_age, allergy_or_special_note, addon_indices, status, created_at")
-      .eq("merchant_id", merchantId)
-      .eq("class_id", classId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
+      .eq("class_id", countClassId)
       .eq("slot_date", dateStr)
       .eq("slot_time", timeStr)
       .order("created_at", { ascending: true });

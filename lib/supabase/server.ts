@@ -5,7 +5,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
  * Server 端 Supabase 客戶端（僅在 Server Actions / API Routes 使用）
- * 使用 Service Role Key 以繞過 RLS，寫入時請自行以 merchant_id 等欄位控管所屬店家。
+ * 使用 `SUPABASE_SERVICE_ROLE_KEY` 以繞過 RLS；跨總站／老師商家更新列表課 `inventory_*`、
+ * `syncListingInventoryFromBindToken` 等皆依賴此客戶端。請勿將此 key 暴露給瀏覽器。
  */
 export function createServerSupabase() {
   if (!supabaseUrl || !supabaseServiceKey) {

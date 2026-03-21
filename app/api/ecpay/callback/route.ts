@@ -165,23 +165,20 @@ export async function POST(request: NextRequest) {
     await supabase
       .from("bookings")
       .update({ ecpay_merchant_trade_no: merchantTradeNo, ecpay_trade_no: tradeNo })
-      .eq("id", res.booking_id)
-      .eq("merchant_id", merchantId);
+      .eq("id", res.booking_id);
     console.log("[ECPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id, "update result: ok");
-    const invoiceResult = await issueInvoice(supabase, res.booking_id, merchantId);
+    const { data: createdBooking } = await supabase
+      .from("bookings")
+      .select("merchant_id")
+      .eq("id", res.booking_id)
+      .single();
+    const bookingOwnerMerchant = (createdBooking as { merchant_id?: string } | null)?.merchant_id ?? merchantId;
+    const invoiceResult = await issueInvoice(supabase, res.booking_id, bookingOwnerMerchant);
     if (!invoiceResult.ok) {
       console.error("[ECPay callback] 發票開立失敗（不影響付款結果）bookingId:", res.booking_id, "error:", invoiceResult.error);
-      await supabase
-        .from("bookings")
-        .update({ invoice_status: "failed" })
-        .eq("id", res.booking_id)
-        .eq("merchant_id", merchantId);
+      await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", res.booking_id);
     } else {
-      await supabase
-        .from("bookings")
-        .update({ invoice_status: "issued" })
-        .eq("id", res.booking_id)
-        .eq("merchant_id", merchantId);
+      await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", res.booking_id);
     }
   }
 

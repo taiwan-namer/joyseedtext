@@ -53,9 +53,10 @@ export async function GET(request: NextRequest) {
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
-    .select("id, merchant_id, class_id, order_amount, status, payment_method, slot_date, slot_time")
+    .select(
+      "id, merchant_id, sold_via_merchant_id, class_id, order_amount, status, payment_method, slot_date, slot_time"
+    )
     .eq("id", orderId)
-    .eq("merchant_id", currentMerchantId)
     .single();
 
   let merchantId: string;
@@ -63,7 +64,17 @@ export async function GET(request: NextRequest) {
   let finalBookingId: string;
   let classIdForFail: string | undefined;
 
-  if (!bookingError && booking && (booking as { status?: string }).status === "unpaid" && (booking as { payment_method?: string }).payment_method === "linepay") {
+  const bookingVisible =
+    booking &&
+    ((booking as { merchant_id: string }).merchant_id === currentMerchantId ||
+      (booking as { sold_via_merchant_id?: string | null }).sold_via_merchant_id === currentMerchantId);
+
+  if (
+    !bookingError &&
+    bookingVisible &&
+    (booking as { status?: string }).status === "unpaid" &&
+    (booking as { payment_method?: string }).payment_method === "linepay"
+  ) {
     merchantId = (booking as { merchant_id: string }).merchant_id;
     const orderAmt = (booking as { order_amount?: number }).order_amount;
     amount = typeof orderAmt === "number" && orderAmt >= 0 ? orderAmt : 0;
@@ -127,7 +138,7 @@ export async function GET(request: NextRequest) {
     const bookingRow = {
       id: orderId,
       class_id: (booking as { class_id?: string }).class_id ?? "",
-      merchant_id: merchantId,
+      merchant_id: (booking as { merchant_id: string }).merchant_id,
       slot_date: (booking as { slot_date?: string | null }).slot_date ?? null,
       slot_time: (booking as { slot_time?: string | null }).slot_time ?? null,
     };
@@ -227,7 +238,6 @@ export async function GET(request: NextRequest) {
           .from("bookings")
           .select("id")
           .eq("line_pay_transaction_id", transactionId)
-          .eq("merchant_id", merchantId)
           .maybeSingle();
         if (existingBooking && (existingBooking as { id: string }).id) {
           console.log("[LINE Pay Confirm] pending 已不存在，依 transactionId 找到已建立訂單，冪等導向 success bookingId:", (existingBooking as { id: string }).id);
@@ -239,11 +249,7 @@ export async function GET(request: NextRequest) {
       return redirectFail("建立訂單失敗", errorMsg || undefined);
     }
     finalBookingId = res.booking_id;
-    await supabase
-      .from("bookings")
-      .update({ line_pay_transaction_id: transactionId })
-      .eq("id", finalBookingId)
-      .eq("merchant_id", currentMerchantId);
+    await supabase.from("bookings").update({ line_pay_transaction_id: transactionId }).eq("id", finalBookingId);
   }
 
   revalidatePath("/member");

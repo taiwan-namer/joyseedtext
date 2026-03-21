@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { bookingsVisibleToMerchantOrFilter } from "@/lib/bookingsMerchantFilter";
 
 function getMerchantId(): string | null {
   const raw = process.env.NEXT_PUBLIC_CLIENT_ID;
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
     const { data: rows, error } = await supabase
       .from("bookings")
       .select("id, created_at, order_amount, status, parent_name, member_email, classes(title, price)")
-      .eq("merchant_id", merchantId)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
       .eq("status", "paid")
       .gte("created_at", startISO)
       .lt("created_at", endNextISO)
