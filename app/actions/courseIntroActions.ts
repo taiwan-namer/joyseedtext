@@ -108,7 +108,7 @@ export async function getCourseIntroPostsForAdmin(): Promise<
   }
 }
 
-/** 前台 /courses 用 */
+/** 前台 /courses/intro 用 */
 export async function getCourseIntroPostsForPublic(): Promise<CourseIntroPost[]> {
   try {
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");

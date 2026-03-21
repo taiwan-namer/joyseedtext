@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Image, ChevronLeft, ChevronRight, Facebook, Instagram } from "lucide-react";
+import NextImage from "next/image";
+import { Image as LucideImage, ChevronLeft, ChevronRight, Facebook, Instagram } from "lucide-react";
 import FAQ from "./components/FAQ";
 import { HeaderMember } from "./components/HeaderMember";
 import { useStoreSettings } from "./providers/StoreSettingsProvider";
 import { useState, useEffect, useRef } from "react";
-import { getCoursesForHomepage } from "./actions/productActions";
+import { getCoursesForHomepageLight } from "./actions/productActions";
+import { HOMEPAGE_COURSES_FETCH_LIMIT } from "@/lib/constants";
 import { getFrontendSettings } from "./actions/frontendSettingsActions";
 import type { CarouselItem } from "./lib/frontendSettingsShared";
 import { getDefaultLayoutBlocks, type LayoutBlock } from "./lib/frontendSettingsShared";
@@ -21,7 +23,6 @@ type Activity = {
   detailHref: string;
   ageTags: string[];
   category?: string;
-  description?: string;
 };
 
 /** LINE 圖示（lucide 無內建，用 SVG 以 currentColor 套主色） */
@@ -58,6 +59,7 @@ export default function WonderVoyageHomePage() {
   const [wallIndex, setWallIndex] = useState(0);
   const [activityIndex, setActivityIndex] = useState(0);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
   const activityScrollRef = useRef<HTMLDivElement>(null);
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const [carouselItems, setCarouselItems] = useState<CarouselItem[]>([]);
@@ -86,25 +88,30 @@ export default function WonderVoyageHomePage() {
     });
   }, []);
 
-  // 從資料庫取得課程列表（與後台同步）
+  // 精簡欄位 + limit，與總站效能標準一致（不載入 course_intro / gallery_urls）
   useEffect(() => {
-    getCoursesForHomepage().then((res) => {
-      if (res.success && res.data.length > 0) {
-        setActivities(
-          res.data.map((c) => ({
-            id: c.id,
-            title: c.title,
-            price: c.salePrice != null && c.price != null && c.salePrice < c.price ? c.salePrice : c.price ?? 0,
-            stock: c.capacity ?? 0,
-            imageUrl: c.imageUrl ?? null,
-            detailHref: `/course/${c.id}`,
-            ageTags: c.sidebarOptionLabels ?? c.ageTags ?? [],
-            category: "課程",
-            description: c.courseIntro ? (c.courseIntro.slice(0, 80) + (c.courseIntro.length > 80 ? "…" : "")) : undefined,
-          }))
-        );
-      }
-    });
+    setActivitiesLoading(true);
+    getCoursesForHomepageLight(HOMEPAGE_COURSES_FETCH_LIMIT)
+      .then((res) => {
+        if (res.success && res.data.length > 0) {
+          setActivities(
+            res.data.map((c) => ({
+              id: c.id,
+              title: c.title,
+              price: c.salePrice != null && c.price != null && c.salePrice < c.price ? c.salePrice : c.price ?? 0,
+              stock: c.capacity ?? 0,
+              imageUrl: c.imageUrl ?? null,
+              detailHref: `/course/${c.id}`,
+              ageTags: c.sidebarOptionLabels ?? c.ageTags ?? [],
+              category: c.marketplace_category?.trim() ? c.marketplace_category : "課程",
+            }))
+          );
+        } else {
+          setActivities([]);
+        }
+      })
+      .catch(() => setActivities([]))
+      .finally(() => setActivitiesLoading(false));
   }, []);
 
   const getBlock = (id: string) => layoutBlocks.find((b) => b.id === id);
@@ -133,19 +140,19 @@ export default function WonderVoyageHomePage() {
 
   // 熱門課程：自動輪播捲動
   useEffect(() => {
-    if (activities.length === 0) return;
+    if (activitiesLoading || activities.length === 0) return;
     const timer = setInterval(() => {
       setActivityIndex((i) => (i + 1) % activities.length);
     }, ACTIVITY_AUTO_SCROLL_MS);
     return () => clearInterval(timer);
-  }, [activities.length]);
+  }, [activities.length, activitiesLoading]);
 
   useEffect(() => {
     const el = activityScrollRef.current;
-    if (!el || activities.length === 0) return;
+    if (!el || activitiesLoading || activities.length === 0) return;
     const step = ACTIVITY_CARD_WIDTH + ACTIVITY_GAP;
     el.scrollTo({ left: Math.min(activityIndex, activities.length - 1) * step, behavior: "smooth" });
-  }, [activityIndex, activities.length]);
+  }, [activityIndex, activities.length, activitiesLoading]);
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
@@ -188,7 +195,7 @@ export default function WonderVoyageHomePage() {
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
-                    <Image className="w-12 h-12 text-gray-400 relative z-10" strokeWidth={1.5} />
+                    <LucideImage className="w-12 h-12 text-gray-400 relative z-10" strokeWidth={1.5} />
                   )}
                 </div>
               ))}
@@ -220,25 +227,27 @@ export default function WonderVoyageHomePage() {
         <div className="relative w-full">
           <button
             type="button"
+            disabled={activitiesLoading || activities.length === 0}
             onClick={() =>
               setActivityIndex((i) =>
                 i === 0 ? Math.max(0, activities.length - 1) : i - 1
               )
             }
             aria-label="上一則課程"
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-amber-500 hover:text-white transition-colors"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-40"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
           <button
             type="button"
+            disabled={activitiesLoading || activities.length === 0}
             onClick={() =>
               setActivityIndex((i) =>
                 i >= Math.max(0, activities.length - 1) ? 0 : i + 1
               )
             }
             aria-label="下一則課程"
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-amber-500 hover:text-white transition-colors"
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-40"
           >
             <ChevronRight className="w-6 h-6" />
           </button>
@@ -247,7 +256,24 @@ export default function WonderVoyageHomePage() {
             className="w-full overflow-x-auto scrollbar-hide px-4 sm:px-12 snap-x snap-mandatory scroll-smooth"
           >
             <div className="flex gap-4 min-w-max py-2">
-              {activities.length === 0 ? (
+              {activitiesLoading ? (
+                <>
+                  {Array.from({ length: HOMEPAGE_COURSES_FETCH_LIMIT }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="shrink-0 w-[280px] snap-start bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm animate-pulse flex flex-col"
+                    >
+                      <div className="aspect-square bg-gray-200" />
+                      <div className="p-3 space-y-2 flex-1">
+                        <div className="h-3 bg-gray-200 rounded w-1/3" />
+                        <div className="h-4 bg-gray-200 rounded w-full" />
+                        <div className="h-4 bg-gray-200 rounded w-2/3" />
+                        <div className="h-8 bg-gray-200 rounded-lg w-full mt-2" />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : activities.length === 0 ? (
                 <div className="shrink-0 w-[280px] snap-start bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-500 text-sm">
                   尚無課程，請至後台新增課程
                 </div>
@@ -259,11 +285,17 @@ export default function WonderVoyageHomePage() {
                       key={activity.id}
                       className="shrink-0 w-[280px] snap-start bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
                     >
-                      <div className="aspect-square bg-gray-200 flex items-center justify-center overflow-hidden">
+                      <div className="relative aspect-square bg-gray-200 flex items-center justify-center overflow-hidden">
                         {activity.imageUrl ? (
-                          <img src={activity.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <NextImage
+                            src={activity.imageUrl}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="280px"
+                          />
                         ) : (
-                          <Image className="w-14 h-14 text-gray-400" strokeWidth={1.5} />
+                          <LucideImage className="w-14 h-14 text-gray-400 relative z-[1]" strokeWidth={1.5} />
                         )}
                       </div>
                       <div className="p-3 flex-1 flex flex-col min-h-0">
@@ -280,11 +312,6 @@ export default function WonderVoyageHomePage() {
                         <h3 className="font-medium text-gray-800 line-clamp-2 mb-2 text-sm">
                           {activity.title}
                         </h3>
-                        {activity.description && (
-                          <p className="text-xs text-gray-600 line-clamp-2 mb-2 leading-relaxed">
-                            {activity.description}
-                          </p>
-                        )}
                         <div className="flex items-center justify-end gap-2 mb-3">
                           <p className="text-amber-600 font-semibold text-sm">
                             NT$ {activity.price.toLocaleString()} 起
@@ -307,19 +334,21 @@ export default function WonderVoyageHomePage() {
           </div>
         </div>
         {/* 輪播指示點：點擊可跳至該課程 */}
-        <div className="max-w-7xl mx-auto px-4 flex justify-center gap-2 mt-4">
-          {activities.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setActivityIndex(i)}
-              aria-label={`第 ${i + 1} 個課程`}
-              className={`h-2 rounded-full transition-all ${
-                i === activityIndex ? "w-6 bg-amber-500" : "w-2 bg-gray-300 hover:bg-gray-400"
-              }`}
-            />
-          ))}
-        </div>
+        {!activitiesLoading && activities.length > 0 && (
+          <div className="max-w-7xl mx-auto px-4 flex justify-center gap-2 mt-4">
+            {activities.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setActivityIndex(i)}
+                aria-label={`第 ${i + 1} 個課程`}
+                className={`h-2 rounded-full transition-all ${
+                  i === activityIndex ? "w-6 bg-amber-500" : "w-2 bg-gray-300 hover:bg-gray-400"
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 4.5 關於我們（後台前台設定可編輯富文本） */}

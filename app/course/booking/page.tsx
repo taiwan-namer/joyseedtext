@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ChevronRight, Image as ImageIcon } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
@@ -61,11 +62,17 @@ export default function CourseBookingPage() {
                     href={`/course/${course.id}`}
                     className="flex overflow-hidden bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
                   >
-                    <div className="w-36 h-28 shrink-0 rounded-l-lg bg-gray-200 flex items-center justify-center overflow-hidden">
+                    <div className="relative w-36 h-28 shrink-0 rounded-l-lg bg-gray-200 flex items-center justify-center overflow-hidden">
                       {course.imageUrl ? (
-                        <img src={course.imageUrl} alt="" className="w-full h-full object-cover" />
+                        <Image
+                          src={course.imageUrl}
+                          alt=""
+                          fill
+                          className="object-cover"
+                          sizes="144px"
+                        />
                       ) : (
-                        <ImageIcon className="w-10 h-10 text-gray-400" strokeWidth={1.5} />
+                        <ImageIcon className="w-10 h-10 text-gray-400 relative z-[1]" strokeWidth={1.5} />
                       )}
                     </div>
                     <div className="min-w-0 flex-1 flex flex-col justify-between py-3 px-4">

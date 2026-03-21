@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Image, ChevronLeft, ChevronRight } from "lucide-react";
+import NextImage from "next/image";
+import { Image as LucideImage, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 
 const ACTIVITY_CARD_WIDTH = 280;
@@ -17,11 +18,17 @@ function CourseCard({ activity }: { activity: Activity }) {
   const isSoldOut = activity.stock === 0;
   return (
     <article className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
-      <div className="aspect-square bg-gray-200 flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-square bg-gray-200 flex items-center justify-center overflow-hidden">
         {activity.imageUrl ? (
-          <img src={activity.imageUrl} alt="" className="w-full h-full object-cover" />
+          <NextImage
+            src={activity.imageUrl}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, 280px"
+          />
         ) : (
-          <Image className="w-14 h-14 text-gray-400" strokeWidth={1.5} />
+          <LucideImage className="w-14 h-14 text-gray-400 relative z-[1]" strokeWidth={1.5} />
         )}
       </div>
       <div className="p-3 flex-1 flex flex-col min-h-0">
@@ -63,12 +70,18 @@ function CourseListItem({ activity }: { activity: Activity }) {
   const isSoldOut = activity.stock === 0;
   return (
     <article className="flex flex-col sm:flex-row gap-4 bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className="shrink-0 w-full sm:w-40 aspect-square sm:aspect-[1] rounded-lg overflow-hidden bg-gray-200">
+      <div className="relative shrink-0 w-full sm:w-40 aspect-square sm:aspect-[1] sm:h-40 rounded-lg overflow-hidden bg-gray-200">
         {activity.imageUrl ? (
-          <img src={activity.imageUrl} alt="" className="w-full h-full object-cover" />
+          <NextImage
+            src={activity.imageUrl}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, 160px"
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Image className="w-10 h-10 text-gray-400" strokeWidth={1.5} />
+            <LucideImage className="w-10 h-10 text-gray-400 relative z-[1]" strokeWidth={1.5} />
           </div>
         )}
       </div>

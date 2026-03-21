@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { COURSES_LIST_PAGE_SIZE, HOMEPAGE_COURSES_FETCH_LIMIT } from "@/lib/constants";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -598,6 +599,8 @@ export type CourseForPublic = {
   postContent?: string | null;
   /** 剩餘名額（後台扣庫存後即為剩餘人數） */
   capacity?: number | null;
+  /** 總站主題分類（列表／RPC 可能帶入） */
+  marketplace_category?: string | null;
 }
 
 function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic {
@@ -645,21 +648,113 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
     addonPrices: Array.isArray(row.addon_prices) ? (row.addon_prices as { name: string; price: number }[]) : undefined,
     postContent: row.post_content != null ? String(row.post_content) : null,
     capacity: row.capacity !== undefined && row.capacity !== null ? Number(row.capacity) : undefined,
+    marketplace_category:
+      row.marketplace_category != null ? String(row.marketplace_category) : null,
   };
 }
 
-/** 依 id 取得單一課程（供前台 /course/[id] 使用），含 capacity 供剩餘人數顯示 */
-export async function getCourseById(id: string, merchantId?: string): Promise<CourseForPublic | null> {
+/** 課程列表頁篩選參數（對應 URL SearchParams 與 RPC） */
+export type ListCoursesParams = {
+  page?: number;
+  pageSize?: number;
+  /** marketplace_category（總站主題分類） */
+  category?: string;
+  searchQuery?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  minAge?: number | null;
+  maxAge?: number | null;
+};
+
+function normalizeAgeRangeForRpc(
+  minAge: number | null | undefined,
+  maxAge: number | null | undefined
+): { min: number | null; max: number | null } {
+  let min = minAge ?? null;
+  let max = maxAge ?? null;
+  if (min != null && max == null) max = 99;
+  if (max != null && min == null) min = 0;
+  return { min, max };
+}
+
+export type CoursesListPageResult =
+  | { success: true; data: CourseForPublic[]; total: number; page: number; pageSize: number }
+  | { success: false; error: string };
+
+/**
+ * 課程列表頁：分頁 + 篩選（RPC list_classes_for_merchant_page），強制 merchant_id 隔離。
+ */
+export async function getCoursesForListpage(params: ListCoursesParams = {}): Promise<CoursesListPageResult> {
   try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) {
+      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    }
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize ?? COURSES_LIST_PAGE_SIZE));
+    const { min, max } = normalizeAgeRangeForRpc(params.minAge, params.maxAge);
+    const useAge = min != null && max != null;
+
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
-    const q = supabase
+    const { data, error } = await supabase.rpc("list_classes_for_merchant_page", {
+      p_merchant_id: merchantId,
+      p_page: page,
+      p_page_size: pageSize,
+      p_search: params.searchQuery?.trim() || null,
+      p_marketplace_category: params.category?.trim() || null,
+      p_start_date: params.startDate?.trim() || null,
+      p_end_date: params.endDate?.trim() || null,
+      p_min_age: useAge ? min : null,
+      p_max_age: useAge ? max : null,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const payload = data as unknown;
+    if (payload == null || typeof payload !== "object") {
+      return { success: false, error: "課程列表回傳格式錯誤" };
+    }
+    const rec = payload as { total?: unknown; rows?: unknown };
+    const totalRaw = rec.total;
+    const total = typeof totalRaw === "number" ? totalRaw : Number(totalRaw ?? 0);
+    const rowsRaw = Array.isArray(rec.rows) ? rec.rows : [];
+    const list = rowsRaw.map((row) => mapRowToCourseForPublic(row as Record<string, unknown>));
+
+    return {
+      success: true,
+      data: list,
+      total: Number.isFinite(total) ? total : 0,
+      page,
+      pageSize,
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "取得課程列表失敗";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 依 id 取得單一課程（供前台 /course/[id] 使用），含 capacity 供剩餘人數顯示。
+ * 強制以伺服器端 NEXT_PUBLIC_CLIENT_ID 過濾 merchant_id；不可依客戶端傳入略過隔離。
+ * （舊第二參數已忽略，避免 Client 元件內讀 env 為 undefined 時誤撈全庫任意一筆課程／圖片。）
+ */
+export async function getCourseById(id: string, _legacyMerchantParam?: string): Promise<CourseForPublic | null> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) {
+      return null;
+    }
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
       .from("classes")
       .select("id, title, price, sale_price, capacity, image_url, course_intro, post_content, gallery_urls, customer_notice, notes, sidebar_option, scheduled_slots, addon_prices")
-      .eq("id", id);
-    const { data, error } = merchantId
-      ? await q.eq("merchant_id", merchantId).single()
-      : await q.single();
+      .eq("id", id)
+      .eq("merchant_id", merchantId)
+      .single();
     if (error || !data) return null;
     return mapRowToCourseForPublic(data as Record<string, unknown>);
   } catch {
@@ -897,7 +992,10 @@ export async function updateCourseFull(
   }
 }
 
-/** 首頁「熱門課程」用：依 merchant 取得課程列表（與前台同步） */
+/**
+ * 同店全課程精簡欄位（不含 course_intro、gallery_urls、customer_notice 等大欄位）。
+ * 供課程預約頁、後台版型預覽等需完整清單處使用。
+ */
 export async function getCoursesForHomepage(): Promise<
   { success: true; data: CourseForPublic[] } | { success: false; error: string }
 > {
@@ -910,9 +1008,40 @@ export async function getCoursesForHomepage(): Promise<
     const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
-      .select("id, merchant_id, title, price, sale_price, capacity, image_url, course_intro, gallery_urls, sidebar_option, notes, customer_notice, scheduled_slots, addon_prices")
+      .select("id, title, price, sale_price, capacity, image_url, sidebar_option, marketplace_category")
       .eq("merchant_id", merchantId)
       .order("id", { ascending: true });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    const list = (data ?? []).map((row) => mapRowToCourseForPublic(row as Record<string, unknown>));
+    return { success: true, data: list };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "取得課程列表失敗";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 首頁熱門課程：限制筆數、精簡欄位（嚴格排除 course_intro、gallery_urls 等）。
+ */
+export async function getCoursesForHomepageLight(
+  limit: number = HOMEPAGE_COURSES_FETCH_LIMIT
+): Promise<{ success: true; data: CourseForPublic[] } | { success: false; error: string }> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) {
+      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    }
+    const cap = Math.max(1, Math.min(limit, 100));
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from("classes")
+      .select("id, title, price, sale_price, capacity, image_url, sidebar_option, marketplace_category")
+      .eq("merchant_id", merchantId)
+      .order("id", { ascending: true })
+      .limit(cap);
     if (error) {
       return { success: false, error: error.message };
     }

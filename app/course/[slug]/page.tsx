@@ -381,8 +381,8 @@ export default function CourseDetailPage() {
     if (!slug) return;
     let cancelled = false;
     (async () => {
-      const currentMerchantId = process.env.NEXT_PUBLIC_CLIENT_ID;
-      const fromDb = await getCourseById(slug, currentMerchantId);
+      // merchant 隔離在 Server Action 內以環境變數強制，勿在 Client 讀 NEXT_PUBLIC_* 傳入（建置／執行時易為 undefined 而誤撈全庫）
+      const fromDb = await getCourseById(slug);
       if (cancelled) return;
       if (fromDb) {
         setCourse(fromDb);

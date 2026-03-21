@@ -1,4 +1,4 @@
--- 課程介紹文章：來自「新增課程」自動備份 或 「課程介紹」手動新增；前台 /courses 顯示此表
+-- 課程介紹文章：來自「新增課程」自動備份 或 「課程介紹」手動新增；前台 /courses/intro 顯示此表
 create table if not exists course_intro_posts (
   id uuid primary key default gen_random_uuid(),
   merchant_id text not null,

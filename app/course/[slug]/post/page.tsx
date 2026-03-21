@@ -53,8 +53,7 @@ export default function CoursePostPage() {
     if (!slug) return;
     let cancelled = false;
     (async () => {
-      const currentMerchantId = process.env.NEXT_PUBLIC_CLIENT_ID;
-      const fromDb = await getCourseById(slug, currentMerchantId);
+      const fromDb = await getCourseById(slug);
       if (cancelled) return;
       if (fromDb) {
         setCourse(fromDb);
@@ -88,7 +87,7 @@ export default function CoursePostPage() {
           </Link>
           <div className="flex items-center gap-2">
             <Link
-              href="/courses"
+              href="/courses/intro"
               className="text-sm text-gray-500 hover:text-brand transition-colors"
             >
               課程介紹
@@ -108,7 +107,7 @@ export default function CoursePostPage() {
             </li>
             <li className="flex items-center gap-1">
               <ChevronRight className="w-4 h-4 shrink-0" />
-              <Link href="/courses" className="hover:text-amber-600 transition-colors">
+              <Link href="/courses/intro" className="hover:text-amber-600 transition-colors">
                 課程介紹
               </Link>
             </li>
@@ -192,7 +191,7 @@ export default function CoursePostPage() {
             查看課程時段 · 立即預約
           </Link>
           <Link
-            href="/courses"
+            href="/courses/intro"
             className="inline-block py-3 px-6 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium transition-colors"
           >
             回課程介紹

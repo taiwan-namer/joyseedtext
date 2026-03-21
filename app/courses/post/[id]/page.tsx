@@ -53,7 +53,7 @@ export default function CourseIntroPostPage() {
             </li>
             <li className="flex items-center gap-1">
               <ChevronRight className="w-4 h-4 shrink-0" />
-              <Link href="/courses" className="hover:text-brand transition-colors">課程介紹</Link>
+              <Link href="/courses/intro" className="hover:text-brand transition-colors">課程介紹文章</Link>
             </li>
             <li className="flex items-center gap-1">
               <ChevronRight className="w-4 h-4 shrink-0" />
@@ -82,7 +82,7 @@ export default function CourseIntroPostPage() {
           )}
           <div className="mt-8 pt-6 border-t border-gray-100">
             <Link
-              href="/courses"
+              href="/courses/intro"
               className="inline-block py-3 px-6 rounded-full bg-brand hover:bg-brand-hover text-white font-medium transition-colors"
             >
               回課程介紹

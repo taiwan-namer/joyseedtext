@@ -86,8 +86,7 @@ export default function AdminLayoutPage() {
               imageUrl: c.imageUrl ?? null,
               detailHref: `/course/${c.id}`,
               ageTags: c.sidebarOptionLabels ?? c.ageTags ?? [],
-              category: "課程",
-              description: c.courseIntro ? (c.courseIntro.slice(0, 80) + (c.courseIntro.length > 80 ? "…" : "")) : undefined,
+              category: c.marketplace_category?.trim() ? c.marketplace_category : "課程",
             }))
           );
         }

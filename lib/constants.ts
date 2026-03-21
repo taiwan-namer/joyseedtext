@@ -2,6 +2,12 @@
  * 分站課程表單常數（與總站資料庫對齊，選項寫死、不從 API 撈取）
  */
 
+/** 首頁「熱門課程」區塊僅向 DB 索取筆數（排除 course_intro / gallery 等大欄位） */
+export const HOMEPAGE_COURSES_FETCH_LIMIT = 12;
+
+/** 課程列表頁每頁筆數（與 RPC list_classes_for_merchant_page 上限內一致） */
+export const COURSES_LIST_PAGE_SIZE = 12;
+
 /** 總站主題分類選項（總站 marketplace 用） */
 export const MARKETPLACE_CATEGORIES = [
   "藝術創作",

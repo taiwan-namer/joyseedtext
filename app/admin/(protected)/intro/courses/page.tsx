@@ -163,7 +163,7 @@ export default function AdminIntroCoursesPage() {
             文章數：{isLoading ? "—" : filteredPosts.length}{filterText ? "（篩選後）" : ""}
           </span>
           <Link
-            href="/courses"
+            href="/courses/intro"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-amber-600 hover:text-amber-700 font-medium"
