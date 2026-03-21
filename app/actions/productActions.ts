@@ -1029,7 +1029,7 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
 
 export type MerchantSummaryRow = { merchant_id: string; site_name: string };
 
-/** 後台：所有 store_settings 商家（下拉／一鍵綁定用） */
+/** 後台：所有 store_settings 商家（新增課程所屬商家下拉用） */
 export async function getAllMerchantsForAdmin(): Promise<
   { success: true; data: MerchantSummaryRow[] } | { success: false; error: string }
 > {
@@ -1057,117 +1057,10 @@ export async function getAllMerchantsForAdmin(): Promise<
   }
 }
 
-export type ClassSummaryRow = { id: string; title: string | null };
-
-/** 後台：指定商家之課程精簡列表（一鍵綁定老師課用） */
-export async function getClassSummariesForMerchant(
-  merchantId: string
-): Promise<{ success: true; data: ClassSummaryRow[] } | { success: false; error: string }> {
-  try {
-    await verifyAdminSession();
-    const mid = merchantId.trim();
-    if (!mid) {
-      return { success: false, error: "請指定商家 ID" };
-    }
-    const { createServerSupabase } = await import("@/lib/supabase/server");
-    const supabase = createServerSupabase();
-    const { data, error } = await supabase
-      .from("classes")
-      .select("id, title")
-      .eq("merchant_id", mid)
-      .order("title", { ascending: true, nullsFirst: false })
-      .limit(300);
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    const list: ClassSummaryRow[] = (data ?? []).map((r) => ({
-      id: String((r as { id: unknown }).id ?? ""),
-      title: (r as { title?: unknown }).title != null ? String((r as { title: unknown }).title) : null,
-    }));
-    return { success: true, data: list };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "取得課程列表失敗";
-    return { success: false, error: message };
-  }
-}
-
 /**
- * 總站後台：將列表課庫存綁定至指定老師課（inventory_* + 老師課 hq_listing_*）。
+ * 後台更新課程（依 id，僅限本 merchant）。
+ * 與 model 一致：表單 **`hq_listing_bind_token`**（優先）或 **`hq_listing_merchant_id` + `hq_listing_class_id`** 可自救綁定總站列表庫存。
  */
-export async function bindHqListingToTeacherClassFromAdmin(
-  listingClassId: string,
-  teacherMerchantId: string,
-  teacherClassId: string
-): Promise<{ success: true } | { success: false; error: string }> {
-  try {
-    await verifyAdminSession();
-    const hqMid = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    if (!hqMid) {
-      return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
-    }
-    const lid = listingClassId.trim();
-    const tmid = teacherMerchantId.trim();
-    const tcid = teacherClassId.trim();
-    if (!lid || !tmid || !tcid) {
-      return { success: false, error: "請填寫列表課、老師商家與老師課程" };
-    }
-    const { createServerSupabase } = await import("@/lib/supabase/server");
-    const supabase = createServerSupabase();
-
-    const { data: listing, error: le } = await supabase
-      .from("classes")
-      .select("id, merchant_id")
-      .eq("id", lid)
-      .maybeSingle();
-    if (le || !listing || String((listing as { merchant_id: unknown }).merchant_id) !== hqMid) {
-      return { success: false, error: "列表課不存在或不屬於本總站商家" };
-    }
-
-    const { data: teacherRow, error: te } = await supabase
-      .from("classes")
-      .select("id, merchant_id")
-      .eq("id", tcid)
-      .eq("merchant_id", tmid)
-      .maybeSingle();
-    if (te || !teacherRow) {
-      return { success: false, error: "找不到指定的老師課程或商家不符" };
-    }
-
-    const { error: invErr } = await supabase
-      .from("classes")
-      .update({
-        inventory_merchant_id: tmid,
-        inventory_class_id: tcid,
-      })
-      .eq("id", lid)
-      .eq("merchant_id", hqMid);
-    if (invErr) {
-      return { success: false, error: invErr.message };
-    }
-
-    const { error: hqErr } = await supabase
-      .from("classes")
-      .update({
-        hq_listing_merchant_id: hqMid,
-        hq_listing_class_id: lid,
-      })
-      .eq("id", tcid)
-      .eq("merchant_id", tmid);
-    if (hqErr) {
-      return { success: false, error: hqErr.message };
-    }
-
-    await revalidateHomepageCoursesListCache();
-    revalidatePath(`/course/${lid}`);
-    revalidatePath(`/course/${tcid}`);
-    return { success: true };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "綁定失敗";
-    return { success: false, error: message };
-  }
-}
-
-/** 後台更新課程（依 id，僅限本 merchant） */
 export async function updateCourseFull(
   id: string,
   formData: FormData

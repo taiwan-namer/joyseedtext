@@ -158,6 +158,9 @@ async function createPendingPayment(
 /**
  * 下單（多租戶：merchant_id 強制來自 NEXT_PUBLIC_CLIENT_ID）。
  * 僅「ATM／現場付(card)」會立即寫入 bookings；LINE Pay／綠界／藍新改為寫入 pending_payments，付款成功後才建立訂單。
+ *
+ * **老師站（joyseed）**：`classId` 須為 **老師課程 `classes.id`（UUID）**，與 model 老師站一致；勿傳總站列表課 id。
+ * RPC 會解析庫存後寫入 `bookings.class_id`＝庫存課 id（無 inventory 綁定時即本課 id）。
  */
 /** 結帳頁傳入的付款方式；存進 DB 為 atm | card | linepay | ecpay | newebpay（transfer → atm） */
 export type PaymentMethodForBooking = "card" | "linepay" | "transfer" | "ecpay" | "newebpay";
@@ -313,6 +316,7 @@ export async function createBooking(
       return { success: false, error: "請選擇付款方式（信用卡／ATM／現場付）後再送出。" };
     }
 
+    // p_class_id：老師站傳老師課 UUID；RPC 內解析 inventory 後訂單仍存庫存課 class_id
     const { data, error } = await supabase.rpc("create_booking_and_decrement_capacity", {
       p_merchant_id: merchantId,
       p_member_email: email,
