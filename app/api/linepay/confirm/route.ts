@@ -6,6 +6,9 @@ import { logPaymentApi } from "@/lib/paymentLogs";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { getAppUrl } from "@/lib/appUrl";
 
+/** 建置時不可靜態預渲染：會讀取 request.url / nextUrl，否則觸發 Dynamic server usage 且 catch 內 redirect 可能失敗 */
+export const dynamic = "force-dynamic";
+
 function envTrim(key: string): string {
   const raw = process.env[key];
   return typeof raw === "string" ? raw.trim() : "";
