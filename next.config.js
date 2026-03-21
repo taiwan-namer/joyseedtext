@@ -1,5 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async rewrites() {
+    // 瀏覽器／探測常直接請求 /favicon.ico、/favicon.png；統一提供 public/favicon.svg
+    return [
+      { source: "/favicon.ico", destination: "/favicon.svg" },
+      { source: "/favicon.png", destination: "/favicon.svg" },
+    ];
+  },
   images: {
     remotePatterns: [
       {
