@@ -15,6 +15,12 @@ import {
   未達人數處置選項,
 } from "@/lib/courseFormOptions";
 import { MARKETPLACE_CATEGORIES, CITY_REGIONS } from "@/lib/constants";
+import {
+  parseInitialAgeFromSidebar,
+  buildSidebarOptionFromForm,
+  sidebarOptionToDisplayLabels,
+} from "@/lib/sidebarAgeOption";
+import { getDistrictsForCity } from "@/lib/taiwanDistricts";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i + 9); // 9～21
@@ -289,15 +295,27 @@ export default function CourseEditForm({
       capacity: typeof (s as ScheduledSlot).capacity === "number" && (s as ScheduledSlot).capacity >= 1 ? (s as ScheduledSlot).capacity : defaultCap,
     })).filter((s) => s.date && s.time);
   });
-  const [sidebarOptions, setSidebarOptions] = useState<string[]>(() => initialData?.sidebar_option ?? []);
+  const [ageMin, setAgeMin] = useState(() => parseInitialAgeFromSidebar(initialData?.sidebar_option).min);
+  const [ageMax, setAgeMax] = useState(() => parseInitialAgeFromSidebar(initialData?.sidebar_option).max);
+  const [adultAccompany, setAdultAccompany] = useState(
+    () => parseInitialAgeFromSidebar(initialData?.sidebar_option).adultAccompany
+  );
+  const [cityRegion, setCityRegion] = useState(() => initialData?.city_region ?? "");
+  const [cityDistrict, setCityDistrict] = useState(() => initialData?.city_district ?? "");
   const [hasSale, setHasSale] = useState(() => !!initialData?.sale_price);
   const [addonItems, setAddonItems] = useState<{ name: string; price: string }[]>(() => (initialData?.addon_prices ?? []).map((a) => ({ name: a.name, price: String(a.price) })));
-  const SIDEBAR_OPTIONS = [
-    { value: "0", label: "0-3歲" },
-    { value: "1", label: "3-6歲" },
-    { value: "2", label: "6-9歲" },
-    { value: "3", label: "可大人陪同" },
-  ] as const;
+  const districtOptions = useMemo(() => getDistrictsForCity(cityRegion), [cityRegion]);
+  const sidebarPreviewLabels = useMemo(
+    () =>
+      sidebarOptionToDisplayLabels(
+        buildSidebarOptionFromForm(
+          ageMin.trim() === "" ? null : Number(ageMin),
+          ageMax.trim() === "" ? null : Number(ageMax),
+          adultAccompany
+        )
+      ),
+    [ageMin, ageMax, adultAccompany]
+  );
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const editorRef = useRef<HTMLDivElement>(null);
   const postContentHiddenRef = useRef<HTMLInputElement>(null);
@@ -306,6 +324,18 @@ export default function CourseEditForm({
 
   // 總站主題分類（預設用本地靜態列表，成功抓到總站設定後再覆寫）
   const [globalCategories, setGlobalCategories] = useState<string[]>(() => [...MARKETPLACE_CATEGORIES]);
+
+  useEffect(() => {
+    const p = parseInitialAgeFromSidebar(initialData?.sidebar_option);
+    setAgeMin(p.min);
+    setAgeMax(p.max);
+    setAdultAccompany(p.adultAccompany);
+  }, [initialData?.sidebar_option]);
+
+  useEffect(() => {
+    setCityRegion(initialData?.city_region ?? "");
+    setCityDistrict(initialData?.city_district ?? "");
+  }, [initialData?.city_region, initialData?.city_district]);
 
   useEffect(() => {
     let cancelled = false;
@@ -374,6 +404,27 @@ export default function CourseEditForm({
     const form = e.currentTarget;
     const formData = new FormData(form);
     const isEdit = !!courseId;
+    const hasMin = ageMin.trim() !== "";
+    const hasMax = ageMax.trim() !== "";
+    if (hasMin !== hasMax) {
+      setError("適齡請同時填寫「最小」與「最大」歲數，或兩者皆留空");
+      return;
+    }
+    if (hasMin && hasMax) {
+      const a = Number(ageMin);
+      const b = Number(ageMax);
+      if (
+        Number.isNaN(a) ||
+        Number.isNaN(b) ||
+        !Number.isInteger(a) ||
+        !Number.isInteger(b) ||
+        a < 0 ||
+        b < 0
+      ) {
+        setError("請填寫有效的適齡整數（0 以上）");
+        return;
+      }
+    }
     if (!isEdit && !imageSlots[0].file) {
       setError("請上傳主圖");
       return;
@@ -384,7 +435,14 @@ export default function CourseEditForm({
     }
     const postHtml = editorRef.current?.innerHTML ?? "";
     formData.set("post_content", postHtml);
-    formData.set("sidebar_option", JSON.stringify(sidebarOptions));
+    const sidebarPayload = buildSidebarOptionFromForm(
+      hasMin ? Number(ageMin) : null,
+      hasMax ? Number(ageMax) : null,
+      adultAccompany
+    );
+    formData.set("sidebar_option", JSON.stringify(sidebarPayload));
+    formData.set("city_region", cityRegion);
+    formData.set("city_district", cityDistrict);
     formData.set("scheduled_slots", JSON.stringify(scheduledSlots));
     const firstSlot = scheduledSlots[0];
     formData.set("class_date", firstSlot ? firstSlot.date : "");
@@ -405,6 +463,11 @@ export default function CourseEditForm({
           setImageSlots(Array(5).fill(null).map(emptySlot));
           setScheduledSlots([]);
           setAddonItems([]);
+          setAgeMin("");
+          setAgeMax("");
+          setAdultAccompany(false);
+          setCityRegion("");
+          setCityDistrict("");
           form.reset();
           if (editorRef.current) editorRef.current.innerHTML = "";
           if ("id" in result && result.id) window.open(`/course/${result.id}`, "_blank");
@@ -653,23 +716,50 @@ export default function CourseEditForm({
             <aside className="mt-8 md:mt-0 md:col-span-5 lg:col-span-4">
               <div className="md:sticky md:top-24 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">選項（可多選）</label>
-                  <div className="flex flex-wrap gap-2">
-                    {SIDEBAR_OPTIONS.map((opt) => (
-                      <label key={opt.value} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 cursor-pointer hover:bg-gray-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50">
-                        <input
-                          type="checkbox"
-                          checked={sidebarOptions.includes(opt.value)}
-                          onChange={() => setSidebarOptions((prev) => prev.includes(opt.value) ? prev.filter((v) => v !== opt.value) : [...prev, opt.value])}
-                          className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                          disabled={isPending}
-                        />
-                        {opt.label}
-                      </label>
-                    ))}
+                  <label className="mb-2 block text-sm font-medium text-gray-700">適齡區間（歲）</label>
+                  <p className="mb-2 text-xs text-gray-500">左小右大，例如 2 與 4 會存成「2-4歲」並寫入資料庫選項欄位。</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      name="age_min_ui"
+                      min={0}
+                      max={120}
+                      step={1}
+                      inputMode="numeric"
+                      placeholder="最小"
+                      value={ageMin}
+                      onChange={(e) => setAgeMin(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                      className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                      disabled={isPending}
+                    />
+                    <span className="text-gray-500">—</span>
+                    <input
+                      type="number"
+                      name="age_max_ui"
+                      min={0}
+                      max={120}
+                      step={1}
+                      inputMode="numeric"
+                      placeholder="最大"
+                      value={ageMax}
+                      onChange={(e) => setAgeMax(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                      className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                      disabled={isPending}
+                    />
+                    <span className="text-sm text-gray-600">歲</span>
                   </div>
-                  {sidebarOptions.length > 0 && (
-                    <p className="mt-2 text-sm text-gray-600">已選：{sidebarOptions.map((v) => SIDEBAR_OPTIONS.find((o) => o.value === v)?.label ?? v).join("、")}</p>
+                  <label className="mt-3 flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={adultAccompany}
+                      onChange={(e) => setAdultAccompany(e.target.checked)}
+                      className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                      disabled={isPending}
+                    />
+                    <span className="text-sm text-gray-800">可大人陪同</span>
+                  </label>
+                  {sidebarPreviewLabels.length > 0 && (
+                    <p className="mt-2 text-sm text-gray-600">已選：{sidebarPreviewLabels.join("、")}</p>
                   )}
                 </div>
                 <div className="mb-4">
@@ -689,12 +779,34 @@ export default function CourseEditForm({
                   <label className="mb-2 block text-sm font-medium text-gray-700">分站自訂分類</label>
                   <input name="store_category" type="text" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder="例如：蒙特梭利" disabled={isPending} defaultValue={initialData?.store_category ?? ""} />
                 </div>
-                <div className="mb-4">
+                <div className="mb-4 space-y-2">
                   <label className="mb-2 block text-sm font-medium text-gray-700">上課地區</label>
-                  <select name="city_region" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" disabled={isPending} defaultValue={initialData?.city_region ?? ""}>
-                    <option value="">請選擇</option>
+                  <select
+                    name="city_region"
+                    value={cityRegion}
+                    onChange={(e) => {
+                      setCityRegion(e.target.value);
+                      setCityDistrict("");
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                    disabled={isPending}
+                  >
+                    <option value="">請選擇縣市</option>
                     {CITY_REGIONS.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">鄉鎮市區</label>
+                  <select
+                    name="city_district"
+                    value={cityDistrict}
+                    onChange={(e) => setCityDistrict(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                    disabled={isPending || !cityRegion || districtOptions.length === 0}
+                  >
+                    <option value="">{cityRegion ? "請選擇鄉鎮市區" : "請先選縣市"}</option>
+                    {districtOptions.map((d) => (
+                      <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
                 </div>

@@ -3,13 +3,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getCurrentMemberEmail } from "@/app/actions/bookingActions";
 import { getFaqItems } from "@/app/actions/storeSettingsActions";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-
-const SIDEBAR_OPTION_LABELS: Record<string, string> = {
-  "0": "0-3歲",
-  "1": "3-6歲",
-  "2": "6-9歲",
-  "3": "可大人陪同",
-};
+import { sidebarOptionToDisplayLabels } from "@/lib/sidebarAgeOption";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -134,9 +128,7 @@ export async function POST(request: NextRequest) {
       const courses: AiChatCourseItem[] = (classesRows ?? []).map((row: Record<string, unknown>) => {
         const id = String(row.id ?? "");
         const sidebar = (row.sidebar_option as string[] | null) ?? [];
-        const ageLabels = sidebar
-          .map((v) => SIDEBAR_OPTION_LABELS[v] ?? v)
-          .filter(Boolean);
+        const ageLabels = sidebarOptionToDisplayLabels(sidebar);
         return {
           id,
           title: String(row.title ?? ""),

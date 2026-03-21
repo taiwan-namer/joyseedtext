@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { COURSES_LIST_PAGE_SIZE, HOMEPAGE_COURSES_FETCH_LIMIT } from "@/lib/constants";
+import { sidebarOptionToDisplayLabels } from "@/lib/sidebarAgeOption";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -515,6 +516,7 @@ export async function createCourseFull(formData: FormData): Promise<
     const marketplace_category = (formData.get("marketplace_category") as string)?.trim() || null;
     const store_category = (formData.get("store_category") as string)?.trim() || null;
     const city_region = (formData.get("city_region") as string)?.trim() || null;
+    const city_district = (formData.get("city_district") as string)?.trim() || null;
 
     const row: Record<string, unknown> = {
       merchant_id: merchantId,
@@ -536,6 +538,7 @@ export async function createCourseFull(formData: FormData): Promise<
       marketplace_category,
       store_category,
       city_region,
+      city_district,
     };
     const { data: inserted, error } = await supabase.from("classes").insert(row).select("id").single();
 
@@ -558,14 +561,6 @@ export async function createCourseFull(formData: FormData): Promise<
     return { success: false, error: message };
   }
 }
-
-/** 後台選項 value 對應前台顯示標籤 */
-const SIDEBAR_OPTION_LABELS: Record<string, string> = {
-  "0": "0-3歲",
-  "1": "3-6歲",
-  "2": "6-9歲",
-  "3": "可大人陪同",
-};
 
 /** 前台課程詳情（與 course-data CourseDetail 相容，供 /course/[id] 使用） */
 export type CourseForPublic = {
@@ -607,7 +602,7 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
   const id = String(row.id ?? "");
   const notice = row.customer_notice as Record<string, unknown> | null | undefined;
   const sidebarOption = (row.sidebar_option as string[] | null) ?? [];
-  const labels = sidebarOption.map((v) => SIDEBAR_OPTION_LABELS[v] ?? v).filter(Boolean);
+  const labels = sidebarOptionToDisplayLabels(sidebarOption);
   const n = Number(notice?.師生比例分子) || 1;
   const d = Number(notice?.師生比例分母) || 10;
   const 師生比例 = `${n} : ${d}`;
@@ -786,6 +781,8 @@ export type CourseForEdit = {
   store_category: string | null;
   /** 上課地區 */
   city_region: string | null;
+  /** 上課地區—鄉鎮市區 */
+  city_district: string | null;
 };
 
 export async function getCourseForEdit(id: string): Promise<CourseForEdit | null> {
@@ -834,6 +831,7 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       marketplace_category: row.marketplace_category != null ? String(row.marketplace_category) : null,
       store_category: row.store_category != null ? String(row.store_category) : null,
       city_region: row.city_region != null ? String(row.city_region) : null,
+      city_district: row.city_district != null ? String(row.city_district) : null,
     };
   } catch {
     return null;
@@ -949,6 +947,7 @@ export async function updateCourseFull(
     const marketplace_category = (formData.get("marketplace_category") as string)?.trim() || null;
     const store_category = (formData.get("store_category") as string)?.trim() || null;
     const city_region = (formData.get("city_region") as string)?.trim() || null;
+    const city_district = (formData.get("city_district") as string)?.trim() || null;
 
     const row: Record<string, unknown> = {
       title,
@@ -969,6 +968,7 @@ export async function updateCourseFull(
       marketplace_category,
       store_category,
       city_region,
+      city_district,
     };
 
     const { error } = await supabase.from("classes").update(row).eq("id", id).eq("merchant_id", merchantId);
