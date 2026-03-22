@@ -154,6 +154,49 @@ export async function getStoreSettings(): Promise<StoreSettings> {
 }
 
 /**
+ * 依指定商家讀 store_settings（發票品項／invoice_provider 等）。
+ * 庫存課訂單之 `bookings.merchant_id` 為庫存擁有者時，開發票應用此函式，勿只用 NEXT_PUBLIC_CLIENT_ID。
+ * 查無列時退回 {@link getStoreSettings}（目前站台）。
+ */
+export async function getStoreSettingsForMerchant(merchantId: string): Promise<StoreSettings> {
+  unstable_noStore();
+  const mid = (merchantId ?? "").trim();
+  if (!mid) {
+    return getStoreSettings();
+  }
+
+  try {
+    const supabase = createServerSupabase();
+
+    try {
+      const { data, error } = await supabase
+        .from("store_settings")
+        .select(STORE_SETTINGS_SELECT_FULL)
+        .eq("merchant_id", mid)
+        .maybeSingle();
+      if (!error && data) {
+        return parseStoreSettingsRow(data as Record<string, unknown>);
+      }
+    } catch {
+      /* 可能為新欄位尚未存在 */
+    }
+
+    const { data, error } = await supabase
+      .from("store_settings")
+      .select(STORE_SETTINGS_SELECT_LEGACY)
+      .eq("merchant_id", mid)
+      .maybeSingle();
+    if (!error && data) {
+      return parseStoreSettingsRow(data as Record<string, unknown>);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return getStoreSettings();
+}
+
+/**
  * 從總站（merchant_id = 'tongqudao_main'）讀取 global_categories 設定。
  * 回傳已去除空白、去重後的字串陣列；若發生錯誤或尚未設定則回傳空陣列。
  */

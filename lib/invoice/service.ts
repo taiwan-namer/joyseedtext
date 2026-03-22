@@ -3,7 +3,7 @@
  * 金流 callback 付款成功後呼叫，發票失敗不影響 callback 回傳，僅 log。
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getStoreSettings } from "@/app/actions/storeSettingsActions";
+import { getStoreSettingsForMerchant } from "@/app/actions/storeSettingsActions";
 import { buildEcpayItemsFromStore, issueEcpayInvoice } from "@/lib/invoice/ecpay-issue";
 import { issueEzpayInvoice } from "@/lib/invoice/ezpay-issue";
 
@@ -17,8 +17,13 @@ function envTrim(key: string): string {
 }
 
 /**
- * 依訂單 ID 開立電子發票（使用後台設定的品項與綠界發票 API）。
- * 若發票金鑰未設定、訂單無金額或開立失敗，回傳 { ok: false }，不拋錯。
+ * 依訂單 ID 開立電子發票（使用後台設定的品項與綠界／ezPay API）。
+ *
+ * **與 `ecpay_payment_type` 無關**：該欄位僅來自「綠界收款」付款通知，供綠界**退刷**判斷是否信用卡。
+ * 藍新付款時不會、也不需寫入 `ecpay_payment_type`。綠界 B2C 發票開立參數不含 PaymentType。
+ *
+ * **RelateNumber**：優先 `ecpay_merchant_trade_no`，否則 `newebpay_merchant_order_no`，再否則訂單 UUID
+ *（藍新付 + 綠界發票時用藍新訂單編號即可）。
  */
 export async function issueInvoice(
   supabase: SupabaseClient,
@@ -61,7 +66,7 @@ export async function issueInvoice(
   const customerPhone = (row.parent_phone ?? "").toString().trim().slice(0, 20);
   const customerAddr = " "; // 不列印時可留空；綠界 B2C 不列印時未強制
 
-  const store = await getStoreSettings();
+  const store = await getStoreSettingsForMerchant(safeMerchantId);
   const provider = store.invoiceProvider === "ezpay" ? "ezpay" : "ecpay";
 
   const invoiceFail = async () => {

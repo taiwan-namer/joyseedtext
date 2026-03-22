@@ -45,6 +45,7 @@ type BookingRefundRow = {
   line_pay_transaction_id: string | null;
   newebpay_merchant_order_no: string | null;
   newebpay_trade_no: string | null;
+  newebpay_payment_type: string | null;
   order_amount: number | null;
   refund_status: string | null;
   invoice_status: string | null;
@@ -52,7 +53,7 @@ type BookingRefundRow = {
 };
 
 const BOOKING_REFUND_SELECT =
-  "id, status, merchant_id, class_id, slot_date, slot_time, payment_method, ecpay_merchant_trade_no, ecpay_trade_no, ecpay_payment_type, line_pay_transaction_id, newebpay_merchant_order_no, newebpay_trade_no, order_amount, refund_status, invoice_status, invoice_no";
+  "id, status, merchant_id, class_id, slot_date, slot_time, payment_method, ecpay_merchant_trade_no, ecpay_trade_no, ecpay_payment_type, line_pay_transaction_id, newebpay_merchant_order_no, newebpay_trade_no, newebpay_payment_type, order_amount, refund_status, invoice_status, invoice_no";
 
 function validateCommonPaidRefundEligibility(b: BookingRefundRow): string | null {
   if ((b.refund_status ?? "").trim().toLowerCase() === "refunded") {
@@ -314,6 +315,7 @@ export async function processBookingRefund(
         merchantOrderNo: (b.newebpay_merchant_order_no ?? "").trim(),
         tradeNo: (b.newebpay_trade_no ?? "").trim() || null,
         amount,
+        newebpayPaymentType: b.newebpay_payment_type,
       });
       if (!nwRefund.ok) {
         return { success: false, error: nwRefund.error };
@@ -433,6 +435,7 @@ export async function processMemberBookingRefund(
         merchantOrderNo: (b.newebpay_merchant_order_no ?? "").trim(),
         tradeNo: (b.newebpay_trade_no ?? "").trim() || null,
         amount,
+        newebpayPaymentType: b.newebpay_payment_type,
       });
       if (!nwRefund.ok) {
         return { success: false, error: nwRefund.error };

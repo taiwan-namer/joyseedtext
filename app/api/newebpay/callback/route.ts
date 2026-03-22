@@ -169,6 +169,13 @@ export async function POST(request: NextRequest) {
     (decrypted.match(/"merchant_order_no"\s*:\s*"([^"]+)"/) ?? decrypted.match(/merchant_order_no=([^&]+)/))?.[1]?.trim();
   const merchantOrderNo = merchantOrderNoFromDec || getStr("MerchantOrderNo") || getStr("OrderNo");
   const amt = getDecByKey("Amt");
+  /** 藍新付款別：CREDIT、VACC、WEBATM 等；與綠界 ecpay_payment_type 無關 */
+  const paymentTypeDec =
+    getDecByKey("PaymentType") ||
+    getDecByKey("PaymentMethod") ||
+    getDecByKey("PAYMENTTYPE") ||
+    getDecByKey("PaymentMethodType") ||
+    "";
   const responseCode = getDecByKey("ResponseCode");
   const returnUrlVal = getDecByKey("ReturnURL");
   const notifyUrlVal = getDecByKey("NotifyURL");
@@ -179,7 +186,24 @@ export async function POST(request: NextRequest) {
     : "";
   const rawStatusSuccess = rawPayStatus === "SUCCESS" || (rawJsonBody && String(rawJsonBody.Status ?? "").toUpperCase() === "SUCCESS");
 
-  console.log("[NewebPay callback] after decrypt: Status:", statusVal, "TradeStatus:", tradeStatus, "Message:", message, "MerchantOrderNo:", merchantOrderNo, "TradeNo:", tradeNo, "Amt:", amt, "ResponseCode:", responseCode);
+  console.log(
+    "[NewebPay callback] after decrypt: Status:",
+    statusVal,
+    "TradeStatus:",
+    tradeStatus,
+    "Message:",
+    message,
+    "MerchantOrderNo:",
+    merchantOrderNo,
+    "TradeNo:",
+    tradeNo,
+    "Amt:",
+    amt,
+    "PaymentType:",
+    paymentTypeDec || "(none)",
+    "ResponseCode:",
+    responseCode
+  );
   console.log("[NewebPay callback] ReturnURL/NotifyURL from decrypt:", !!returnUrlVal, !!notifyUrlVal);
   console.log("[NewebPay callback] from raw JSON: success:", rawJsonBody?.success, "Status:", rawJsonBody?.Status, "data.payStatus:", rawPayStatus || "(none)");
 
@@ -213,16 +237,37 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServerSupabase();
-  const { data: booking, error: fetchError } = await supabase
+  // 與綠界相同：庫存課訂單 merchant_id 為老師，sold_via_merchant_id 為結帳站，不可只 eq merchant_id
+  const { data: bookingRows, error: fetchError } = await supabase
     .from("bookings")
-    .select("id, class_id, merchant_id, slot_date, slot_time, status")
-    .eq("newebpay_merchant_order_no", merchantOrderNo)
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
+    .select("id, class_id, merchant_id, sold_via_merchant_id, slot_date, slot_time, status")
+    .eq("newebpay_merchant_order_no", merchantOrderNo);
 
-  if (!fetchError && booking) {
+  if (fetchError) {
+    console.error("[NewebPay callback] bookings by MerchantOrderNo:", fetchError.message);
+  }
+  const bRows = bookingRows ?? [];
+  if ((bRows.length ?? 0) > 1) {
+    console.warn("[NewebPay callback] 多筆訂單同 newebpay_merchant_order_no，取符合店家之一筆:", merchantOrderNo);
+  }
+  const booking =
+    (bRows.find(
+      (r) =>
+        (r as { merchant_id?: string }).merchant_id === merchantId ||
+        (r as { sold_via_merchant_id?: string | null }).sold_via_merchant_id === merchantId
+    ) as (typeof bRows)[0] | undefined) ?? (bRows.length === 1 ? bRows[0] : undefined);
+
+  if (booking) {
     const status = (booking as { status?: string }).status ?? "";
     if (status === "paid" || status === "completed") {
+      if (paymentTypeDec) {
+        await supabase
+          .from("bookings")
+          .update({ newebpay_payment_type: paymentTypeDec })
+          .eq("id", (booking as { id: string }).id)
+          .eq("merchant_id", (booking as { merchant_id: string }).merchant_id)
+          .is("newebpay_payment_type", null);
+      }
       console.log("[NewebPay callback] 訂單已為 paid/completed，冪等直接回 200 bookingId:", (booking as { id: string }).id);
       revalidatePath("/member");
       return NextResponse.json({ message: "OK" });
@@ -241,6 +286,13 @@ export async function POST(request: NextRequest) {
       if (!result.ok) {
         console.error("[NewebPay callback] 更新訂單失敗", result.error);
         return NextResponse.json({ error: "更新訂單失敗" }, { status: 500 });
+      }
+      if (paymentTypeDec) {
+        await supabase
+          .from("bookings")
+          .update({ newebpay_payment_type: paymentTypeDec })
+          .eq("id", bookingRow.id)
+          .eq("merchant_id", bookingRow.merchant_id);
       }
       console.log("[NewebPay callback] 訂單已更新為 paid bookingId:", bookingRow.id);
       const invoiceResult = await issueInvoice(supabase, bookingRow.id, bookingRow.merchant_id);
@@ -276,7 +328,11 @@ export async function POST(request: NextRequest) {
         if (res.ok && res.booking_id) {
           await supabase
             .from("bookings")
-            .update({ newebpay_merchant_order_no: merchantOrderNo, newebpay_trade_no: tradeNo })
+            .update({
+              newebpay_merchant_order_no: merchantOrderNo,
+              newebpay_trade_no: tradeNo,
+              ...(paymentTypeDec ? { newebpay_payment_type: paymentTypeDec } : {}),
+            })
             .eq("id", res.booking_id);
           console.log("[NewebPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id);
           const { data: createdBooking } = await supabase

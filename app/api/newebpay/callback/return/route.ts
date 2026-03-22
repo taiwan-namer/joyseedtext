@@ -49,12 +49,17 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServerSupabase();
-  const { data: row } = await supabase
+  const { data: rows } = await supabase
     .from("bookings")
-    .select("id")
-    .eq("newebpay_merchant_order_no", merchantOrderNo)
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
+    .select("id, merchant_id, sold_via_merchant_id")
+    .eq("newebpay_merchant_order_no", merchantOrderNo);
+  const list = rows ?? [];
+  const row =
+    list.find(
+      (r) =>
+        (r as { merchant_id?: string }).merchant_id === merchantId ||
+        (r as { sold_via_merchant_id?: string | null }).sold_via_merchant_id === merchantId
+    ) ?? (list.length === 1 ? list[0] : undefined);
 
   const bookingId = row ? (row as { id: string }).id : merchantOrderNo;
   const successUrl = `${successPage}?bookingId=${encodeURIComponent(bookingId)}`;
