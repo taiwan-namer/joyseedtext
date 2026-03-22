@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePublicBaseUrl } from "@/lib/appUrl";
-import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
+import { newebpayAesDecrypt, newebpayVerifyTradeSha } from "@/lib/payment-utils";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
 import { parseNewebpayIncomingPost } from "@/lib/newebpay/parseIncomingPost";
 
@@ -78,11 +78,12 @@ export async function POST(request: NextRequest) {
         "isHex:",
         isHexString(c.tradeInfo)
       );
-      const expectedSha = newebpayTradeSha(c.tradeInfo, creds.hashKey, creds.hashIv);
-      if (c.tradeSha.toUpperCase() !== expectedSha) {
+      const shaCheck = newebpayVerifyTradeSha(c.tradeSha, c.tradeInfo, creds.hashKey, creds.hashIv);
+      if (!shaCheck.ok) {
         console.log("[NewebPay result] 候選", c.source, "TradeSha 驗證失敗，試下一組");
         continue;
       }
+      console.log("[NewebPay result] 候選", c.source, "TradeSha 成功，變體:", shaCheck.matchedVariant);
       try {
         const decrypted = newebpayAesDecrypt(c.tradeInfo, creds.hashKey, creds.hashIv);
         const params = new URLSearchParams(decrypted);

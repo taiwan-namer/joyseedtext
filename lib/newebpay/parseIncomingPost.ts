@@ -69,6 +69,54 @@ export function tradePairFromJsonRoot(body: Record<string, unknown>): NewebpayTr
   return { tradeInfo: ti, tradeSha: ts, source: "json" };
 }
 
+/**
+ * 遞迴掃描 JSON：藍新 RespondType=JSON 時，TradeInfo／TradeSha 可能在巢狀物件，
+ * 或 Result 為「JSON 字串」需再 parse。
+ */
+function deepCollectTradePairs(
+  node: unknown,
+  basePath: string,
+  pairs: NewebpayTradePair[],
+  seen: Set<unknown>
+): void {
+  if (node === null || node === undefined) return;
+  if (typeof node === "string") {
+    const t = node.trim();
+    if (t.startsWith("{") && t.length > 2) {
+      try {
+        deepCollectTradePairs(JSON.parse(t), `${basePath}#json`, pairs, seen);
+      } catch {
+        /* ignore */
+      }
+    }
+    return;
+  }
+  if (typeof node !== "object") return;
+  if (seen.has(node)) return;
+  seen.add(node);
+
+  if (Array.isArray(node)) {
+    node.forEach((item, i) => deepCollectTradePairs(item, `${basePath}[${i}]`, pairs, seen));
+    return;
+  }
+
+  const o = node as Record<string, unknown>;
+  const pick = (keys: string[]) => {
+    for (const k of keys) {
+      const v = o[k];
+      if (typeof v === "string" && v.length > 0) return v;
+    }
+    return "";
+  };
+  const ti = pick(["TradeInfo", "tradeinfo", "Trade_Info", "trade_info"]);
+  const ts = pick(["TradeSha", "tradesha", "Trade_Sha", "trade_sha"]);
+  pushPair(pairs, ti, ts, `json-deep:${basePath}`);
+
+  for (const [k, v] of Object.entries(o)) {
+    deepCollectTradePairs(v, `${basePath}.${k}`, pairs, seen);
+  }
+}
+
 function collectTradePairsFromRawBody(rawBody: string, contentType: string): NewebpayTradePair[] {
   const pairs: NewebpayTradePair[] = [];
   const trimmed = rawBody.trim();
@@ -84,11 +132,16 @@ function collectTradePairsFromRawBody(rawBody: string, contentType: string): New
   }
 
   // 2) JSON（即使 Content-Type 標錯，只要內容是 JSON 也試）
-  if (trimmed.startsWith("{") || contentType.toLowerCase().includes("json")) {
+  if (trimmed.startsWith("{") || trimmed.startsWith("[") || contentType.toLowerCase().includes("json")) {
     try {
-      const body = JSON.parse(trimmed) as Record<string, unknown>;
-      const p = tradePairFromJsonRoot(body);
+      const body = JSON.parse(trimmed) as unknown;
+      const p =
+        body && typeof body === "object" && !Array.isArray(body)
+          ? tradePairFromJsonRoot(body as Record<string, unknown>)
+          : null;
       if (p) pushPair(pairs, p.tradeInfo, p.tradeSha, p.source);
+      const seen = new Set<unknown>();
+      deepCollectTradePairs(body, "$", pairs, seen);
     } catch {
       /* ignore */
     }

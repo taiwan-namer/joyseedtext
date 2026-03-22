@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
+import { newebpayAesDecrypt, newebpayVerifyTradeSha } from "@/lib/payment-utils";
 import { resolvePublicBaseUrl } from "@/lib/appUrl";
 import { getNewebpayCreds } from "@/lib/newebpay/config";
 
@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(failUrl);
   }
 
-  const expectedSha = newebpayTradeSha(tradeInfoEnc, creds.hashKey, creds.hashIv);
-  if (tradeShaReceived.toUpperCase() !== expectedSha) {
+  const shaCheck = newebpayVerifyTradeSha(tradeShaReceived, tradeInfoEnc, creds.hashKey, creds.hashIv);
+  if (!shaCheck.ok) {
     return NextResponse.redirect(failUrl);
   }
 

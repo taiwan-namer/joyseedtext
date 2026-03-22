@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
+import { newebpayAesDecrypt, newebpayVerifyTradeSha } from "@/lib/payment-utils";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
 import { issueInvoice } from "@/lib/invoice/service";
@@ -72,17 +72,16 @@ export async function POST(request: NextRequest) {
   let usedPairSource = "";
 
   for (const c of tradePairs) {
-    const expectedSha = newebpayTradeSha(c.tradeInfo, creds.hashKey, creds.hashIv);
-    const shaOk = c.tradeSha.toUpperCase() === expectedSha;
+    const shaCheck = newebpayVerifyTradeSha(c.tradeSha, c.tradeInfo, creds.hashKey, creds.hashIv);
     console.log(
       "[NewebPay callback] 候選",
       c.source,
       "TradeSha:",
-      shaOk ? "成功" : "失敗",
+      shaCheck.ok ? `成功(${shaCheck.matchedVariant ?? "?"})` : "失敗",
       "TradeInfo len:",
       c.tradeInfo.length
     );
-    if (!shaOk) continue;
+    if (!shaCheck.ok) continue;
     try {
       decrypted = newebpayAesDecrypt(c.tradeInfo, creds.hashKey, creds.hashIv);
       tradeInfoEnc = c.tradeInfo;
