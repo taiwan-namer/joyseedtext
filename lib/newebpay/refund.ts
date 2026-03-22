@@ -5,10 +5,13 @@
  */
 import { getNewebpayConfig } from "@/lib/newebpay/config";
 import { newebpayEncryptTradeInfo } from "@/lib/newebpay/encrypt";
-import { queryNewebpayPaymentType } from "@/lib/newebpay/queryTradeInfo";
+import { queryNewebpayPaymentType, queryNewebpayTradeDetails } from "@/lib/newebpay/queryTradeInfo";
 
 const CLOSE_STAGE = "https://ccore.newebpay.com/API/CreditCard/Close";
 const CLOSE_PRODUCTION = "https://core.newebpay.com/API/CreditCard/Close";
+
+const CANCEL_STAGE = "https://ccore.newebpay.com/API/CreditCard/Cancel";
+const CANCEL_PRODUCTION = "https://core.newebpay.com/API/CreditCard/Cancel";
 
 const EWALLET_REFUND_STAGE = "https://ccore.newebpay.com/API/EWallet/Refund";
 const EWALLET_REFUND_PRODUCTION = "https://core.newebpay.com/API/EWallet/Refund";
@@ -17,8 +20,23 @@ function getCloseUrl(isProduction: boolean): string {
   return isProduction ? CLOSE_PRODUCTION : CLOSE_STAGE;
 }
 
+function getCancelUrl(isProduction: boolean): string {
+  return isProduction ? CANCEL_PRODUCTION : CANCEL_STAGE;
+}
+
 function getEWalletRefundUrl(isProduction: boolean): string {
   return isProduction ? EWALLET_REFUND_PRODUCTION : EWALLET_REFUND_STAGE;
+}
+
+/** 藍新常見訊息：請款尚未完成，API 刷退會失敗（參考 1shop / 實務說明） */
+const MSG_CLOSE_PENDING_CAPTURE =
+  "藍新端尚在「請款」處理中（CloseStatus=等待／處理中），此時無法用 API 刷退。請隔日請款完成後再試，或至藍新後台「銷售中心 → 銷售紀錄查詢 → 信用卡交易」手動退款。";
+
+function appendCloseStateHint(err: string): string {
+  if (/非授權成功|已請款完成|請款完成狀態/i.test(err)) {
+    return `${err} 常見原因：信用卡交易尚在銀行請款流程中，請隔日再試刷退，或至藍新後台手動操作。`;
+  }
+  return err;
 }
 
 function parseJsonResponse(text: string): unknown {
@@ -103,7 +121,7 @@ async function postMerchantIdAndPostData(
 }
 
 export type NewebpayRefundResult =
-  | { ok: true; channel: "close" | "ewallet"; raw: unknown }
+  | { ok: true; channel: "close" | "cancel" | "ewallet"; raw: unknown }
   | { ok: false; error: string; raw?: unknown };
 
 /**
@@ -118,8 +136,11 @@ export function isNewebpayCloseRefundApplicable(paymentType: string | null | und
 }
 
 /**
- * 藍新退款：先呼叫 CreditCard/Close（CloseType=2 退款）；
- * 失敗且存有 TradeNo 時再嘗試 EWallet/Refund（適用經藍新之路徑）。
+ * 藍新退款／沖帳：
+ * 1) QueryTradeInfo 看 BackStatus／CloseStatus（已退款、請款中等先擋下並給明確提示）
+ * 2) CloseStatus=0 時改走 CreditCard/Cancel 取消授權
+ * 3) 否則 CreditCard/Close CloseType=2 刷退（一律帶 TradeNo）
+ * 4) 失敗時再嘗試 EWallet/Refund（錢包類）
  */
 export async function executeNewebpayRefund(params: {
   merchantOrderNo: string;
@@ -162,10 +183,95 @@ export async function executeNewebpayRefund(params: {
     };
   }
 
-  const tn = (params.tradeNo ?? "").trim();
+  const details = await queryNewebpayTradeDetails({ merchantOrderNo: orderNo, amt });
+  let tn = (params.tradeNo ?? "").trim();
+  if (!tn && details?.tradeNo) {
+    tn = details.tradeNo;
+  }
+
+  if (details) {
+    if (details.backStatus === "3") {
+      return {
+        ok: false,
+        error: "藍新查詢顯示此筆已「退款完成」（BackStatus=3），無法重複退款。若站內訂單狀態未更新，請手動核對後台。",
+        raw: details.raw,
+      };
+    }
+    if (details.closeStatus === "1" || details.closeStatus === "2") {
+      return { ok: false, error: MSG_CLOSE_PENDING_CAPTURE, raw: details.raw };
+    }
+    /**
+     * 未請款（0）：僅授權、尚未請款時應走「取消授權」而非 Close 刷退。
+     */
+    if (details.closeStatus === "0" && tn) {
+      const cancelTs = String(Math.floor(Date.now() / 1000));
+      const cancelUrl = getCancelUrl(cfg.isProduction);
+      const cancelByTrade: Record<string, string> = {
+        RespondType: "JSON",
+        Version: "1.0",
+        Amt: String(amt),
+        TradeNo: tn,
+        TimeStamp: cancelTs,
+        IndexType: "2",
+      };
+      const cancelRes = await postMerchantIdAndPostData(
+        cancelUrl,
+        cfg.merchantId,
+        cfg.hashKey,
+        cfg.hashIv,
+        cancelByTrade
+      );
+      if (!cancelRes.encryptError && cancelRes.parsed != null && isNewebpayApiSuccess(cancelRes.parsed)) {
+        return { ok: true, channel: "cancel", raw: cancelRes.parsed };
+      }
+      const cancelByOrder: Record<string, string> = {
+        RespondType: "JSON",
+        Version: "1.0",
+        Amt: String(amt),
+        MerchantOrderNo: orderNo,
+        TimeStamp: cancelTs,
+        IndexType: "1",
+      };
+      const cancel2 = await postMerchantIdAndPostData(
+        cancelUrl,
+        cfg.merchantId,
+        cfg.hashKey,
+        cfg.hashIv,
+        cancelByOrder
+      );
+      if (!cancel2.encryptError && cancel2.parsed != null && isNewebpayApiSuccess(cancel2.parsed)) {
+        return { ok: true, channel: "cancel", raw: cancel2.parsed };
+      }
+      const e1 = cancelRes.encryptError
+        ? cancelRes.encryptError
+        : cancelRes.parsed != null
+          ? errorMessageFromParsed(cancelRes.parsed, "取消授權失敗")
+          : cancelRes.text.trim().slice(0, 200);
+      const e2 = cancel2.encryptError
+        ? cancel2.encryptError
+        : cancel2.parsed != null
+          ? errorMessageFromParsed(cancel2.parsed, "取消授權失敗")
+          : cancel2.text.trim().slice(0, 200);
+      return {
+        ok: false,
+        error: `此筆藍新查詢為「未請款」（CloseStatus=0），應先取消授權；API 嘗試未成功：${e1}／${e2}。請至藍新後台「信用卡交易」操作取消授權或洽客服。`,
+        raw: cancel2.parsed ?? cancelRes.parsed ?? undefined,
+      };
+    }
+  }
+
   const ts = String(Math.floor(Date.now() / 1000));
 
-  /** 官方 Close PostData 須含 TradeNo；僅有訂單編號時部分情境會失敗 */
+  /** 官方 Close PostData 須含 TradeNo；無 TradeNo 時 Close 常失敗或回狀態錯誤 */
+  if (!tn) {
+    return {
+      ok: false,
+      error:
+        "缺少藍新交易序號（TradeNo），無法呼叫請退款 API。請確認 Notify 已寫入 newebpay_trade_no，或至藍新後台查詢該筆「藍新交易序號」後再試／於後台手動退款。",
+      raw: details?.raw,
+    };
+  }
+
   const closeInner: Record<string, string> = {
     RespondType: "JSON",
     Version: "1.1",
@@ -174,7 +280,7 @@ export async function executeNewebpayRefund(params: {
     TimeStamp: ts,
     IndexType: "1",
     CloseType: "2",
-    ...(tn ? { TradeNo: tn } : {}),
+    TradeNo: tn,
   };
 
   const closeUrl = getCloseUrl(cfg.isProduction);
@@ -221,13 +327,11 @@ export async function executeNewebpayRefund(params: {
         ? `藍新回應無法解析為 JSON：${closeRes.text.replace(/\s+/g, " ").trim().slice(0, 200)}`
         : "藍新 Close 退款請求失敗";
 
+  closeErr = appendCloseStateHint(closeErr);
+
   if (/信用卡|資格|CREDIT|close|未開放/i.test(closeErr)) {
     closeErr +=
       " 請至藍新後台確認：是否已開通「信用卡」收單；若僅開 ATM／VACC，請在後台對該筆交易操作退款。若 DB 無 newebpay_payment_type，系統已嘗試 QueryTradeInfo 判斷付款方式。";
-  }
-
-  if (!tn) {
-    return { ok: false, error: closeErr, raw: closeRes.parsed ?? undefined };
   }
 
   const ewTs = String(Math.floor(Date.now() / 1000));

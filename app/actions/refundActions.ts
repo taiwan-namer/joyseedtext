@@ -329,7 +329,11 @@ export async function processBookingRefund(
       });
       if (upErr) return { success: false, error: upErr };
 
-      return { success: true, message: "藍新退款成功，訂單已標記為已退款並取消" };
+      const nwMsg =
+        nwRefund.channel === "cancel"
+          ? "藍新取消授權成功，訂單已標記為已退款並取消"
+          : "藍新退款成功，訂單已標記為已退款並取消";
+      return { success: true, message: nwMsg };
     }
 
     return { success: false, error: "此付款方式不支援後台自動退款（僅支援綠界信用卡、LINE Pay、藍新）" };
@@ -452,7 +456,9 @@ export async function processMemberBookingRefund(
       });
       if (upErr) return { success: false, error: upErr };
 
-      return { success: true, message: "藍新退款成功，預約已取消" };
+      const nwMsg =
+        nwRefund.channel === "cancel" ? "藍新取消授權成功，預約已取消" : "藍新退款成功，預約已取消";
+      return { success: true, message: nwMsg };
     }
 
     return { success: false, error: "此付款方式不支援線上自動退款，請聯絡客服" };
