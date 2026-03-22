@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAppUrl } from "@/lib/appUrl";
+import { resolvePublicBaseUrl } from "@/lib/appUrl";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
 
@@ -12,7 +12,7 @@ function isHexString(s: string): boolean {
  * 優先從原始 payload 取得 MerchantOrderNo；decrypt 失敗不寫 error，導向結果頁或 state=pending。
  */
 export async function POST(request: NextRequest) {
-  const appUrl = getAppUrl();
+  const appUrl = resolvePublicBaseUrl(request.nextUrl.origin);
   const resultPage = appUrl ? `${appUrl}/payment/newebpay/result` : "/payment/newebpay/result";
 
   const contentType = request.headers.get("content-type") ?? "";

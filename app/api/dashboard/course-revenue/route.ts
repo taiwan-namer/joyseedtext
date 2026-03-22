@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-import { applyAdminBookingsVisibilityToQuery } from "@/lib/bookingsMerchantFilter";
+import {
+  applyAdminBookingsAccessToQuery,
+  getAdminBookingsAccessFilter,
+} from "@/lib/bookingsMerchantFilter";
 
 /**
  * GET /api/dashboard/course-revenue?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
@@ -35,11 +38,12 @@ export async function GET(request: NextRequest) {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-    let query = supabase.from("bookings").select("class_id, order_amount, classes(id, title, price)");
-    const scoped = await applyAdminBookingsVisibilityToQuery(supabase, query);
-    if (!scoped) {
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) {
       return NextResponse.json({ error: "未設定店家" }, { status: 500 });
     }
+    const query = supabase.from("bookings").select("class_id, order_amount, classes(id, title, price)");
+    const scoped = applyAdminBookingsAccessToQuery(query, access);
     const { data: rows, error } = await scoped
       .in("status", ["paid", "completed"])
       .gte("created_at", startISO)

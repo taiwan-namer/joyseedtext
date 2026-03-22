@@ -8,6 +8,7 @@ import { sidebarOptionToDisplayLabels } from "@/lib/sidebarAgeOption";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { pushInventoryBindToHqListing } from "@/lib/syncListingInventoryFromTeacher";
 import { syncListingInventoryFromBindToken } from "@/lib/syncListingInventoryFromBindToken";
+import { normalizeSlotTime } from "@/lib/slotTime";
 
 /** 首頁課程列表等快取：與 model 對齊之集中 revalidate（joyseed 目前以 path 為主） */
 export async function revalidateHomepageCoursesListCache(): Promise<void> {
@@ -784,7 +785,14 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
         }
       : undefined,
     sidebarOptionLabels: labels.length > 0 ? labels : undefined,
-    scheduledSlots: Array.isArray(row.scheduled_slots) ? (row.scheduled_slots as { date: string; time: string }[]) : undefined,
+    scheduledSlots: Array.isArray(row.scheduled_slots)
+      ? (row.scheduled_slots as { date?: string; time?: string }[])
+          .filter((s) => s?.date && s?.time != null && String(s.time).trim() !== "")
+          .map((s) => ({
+            date: String(s.date).slice(0, 10),
+            time: normalizeSlotTime(String(s.time)),
+          }))
+      : undefined,
     price: row.price != null ? Number(row.price) : undefined,
     salePrice: row.sale_price != null ? Number(row.sale_price) : null,
     addonPrices: Array.isArray(row.addon_prices) ? (row.addon_prices as { name: string; price: number }[]) : undefined,

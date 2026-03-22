@@ -7,6 +7,7 @@ import { ChevronRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight as Chev
 import { getCourseBySlug } from "../course-data";
 import { getCourseById } from "@/app/actions/productActions";
 import { getSlotRemainingCounts, type SlotRemaining } from "@/app/actions/bookingActions";
+import { normalizeSlotTime } from "@/lib/slotTime";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import type { CustomerNotice } from "../course-data";
@@ -137,7 +138,9 @@ function DateTimeModal({
 
   const slotRemaining =
     dateStr && selectedTime && slotRemainingList.length > 0
-      ? slotRemainingList.find((s) => s.date === dateStr && s.time === selectedTime)?.remaining ?? null
+      ? slotRemainingList.find(
+          (s) => s.date === dateStr && normalizeSlotTime(s.time) === normalizeSlotTime(selectedTime)
+        )?.remaining ?? null
       : null;
   const displayRemaining = slotRemaining !== null ? slotRemaining : remainingCapacity ?? null;
   const canConfirm = !!dateStr && !!selectedTime && (displayRemaining === null || displayRemaining > 0);
@@ -637,7 +640,11 @@ export default function CourseDetailPage() {
                 onClose={() => setDateTimeModalOpen(false)}
                 onConfirm={(date, time) => setSelectedDateTime({ date, time })}
                 availableSlots={course.scheduledSlots ?? []}
-                remainingCapacity={(course as CourseForPublic).capacity ?? null}
+                remainingCapacity={
+                  (course.scheduledSlots?.length ?? 0) > 0
+                    ? null
+                    : ((course as CourseForPublic).capacity ?? null)
+                }
                 slotRemainingList={slotRemainingList}
               />
             </div>

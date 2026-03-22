@@ -95,13 +95,13 @@ export async function buildAdminBookingsOrClause(supabase: SupabaseClient): Prom
 }
 
 /**
- * 儀表板營收 API：與 `getAdminBookings` 相同訂單可見範圍（class_creator / 多 merchant / 代銷庫存）。
- * 請在 `.from('bookings').select(...)` 之後、`.eq/.in('status')` 與日期條件之前呼叫。
+ * 儀表板營收 API：將後台訂單可見範圍套到查詢上（與 `getAdminBookings` 一致）。
+ * 必須為**同步**函式：Postgrest 查詢建構子帶 `then`，若從 `async function` `return` 會被當成 Promise 先執行，導致後續 `.in()` 報錯。
+ *
+ * 用法：`const access = await getAdminBookingsAccessFilter(supabase); if (!access) ...; const q = applyAdminBookingsAccessToQuery(supabase.from(...).select(...), access);`
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function applyAdminBookingsVisibilityToQuery(supabase: SupabaseClient, query: any): Promise<any | null> {
-  const access = await getAdminBookingsAccessFilter(supabase);
-  if (!access) return null;
+export function applyAdminBookingsAccessToQuery(query: any, access: AdminBookingsAccessFilter): any {
   if (access.mode === "class_creator") {
     return query.eq("class_creator_merchant_id", access.merchantId);
   }
