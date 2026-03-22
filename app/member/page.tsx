@@ -351,7 +351,7 @@ export default function MemberDashboardPage() {
         }
         alert(res.message ?? "已取消預約");
       } else if (st === "paid") {
-        if (pm === "ecpay" || pm === "linepay") {
+        if (pm === "ecpay" || pm === "linepay" || pm === "newebpay") {
           const res = await processMemberBookingRefund(selectedOrderId);
           if (!res.success) {
             alert(res.error);
@@ -487,7 +487,8 @@ export default function MemberDashboardPage() {
             >
               {selectedBooking?.status === "paid"
                 ? selectedBooking.payment_method === "ecpay" ||
-                    selectedBooking.payment_method === "linepay"
+                    selectedBooking.payment_method === "linepay" ||
+                    selectedBooking.payment_method === "newebpay"
                   ? "確認取消預約與退款？"
                   : "確認申請退款？"
                 : "確認取消預約？"}
@@ -501,6 +502,11 @@ export default function MemberDashboardPage() {
                 ) : selectedBooking.payment_method === "linepay" ? (
                   <>
                     將向 LINE Pay 申請退款；依據平台政策，開課前 24 小時內取消可能酌收手續費。確定要繼續嗎？
+                  </>
+                ) : selectedBooking.payment_method === "newebpay" ? (
+                  <>
+                    將向藍新申請退款（信用卡／ATM 等依藍新規則處理）；依據平台政策，開課前 24
+                    小時內取消可能酌收手續費。確定要繼續嗎？
                   </>
                 ) : (
                   <>

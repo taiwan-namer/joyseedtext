@@ -19,9 +19,7 @@ import {
   type AdminBookingsAccessFilter,
 } from "@/lib/bookingsMerchantFilter";
 
-/** 付款成功後開立發票並寫入 `invoice_no`／`invoice_status`（實作於 lib/invoice/service） */
-export { issueInvoice } from "@/lib/invoice/service";
-export type { IssueInvoiceResult } from "@/lib/invoice/service";
+/** 發票開立請改由 `@/lib/invoice/service` 的 `issueInvoice`（不可在此 re-export：`use server` 檔僅允許 export async 函式本體）。 */
 
 function applyAdminBookingsAccess<T>(q: T, access: AdminBookingsAccessFilter): T {
   if (access.mode === "class_creator") {

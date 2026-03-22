@@ -206,7 +206,9 @@ export default function AdminBookingsPage() {
     const msg =
       pm === "linepay"
         ? "確定要對此筆訂單執行 LINE Pay 退款？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。"
-        : "確定要對此筆訂單執行綠界信用卡退刷？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。";
+        : pm === "newebpay"
+          ? "確定要對此筆訂單執行藍新退款？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。"
+          : "確定要對此筆訂單執行綠界信用卡退刷？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。";
     if (!confirm(msg)) return;
     setRefundingId(bookingId);
     const res = await processBookingRefund(bookingId);
@@ -518,7 +520,9 @@ export default function AdminBookingsPage() {
                           </button>
                         )}
                         {row.status === "paid" &&
-                          (row.payment_method === "ecpay" || row.payment_method === "linepay") &&
+                          (row.payment_method === "ecpay" ||
+                            row.payment_method === "linepay" ||
+                            row.payment_method === "newebpay") &&
                           (row.refund_status ?? "").trim().toLowerCase() !== "refunded" && (
                             <button
                               type="button"
@@ -527,7 +531,9 @@ export default function AdminBookingsPage() {
                               title={
                                 row.payment_method === "linepay"
                                   ? "LINE Pay 退款（需有 line_pay_transaction_id 與店家 linePayApi）"
-                                  : "綠界信用卡退刷（需有交易編號與 PaymentType）"
+                                  : row.payment_method === "newebpay"
+                                    ? "藍新退款（需有 newebpay_merchant_order_no；建議一併有 newebpay_trade_no 以利電子錢包備援）"
+                                    : "綠界信用卡退刷（需有交易編號與 PaymentType）"
                               }
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
                             >
@@ -536,7 +542,11 @@ export default function AdminBookingsPage() {
                               ) : (
                                 <RotateCcw className="w-3.5 h-3.5" />
                               )}
-                              {row.payment_method === "linepay" ? "LINE 退款" : "綠界退刷"}
+                              {row.payment_method === "linepay"
+                                ? "LINE 退款"
+                                : row.payment_method === "newebpay"
+                                  ? "藍新退款"
+                                  : "綠界退刷"}
                             </button>
                           )}
                         <button

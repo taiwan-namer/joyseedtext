@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { getCurrentMemberEmail } from "@/app/actions/bookingActions";
 import { executeEcpayRefund } from "@/lib/ecpay/refundDoAction";
+import { executeNewebpayRefund } from "@/lib/newebpay/refund";
 import {
   executeLinePayRefund,
   getLinePaySandboxCredentials,
@@ -42,6 +43,8 @@ type BookingRefundRow = {
   ecpay_trade_no: string | null;
   ecpay_payment_type: string | null;
   line_pay_transaction_id: string | null;
+  newebpay_merchant_order_no: string | null;
+  newebpay_trade_no: string | null;
   order_amount: number | null;
   refund_status: string | null;
   invoice_status: string | null;
@@ -49,7 +52,7 @@ type BookingRefundRow = {
 };
 
 const BOOKING_REFUND_SELECT =
-  "id, status, merchant_id, class_id, slot_date, slot_time, payment_method, ecpay_merchant_trade_no, ecpay_trade_no, ecpay_payment_type, line_pay_transaction_id, order_amount, refund_status, invoice_status, invoice_no";
+  "id, status, merchant_id, class_id, slot_date, slot_time, payment_method, ecpay_merchant_trade_no, ecpay_trade_no, ecpay_payment_type, line_pay_transaction_id, newebpay_merchant_order_no, newebpay_trade_no, order_amount, refund_status, invoice_status, invoice_no";
 
 function validateCommonPaidRefundEligibility(b: BookingRefundRow): string | null {
   if ((b.refund_status ?? "").trim().toLowerCase() === "refunded") {
@@ -91,6 +94,14 @@ function validateLinePayRefundFields(b: BookingRefundRow): string | null {
   const tid = (b.line_pay_transaction_id ?? "").trim();
   if (!tid) {
     return "缺少 LINE Pay 交易序號（line_pay_transaction_id）";
+  }
+  return null;
+}
+
+function validateNewebpayRefundFields(b: BookingRefundRow): string | null {
+  const orderNo = (b.newebpay_merchant_order_no ?? "").trim();
+  if (!orderNo) {
+    return "缺少藍新商店訂單編號（newebpay_merchant_order_no）";
   }
   return null;
 }
@@ -295,7 +306,31 @@ export async function processBookingRefund(
       return { success: true, message: "LINE Pay 退款成功，訂單已標記為已退款並取消" };
     }
 
-    return { success: false, error: "此付款方式不支援後台自動退款（僅支援綠界信用卡、LINE Pay）" };
+    if (pm === "newebpay") {
+      const nwErr = validateNewebpayRefundFields(b);
+      if (nwErr) return { success: false, error: nwErr };
+
+      const nwRefund = await executeNewebpayRefund({
+        merchantOrderNo: (b.newebpay_merchant_order_no ?? "").trim(),
+        tradeNo: (b.newebpay_trade_no ?? "").trim() || null,
+        amount,
+      });
+      if (!nwRefund.ok) {
+        return { success: false, error: nwRefund.error };
+      }
+
+      const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, async (patch) => {
+        return await applyAdminBookingsAccess(
+          supabase.from("bookings").update(patch).eq("id", bookingId).eq("status", "paid"),
+          access
+        );
+      });
+      if (upErr) return { success: false, error: upErr };
+
+      return { success: true, message: "藍新退款成功，訂單已標記為已退款並取消" };
+    }
+
+    return { success: false, error: "此付款方式不支援後台自動退款（僅支援綠界信用卡、LINE Pay、藍新）" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "退款失敗";
     return { success: false, error: msg };
@@ -303,7 +338,7 @@ export async function processBookingRefund(
 }
 
 /**
- * 會員中心：本人訂單之綠界／LINE Pay 自動退款（條件同後台金流邏輯）。
+ * 會員中心：本人訂單之綠界／LINE Pay／藍新自動退款（條件同後台金流邏輯）。
  */
 export async function processMemberBookingRefund(
   bookingId: string
@@ -388,6 +423,33 @@ export async function processMemberBookingRefund(
       if (upErr) return { success: false, error: upErr };
 
       return { success: true, message: "LINE Pay 退款成功，預約已取消" };
+    }
+
+    if (pm === "newebpay") {
+      const nwErr = validateNewebpayRefundFields(b);
+      if (nwErr) return { success: false, error: nwErr };
+
+      const nwRefund = await executeNewebpayRefund({
+        merchantOrderNo: (b.newebpay_merchant_order_no ?? "").trim(),
+        tradeNo: (b.newebpay_trade_no ?? "").trim() || null,
+        amount,
+      });
+      if (!nwRefund.ok) {
+        return { success: false, error: nwRefund.error };
+      }
+
+      const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, async (patch) => {
+        return await supabase
+          .from("bookings")
+          .update(patch)
+          .eq("id", bookingId)
+          .eq("member_email", email)
+          .or(bookingsVisibleToMerchantOrFilter(merchantId))
+          .eq("status", "paid");
+      });
+      if (upErr) return { success: false, error: upErr };
+
+      return { success: true, message: "藍新退款成功，預約已取消" };
     }
 
     return { success: false, error: "此付款方式不支援線上自動退款，請聯絡客服" };
