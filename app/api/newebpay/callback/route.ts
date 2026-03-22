@@ -7,6 +7,7 @@ import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config"
 import { issueInvoice } from "@/lib/invoice/service";
 import { extractNewebpayPaymentTypeFromDecrypted } from "@/lib/newebpay/notifyPaymentType";
 import { queryNewebpayPaymentType } from "@/lib/newebpay/queryTradeInfo";
+import { parseNewebpayIncomingPost } from "@/lib/newebpay/parseIncomingPost";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -26,75 +27,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "未設定 NEXT_PUBLIC_CLIENT_ID" }, { status: 500 });
   }
 
-  const contentType = request.headers.get("content-type") ?? "";
-  console.log("[NewebPay callback] request content-type:", contentType);
-
-  let rawBody: string;
+  let parsed: Awaited<ReturnType<typeof parseNewebpayIncomingPost>>;
   try {
-    rawBody = await request.text();
+    parsed = await parseNewebpayIncomingPost(request);
   } catch (e) {
-    console.error("[NewebPay callback] 讀取 body 失敗", e);
+    console.error("[NewebPay callback] 讀取／解析 body 失敗", e);
     return NextResponse.json({ error: "body read failed" }, { status: 400 });
   }
 
+  const { rawBody, contentType, parsedKeys, parsedObject, rawJsonBody, tradePairs } = parsed;
+
+  console.log("[NewebPay callback] request content-type:", contentType);
   console.log("[NewebPay callback] raw body length:", rawBody.length);
-  console.log("[NewebPay callback] raw body text (full):", rawBody);
-
-  const parsedKeys: string[] = [];
-  const parsedObject: Record<string, string> = {};
-  let tradeInfoEnc = "";
-  let tradeShaReceived = "";
-  let rawJsonBody: Record<string, unknown> | null = null;
-
-  if (contentType.includes("application/json")) {
-    try {
-      const body = JSON.parse(rawBody) as Record<string, unknown>;
-      rawJsonBody = body;
-      for (const k of Object.keys(body)) {
-        parsedKeys.push(k);
-        const v = body[k];
-        const s = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v).slice(0, 200) : String(v);
-        parsedObject[k] = s;
-      }
-      tradeInfoEnc = typeof body.TradeInfo === "string" ? body.TradeInfo : (body.tradeinfo as string) ?? "";
-      tradeShaReceived = typeof body.TradeSha === "string" ? body.TradeSha : (body.tradesha as string) ?? "";
-      if (!tradeInfoEnc && body.Result && typeof body.Result === "object") {
-        const r = body.Result as Record<string, unknown>;
-        if (typeof r.TradeInfo === "string") tradeInfoEnc = r.TradeInfo;
-        if (typeof r.TradeSha === "string") tradeShaReceived = r.TradeSha;
-      }
-      if (!tradeInfoEnc && body.data && typeof body.data === "object") {
-        const d = body.data as Record<string, unknown>;
-        if (typeof d.TradeInfo === "string") tradeInfoEnc = d.TradeInfo;
-        if (typeof d.TradeSha === "string") tradeShaReceived = d.TradeSha;
-      }
-    } catch (e) {
-      console.error("[NewebPay callback] JSON parse 失敗，改試 form", e);
-      const params = new URLSearchParams(rawBody);
-      params.forEach((value, key) => {
-        parsedKeys.push(key);
-        parsedObject[key] = value;
-      });
-      tradeInfoEnc = params.get("TradeInfo") ?? params.get("tradeinfo") ?? "";
-      tradeShaReceived = params.get("TradeSha") ?? params.get("tradesha") ?? "";
-    }
-  } else {
-    const params = new URLSearchParams(rawBody);
-    params.forEach((value, key) => {
-      parsedKeys.push(key);
-      parsedObject[key] = value;
-    });
-    tradeInfoEnc = params.get("TradeInfo") ?? params.get("tradeinfo") ?? "";
-    tradeShaReceived = params.get("TradeSha") ?? params.get("tradesha") ?? "";
+  if (rawBody.length > 0) {
+    console.log("[NewebPay callback] raw body text (full):", rawBody);
   }
+  console.log("[NewebPay callback] trade pair candidates:", tradePairs.map((p) => p.source));
 
   console.log("[NewebPay callback] parsed form keys:", parsedKeys);
   console.log("[NewebPay callback] parsed form object (each key -> value length):", Object.fromEntries(parsedKeys.map((k) => [k, (parsedObject[k] ?? "").length])));
 
   const getStr = (key: string): string => (parsedObject[key] ?? parsedObject[key.toLowerCase()] ?? "").trim();
   console.log("[NewebPay callback] from raw payload (plain): Status:", getStr("Status"), "TradeStatus:", getStr("TradeStatus"), "Message:", getStr("Message"), "Result:", getStr("Result").slice(0, 100), "MerchantOrderNo:", getStr("MerchantOrderNo"), "OrderNo:", getStr("OrderNo"), "TradeNo:", getStr("TradeNo"), "Amt:", getStr("Amt"));
-
-  console.log("[NewebPay callback] field used for decrypt: TradeInfo, length:", tradeInfoEnc.length, "preview (前 32 字):", tradeInfoEnc.slice(0, 32));
 
   const credsForLog = getNewebpayCredsForLog();
   if (credsForLog) {
@@ -107,24 +61,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "藍新金流未設定" }, { status: 500 });
   }
 
-  if (!tradeInfoEnc || !tradeShaReceived) {
-    console.log("[NewebPay callback] TradeInfo 或 TradeSha 為空");
+  if (tradePairs.length === 0) {
+    console.log("[NewebPay callback] 無任何 TradeInfo／TradeSha 候選");
     return NextResponse.json({ error: "Missing TradeInfo or TradeSha" }, { status: 400 });
   }
 
-  const expectedSha = newebpayTradeSha(tradeInfoEnc, creds.hashKey, creds.hashIv);
-  const shaValid = tradeShaReceived.toUpperCase() === expectedSha;
-  console.log("[NewebPay callback] TradeSha 驗證:", shaValid ? "成功" : "失敗");
-  if (!shaValid) {
-    return NextResponse.json({ error: "TradeSha 驗證失敗" }, { status: 400 });
+  let tradeInfoEnc = "";
+  let tradeShaReceived = "";
+  let decrypted: string | null = null;
+  let usedPairSource = "";
+
+  for (const c of tradePairs) {
+    const expectedSha = newebpayTradeSha(c.tradeInfo, creds.hashKey, creds.hashIv);
+    const shaOk = c.tradeSha.toUpperCase() === expectedSha;
+    console.log(
+      "[NewebPay callback] 候選",
+      c.source,
+      "TradeSha:",
+      shaOk ? "成功" : "失敗",
+      "TradeInfo len:",
+      c.tradeInfo.length
+    );
+    if (!shaOk) continue;
+    try {
+      decrypted = newebpayAesDecrypt(c.tradeInfo, creds.hashKey, creds.hashIv);
+      tradeInfoEnc = c.tradeInfo;
+      tradeShaReceived = c.tradeSha;
+      usedPairSource = c.source;
+      console.log(
+        "[NewebPay callback] decrypt success, source:",
+        usedPairSource,
+        "decrypted length:",
+        decrypted.length
+      );
+      break;
+    } catch (e) {
+      console.warn("[NewebPay callback] 候選", c.source, "TradeSha 通過但解密失敗:", e);
+    }
   }
 
-  let decrypted: string;
-  try {
-    decrypted = newebpayAesDecrypt(tradeInfoEnc, creds.hashKey, creds.hashIv);
-    console.log("[NewebPay callback] decrypt success, decrypted length:", decrypted.length);
-  } catch (e) {
-    console.error("[NewebPay callback] decrypt failure", e);
+  if (!decrypted) {
+    console.error("[NewebPay callback] 所有候選皆無法通過驗證／解密（請確認 HashKey／HashIV 與商店後台一致，或檢查 Notify 格式）");
     return NextResponse.json({ error: "解密失敗" }, { status: 400 });
   }
 

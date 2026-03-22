@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolvePublicBaseUrl } from "@/lib/appUrl";
 import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
+import { parseNewebpayIncomingPost } from "@/lib/newebpay/parseIncomingPost";
 
 function isHexString(s: string): boolean {
   return /^[0-9a-fA-F]*$/.test(s);
@@ -15,79 +16,38 @@ export async function POST(request: NextRequest) {
   const appUrl = resolvePublicBaseUrl(request.nextUrl.origin);
   const resultPage = appUrl ? `${appUrl}/payment/newebpay/result` : "/payment/newebpay/result";
 
-  const contentType = request.headers.get("content-type") ?? "";
-  console.log("[NewebPay result] request content-type:", contentType);
-
-  let rawBody: string;
+  let parsed: Awaited<ReturnType<typeof parseNewebpayIncomingPost>>;
   try {
-    rawBody = await request.text();
+    parsed = await parseNewebpayIncomingPost(request);
   } catch (e) {
-    console.error("[NewebPay result] 讀取 body 失敗", e);
+    console.error("[NewebPay result] 讀取／解析 body 失敗", e);
     return NextResponse.redirect(`${resultPage}?state=pending`, 302);
   }
 
+  const { rawBody, contentType, parsedKeys, parsedObject, rawJsonBody, tradePairs } = parsed;
+
+  console.log("[NewebPay result] request content-type:", contentType);
   console.log("[NewebPay result] raw body length:", rawBody.length);
-  console.log("[NewebPay result] raw body text (full):", rawBody);
-
-  const parsedKeys: string[] = [];
-  const parsedObject: Record<string, string> = {};
-  let tradeInfoEnc = "";
-  let tradeShaReceived = "";
-
-  if (contentType.includes("application/json")) {
-    try {
-      const body = JSON.parse(rawBody) as Record<string, unknown>;
-      for (const k of Object.keys(body)) {
-        parsedKeys.push(k);
-        const v = body[k];
-        const s = v === undefined || v === null ? "" : String(v);
-        parsedObject[k] = s;
-      }
-      tradeInfoEnc = typeof body.TradeInfo === "string" ? body.TradeInfo : (body.tradeinfo as string) ?? "";
-      tradeShaReceived = typeof body.TradeSha === "string" ? body.TradeSha : (body.tradesha as string) ?? "";
-      if (!tradeInfoEnc && body.Result && typeof body.Result === "object") {
-        const r = body.Result as Record<string, unknown>;
-        if (typeof r.TradeInfo === "string") tradeInfoEnc = r.TradeInfo;
-        if (typeof r.TradeSha === "string") tradeShaReceived = r.TradeSha;
-      }
-      if (!tradeInfoEnc && body.data && typeof body.data === "object") {
-        const d = body.data as Record<string, unknown>;
-        if (typeof d.TradeInfo === "string") tradeInfoEnc = d.TradeInfo;
-        if (typeof d.TradeSha === "string") tradeShaReceived = d.TradeSha;
-      }
-    } catch (e) {
-      console.error("[NewebPay result] JSON parse 失敗", e);
-      return NextResponse.redirect(`${resultPage}?state=pending`, 302);
-    }
-  } else {
-    const params = new URLSearchParams(rawBody);
-    params.forEach((value, key) => {
-      parsedKeys.push(key);
-      parsedObject[key] = value;
-    });
-    tradeInfoEnc = params.get("TradeInfo") ?? params.get("tradeinfo") ?? "";
-    tradeShaReceived = params.get("TradeSha") ?? params.get("tradesha") ?? "";
+  if (rawBody.length > 0) {
+    console.log("[NewebPay result] raw body text (full):", rawBody);
   }
+  console.log("[NewebPay result] trade pair candidates:", tradePairs.map((p) => p.source));
 
   console.log("[NewebPay result] parsed form keys:", parsedKeys);
   console.log("[NewebPay result] parsed form object (each key -> value length):", Object.fromEntries(parsedKeys.map((k) => [k, (parsedObject[k] ?? "").length])));
 
   const getStr = (key: string): string => (parsedObject[key] ?? parsedObject[key.toLowerCase()] ?? "").trim();
   let merchantOrderNoFromPlain = getStr("MerchantOrderNo") || getStr("OrderNo");
-  if (!merchantOrderNoFromPlain && contentType.includes("application/json")) {
-    try {
-      const body = JSON.parse(rawBody) as Record<string, unknown>;
-      if (typeof body.MerchantOrderNo === "string") merchantOrderNoFromPlain = body.MerchantOrderNo.trim();
-      if (!merchantOrderNoFromPlain && body.data && typeof body.data === "object") {
-        const d = body.data as Record<string, unknown>;
-        if (typeof d.MerchantOrderNo === "string") merchantOrderNoFromPlain = d.MerchantOrderNo.trim();
-      }
-      if (!merchantOrderNoFromPlain && body.Result && typeof body.Result === "object") {
-        const r = body.Result as Record<string, unknown>;
-        if (typeof r.MerchantOrderNo === "string") merchantOrderNoFromPlain = r.MerchantOrderNo.trim();
-      }
-    } catch {
-      // already parsed above
+  if (!merchantOrderNoFromPlain && rawJsonBody) {
+    const body = rawJsonBody;
+    if (typeof body.MerchantOrderNo === "string") merchantOrderNoFromPlain = body.MerchantOrderNo.trim();
+    if (!merchantOrderNoFromPlain && body.data && typeof body.data === "object") {
+      const d = body.data as Record<string, unknown>;
+      if (typeof d.MerchantOrderNo === "string") merchantOrderNoFromPlain = d.MerchantOrderNo.trim();
+    }
+    if (!merchantOrderNoFromPlain && body.Result && typeof body.Result === "object") {
+      const r = body.Result as Record<string, unknown>;
+      if (typeof r.MerchantOrderNo === "string") merchantOrderNoFromPlain = r.MerchantOrderNo.trim();
     }
   }
   const statusFromPlain = getStr("Status");
@@ -105,28 +65,50 @@ export async function POST(request: NextRequest) {
 
   let orderNoForRedirect = merchantOrderNoFromPlain;
 
-  if (tradeInfoEnc && tradeShaReceived) {
-    console.log("[NewebPay result] field used for decrypt: TradeInfo, length:", tradeInfoEnc.length, "preview (前 32 字):", tradeInfoEnc.slice(0, 32), "isHex:", isHexString(tradeInfoEnc));
-
-    const creds = getNewebpayCreds();
-    if (creds) {
-      const expectedSha = newebpayTradeSha(tradeInfoEnc, creds.hashKey, creds.hashIv);
-      if (tradeShaReceived.toUpperCase() === expectedSha) {
-        try {
-          const decrypted = newebpayAesDecrypt(tradeInfoEnc, creds.hashKey, creds.hashIv);
-          const params = new URLSearchParams(decrypted);
-          const fromDecrypt = params.get("MerchantOrderNo") ?? "";
-          if (fromDecrypt.trim()) orderNoForRedirect = orderNoForRedirect || fromDecrypt.trim();
-          console.log("[NewebPay result] decrypt success, MerchantOrderNo from decrypt:", fromDecrypt.trim());
-        } catch (e) {
-          console.error("[NewebPay result] decrypt failure, input length:", tradeInfoEnc.length, "isHex:", isHexString(tradeInfoEnc), e);
-        }
-      } else {
-        console.log("[NewebPay result] TradeSha 驗證失敗，略過 decrypt");
+  const creds = getNewebpayCreds();
+  if (tradePairs.length > 0 && creds) {
+    for (const c of tradePairs) {
+      console.log(
+        "[NewebPay result] 嘗試候選",
+        c.source,
+        "TradeInfo len:",
+        c.tradeInfo.length,
+        "preview:",
+        c.tradeInfo.slice(0, 32),
+        "isHex:",
+        isHexString(c.tradeInfo)
+      );
+      const expectedSha = newebpayTradeSha(c.tradeInfo, creds.hashKey, creds.hashIv);
+      if (c.tradeSha.toUpperCase() !== expectedSha) {
+        console.log("[NewebPay result] 候選", c.source, "TradeSha 驗證失敗，試下一組");
+        continue;
+      }
+      try {
+        const decrypted = newebpayAesDecrypt(c.tradeInfo, creds.hashKey, creds.hashIv);
+        const params = new URLSearchParams(decrypted);
+        const fromDecrypt = params.get("MerchantOrderNo") ?? "";
+        if (fromDecrypt.trim()) orderNoForRedirect = orderNoForRedirect || fromDecrypt.trim();
+        console.log(
+          "[NewebPay result] decrypt success, source:",
+          c.source,
+          "MerchantOrderNo from decrypt:",
+          fromDecrypt.trim()
+        );
+        break;
+      } catch (e) {
+        console.error(
+          "[NewebPay result] 候選",
+          c.source,
+          "解密失敗, input length:",
+          c.tradeInfo.length,
+          "isHex:",
+          isHexString(c.tradeInfo),
+          e
+        );
       }
     }
-  } else {
-    console.log("[NewebPay result] TradeInfo 或 TradeSha 為空，不嘗試 decrypt");
+  } else if (tradePairs.length === 0) {
+    console.log("[NewebPay result] 無 TradeInfo／TradeSha 候選，不嘗試 decrypt");
   }
 
   const redirectTarget = orderNoForRedirect
