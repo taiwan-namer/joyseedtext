@@ -80,8 +80,8 @@ export async function voidEcpayInvoice(
     MerchantID: creds.merchantId,
     InvoiceNo: inv,
     InvoiceDate: normalizeInvoiceDateForInvalidApi(invoiceDate),
-    /** 文件上限 20 字元，依字元截斷 */
-    Reason: [...voidReason].slice(0, 20).join(""),
+    /** 文件上限 20 字元，依字元截斷（避免 [...string] 在 TS target 較低時需 downlevelIteration） */
+    Reason: Array.from(voidReason).slice(0, 20).join(""),
   };
 
   let encryptedData: string;
