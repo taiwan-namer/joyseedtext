@@ -5,6 +5,12 @@ import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { getCurrentMemberEmail } from "@/app/actions/bookingActions";
 import { executeEcpayRefund } from "@/lib/ecpay/refundDoAction";
 import {
+  executeLinePayRefund,
+  getLinePaySandboxCredentials,
+  validateLinePayCredentials,
+  type LinePayCredentials,
+} from "@/lib/linepay";
+import {
   bookingsVisibleToMerchantOrFilter,
   getAdminBookingsAccessFilter,
   type AdminBookingsAccessFilter,
@@ -29,20 +35,36 @@ type BookingRefundRow = {
   class_id: string | null;
   slot_date: string | null;
   slot_time: string | null;
+  payment_method: string;
   ecpay_merchant_trade_no: string | null;
   ecpay_trade_no: string | null;
   ecpay_payment_type: string | null;
+  line_pay_transaction_id: string | null;
   order_amount: number | null;
   refund_status: string | null;
 };
 
-function validatePaidEcpayCreditRefund(b: BookingRefundRow): string | null {
+const BOOKING_REFUND_SELECT =
+  "id, status, merchant_id, class_id, slot_date, slot_time, payment_method, ecpay_merchant_trade_no, ecpay_trade_no, ecpay_payment_type, line_pay_transaction_id, order_amount, refund_status";
+
+function validateCommonPaidRefundEligibility(b: BookingRefundRow): string | null {
   if ((b.refund_status ?? "").trim().toLowerCase() === "refunded") {
     return "此訂單已標記為已退款";
   }
   if (b.status !== "paid") {
-    return "僅限已付款（paid）訂單可退刷";
+    return "僅限已付款（paid）訂單可退款";
   }
+  const amount =
+    b.order_amount != null && Number.isFinite(Number(b.order_amount)) && Number(b.order_amount) > 0
+      ? Number(b.order_amount)
+      : null;
+  if (amount == null) {
+    return "訂單金額（order_amount）無效，無法退款";
+  }
+  return null;
+}
+
+function validateEcpayCreditRefundFields(b: BookingRefundRow): string | null {
   const tradeNo = (b.ecpay_trade_no ?? "").trim();
   if (!tradeNo) {
     return "缺少綠界交易編號（ecpay_trade_no）";
@@ -58,17 +80,47 @@ function validatePaidEcpayCreditRefund(b: BookingRefundRow): string | null {
   if (!merchantTradeNo) {
     return "缺少綠界商店訂單編號（ecpay_merchant_trade_no）";
   }
-  const amount =
-    b.order_amount != null && Number.isFinite(Number(b.order_amount)) && Number(b.order_amount) > 0
-      ? Number(b.order_amount)
-      : null;
-  if (amount == null) {
-    return "訂單金額（order_amount）無效，無法退刷";
+  return null;
+}
+
+function validateLinePayRefundFields(b: BookingRefundRow): string | null {
+  const tid = (b.line_pay_transaction_id ?? "").trim();
+  if (!tid) {
+    return "缺少 LINE Pay 交易序號（line_pay_transaction_id）";
   }
   return null;
 }
 
-/** 無場次時付款曾扣 classes.capacity，取消／退刷後回補 +1（與 deleteBooking 一致） */
+async function resolveLinePayCredentialsForMerchant(
+  supabase: ReturnType<typeof createServerSupabase>,
+  merchantId: string
+): Promise<{ ok: true; creds: LinePayCredentials } | { ok: false; error: string }> {
+  const { data: settingsRow, error } = await supabase
+    .from("store_settings")
+    .select("frontend_settings")
+    .eq("merchant_id", merchantId)
+    .maybeSingle();
+
+  if (error || !settingsRow?.frontend_settings) {
+    return { ok: false, error: "無法讀取店家金流設定（store_settings）" };
+  }
+
+  const raw = settingsRow.frontend_settings as Record<string, unknown>;
+  const linePayApi = typeof raw.linePayApi === "string" ? raw.linePayApi : null;
+  const creds = getLinePaySandboxCredentials(linePayApi);
+  if (!creds) {
+    return { ok: false, error: "LINE Pay 未設定（請設定 .env 或後台金流 linePayApi）" };
+  }
+
+  const validation = validateLinePayCredentials(creds);
+  if (!validation.ok) {
+    return { ok: false, error: validation.error };
+  }
+
+  return { ok: true, creds };
+}
+
+/** 無場次時付款曾扣 classes.capacity，取消／退款後回補 +1（與 deleteBooking 一致） */
 async function restoreClassCapacityIfPaidWithoutSlot(
   supabase: ReturnType<typeof createServerSupabase>,
   b: BookingRefundRow
@@ -93,8 +145,22 @@ async function restoreClassCapacityIfPaidWithoutSlot(
 }
 
 /**
- * 後台：綠界信用卡自動退刷（DoAction R），成功後標記 refund_status 並取消訂單。
- * 權限與訂單列表相同（verifyAdminSession + 多租戶／開課者範圍）。
+ * 金流退款成功後共用：回補名額（無場次時）、將訂單標為已退款並取消。
+ * （專案無 orders 表，不連動。）
+ */
+async function applyRefundSuccessToBooking(
+  supabase: ReturnType<typeof createServerSupabase>,
+  bookingId: string,
+  b: BookingRefundRow,
+  runUpdate: () => Promise<{ error: { message: string } | null }>
+): Promise<{ error: string | null }> {
+  await restoreClassCapacityIfPaidWithoutSlot(supabase, b);
+  const { error } = await runUpdate();
+  return { error: error?.message ?? null };
+}
+
+/**
+ * 後台：依付款方式執行綠界信用卡退刷或 LINE Pay 退款，成功後標記 refund_status 並取消訂單。
  */
 export async function processBookingRefund(
   bookingId: string
@@ -106,58 +172,88 @@ export async function processBookingRefund(
     if (!access) return { success: false, error: "未設定店家" };
 
     const { data: row, error: fetchError } = await applyAdminBookingsAccess(
-      supabase
-        .from("bookings")
-        .select(
-          "id, status, merchant_id, class_id, slot_date, slot_time, ecpay_merchant_trade_no, ecpay_trade_no, ecpay_payment_type, order_amount, refund_status"
-        )
-        .eq("id", bookingId),
+      supabase.from("bookings").select(BOOKING_REFUND_SELECT).eq("id", bookingId),
       access
     ).maybeSingle();
 
     if (fetchError || !row) return { success: false, error: "訂單不存在或無權限操作" };
 
     const b = row as BookingRefundRow;
-    const validationError = validatePaidEcpayCreditRefund(b);
-    if (validationError) return { success: false, error: validationError };
+    const commonErr = validateCommonPaidRefundEligibility(b);
+    if (commonErr) return { success: false, error: commonErr };
 
+    const pm = (b.payment_method ?? "").trim().toLowerCase();
     const amount = Number(b.order_amount);
 
-    const refund = await executeEcpayRefund(
-      (b.ecpay_merchant_trade_no ?? "").trim(),
-      (b.ecpay_trade_no ?? "").trim(),
-      amount
-    );
-    if (!refund.ok) {
-      return { success: false, error: refund.error };
+    if (pm === "ecpay") {
+      const ecpayErr = validateEcpayCreditRefundFields(b);
+      if (ecpayErr) return { success: false, error: ecpayErr };
+
+      const refund = await executeEcpayRefund(
+        (b.ecpay_merchant_trade_no ?? "").trim(),
+        (b.ecpay_trade_no ?? "").trim(),
+        amount
+      );
+      if (!refund.ok) {
+        return { success: false, error: refund.error };
+      }
+
+      const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, async () => {
+        return await applyAdminBookingsAccess(
+          supabase
+            .from("bookings")
+            .update({ refund_status: "refunded", status: "cancelled" })
+            .eq("id", bookingId)
+            .eq("status", "paid"),
+          access
+        );
+      });
+      if (upErr) return { success: false, error: upErr };
+
+      return { success: true, message: "綠界退刷成功，訂單已標記為已退款並取消" };
     }
 
-    await restoreClassCapacityIfPaidWithoutSlot(supabase, b);
+    if (pm === "linepay") {
+      const lpErr = validateLinePayRefundFields(b);
+      if (lpErr) return { success: false, error: lpErr };
 
-    const { error: upErr } = await applyAdminBookingsAccess(
-      supabase
-        .from("bookings")
-        .update({
-          refund_status: "refunded",
-          status: "cancelled",
-        })
-        .eq("id", bookingId)
-        .eq("status", "paid"),
-      access
-    );
+      const credsRes = await resolveLinePayCredentialsForMerchant(supabase, b.merchant_id);
+      if (!credsRes.ok) return { success: false, error: credsRes.error };
 
-    if (upErr) return { success: false, error: upErr.message };
+      const lpRefund = await executeLinePayRefund(
+        (b.line_pay_transaction_id ?? "").trim(),
+        amount,
+        credsRes.creds.channelId,
+        credsRes.creds.channelSecret
+      );
+      if (!lpRefund.ok) {
+        return { success: false, error: lpRefund.error };
+      }
 
-    return { success: true, message: "退刷成功，訂單已標記為已退款並取消" };
+      const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, async () => {
+        return await applyAdminBookingsAccess(
+          supabase
+            .from("bookings")
+            .update({ refund_status: "refunded", status: "cancelled" })
+            .eq("id", bookingId)
+            .eq("status", "paid"),
+          access
+        );
+      });
+      if (upErr) return { success: false, error: upErr };
+
+      return { success: true, message: "LINE Pay 退款成功，訂單已標記為已退款並取消" };
+    }
+
+    return { success: false, error: "此付款方式不支援後台自動退款（僅支援綠界信用卡、LINE Pay）" };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "退刷失敗";
+    const msg = e instanceof Error ? e.message : "退款失敗";
     return { success: false, error: msg };
   }
 }
 
 /**
- * 會員中心：本人訂單之綠界信用卡退刷（條件同後台退刷）。
- * 以登入信箱 + 本站可見範圍（merchant_id / sold_via）驗證。
+ * 會員中心：本人訂單之綠界／LINE Pay 自動退款（條件同後台金流邏輯）。
  */
 export async function processMemberBookingRefund(
   bookingId: string
@@ -171,9 +267,7 @@ export async function processMemberBookingRefund(
     const supabase = createServerSupabase();
     const { data: row, error: fetchError } = await supabase
       .from("bookings")
-      .select(
-        "id, status, merchant_id, class_id, slot_date, slot_time, ecpay_merchant_trade_no, ecpay_trade_no, ecpay_payment_type, order_amount, refund_status"
-      )
+      .select(BOOKING_REFUND_SELECT)
       .eq("id", bookingId)
       .eq("member_email", email)
       .or(bookingsVisibleToMerchantOrFilter(merchantId))
@@ -182,38 +276,66 @@ export async function processMemberBookingRefund(
     if (fetchError || !row) return { success: false, error: "訂單不存在或無權限操作" };
 
     const b = row as BookingRefundRow;
-    const validationError = validatePaidEcpayCreditRefund(b);
-    if (validationError) return { success: false, error: validationError };
+    const commonErr = validateCommonPaidRefundEligibility(b);
+    if (commonErr) return { success: false, error: commonErr };
 
+    const pm = (b.payment_method ?? "").trim().toLowerCase();
     const amount = Number(b.order_amount);
 
-    const refund = await executeEcpayRefund(
-      (b.ecpay_merchant_trade_no ?? "").trim(),
-      (b.ecpay_trade_no ?? "").trim(),
-      amount
-    );
-    if (!refund.ok) {
-      return { success: false, error: refund.error };
+    const memberUpdate = async () =>
+      await supabase
+        .from("bookings")
+        .update({ refund_status: "refunded", status: "cancelled" })
+        .eq("id", bookingId)
+        .eq("member_email", email)
+        .or(bookingsVisibleToMerchantOrFilter(merchantId))
+        .eq("status", "paid");
+
+    if (pm === "ecpay") {
+      const ecpayErr = validateEcpayCreditRefundFields(b);
+      if (ecpayErr) return { success: false, error: ecpayErr };
+
+      const refund = await executeEcpayRefund(
+        (b.ecpay_merchant_trade_no ?? "").trim(),
+        (b.ecpay_trade_no ?? "").trim(),
+        amount
+      );
+      if (!refund.ok) {
+        return { success: false, error: refund.error };
+      }
+
+      const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, memberUpdate);
+      if (upErr) return { success: false, error: upErr };
+
+      return { success: true, message: "退刷成功，預約已取消" };
     }
 
-    await restoreClassCapacityIfPaidWithoutSlot(supabase, b);
+    if (pm === "linepay") {
+      const lpErr = validateLinePayRefundFields(b);
+      if (lpErr) return { success: false, error: lpErr };
 
-    const { error: upErr } = await supabase
-      .from("bookings")
-      .update({
-        refund_status: "refunded",
-        status: "cancelled",
-      })
-      .eq("id", bookingId)
-      .eq("member_email", email)
-      .or(bookingsVisibleToMerchantOrFilter(merchantId))
-      .eq("status", "paid");
+      const credsRes = await resolveLinePayCredentialsForMerchant(supabase, b.merchant_id);
+      if (!credsRes.ok) return { success: false, error: credsRes.error };
 
-    if (upErr) return { success: false, error: upErr.message };
+      const lpRefund = await executeLinePayRefund(
+        (b.line_pay_transaction_id ?? "").trim(),
+        amount,
+        credsRes.creds.channelId,
+        credsRes.creds.channelSecret
+      );
+      if (!lpRefund.ok) {
+        return { success: false, error: lpRefund.error };
+      }
 
-    return { success: true, message: "退刷成功，預約已取消" };
+      const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, memberUpdate);
+      if (upErr) return { success: false, error: upErr };
+
+      return { success: true, message: "LINE Pay 退款成功，預約已取消" };
+    }
+
+    return { success: false, error: "此付款方式不支援線上自動退款，請聯絡客服" };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "退刷失敗";
+    const msg = e instanceof Error ? e.message : "退款失敗";
     return { success: false, error: msg };
   }
 }

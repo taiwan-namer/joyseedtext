@@ -201,14 +201,13 @@ export default function AdminBookingsPage() {
     }
   };
 
-  const handleEcpayRefund = async (bookingId: string) => {
-    if (
-      !confirm(
-        "確定要對此筆訂單執行綠界信用卡退刷？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。"
-      )
-    ) {
-      return;
-    }
+  const handleOnlineRefund = async (bookingId: string, paymentMethod: string) => {
+    const pm = paymentMethod.toLowerCase();
+    const msg =
+      pm === "linepay"
+        ? "確定要對此筆訂單執行 LINE Pay 退款？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。"
+        : "確定要對此筆訂單執行綠界信用卡退刷？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。";
+    if (!confirm(msg)) return;
     setRefundingId(bookingId);
     const res = await processBookingRefund(bookingId);
     setRefundingId(null);
@@ -220,7 +219,7 @@ export default function AdminBookingsPage() {
             : b
         )
       );
-      alert(res.message ?? "退刷成功");
+      alert(res.message ?? "退款成功");
     } else {
       alert(res.error);
     }
@@ -519,13 +518,17 @@ export default function AdminBookingsPage() {
                           </button>
                         )}
                         {row.status === "paid" &&
-                          row.payment_method === "ecpay" &&
+                          (row.payment_method === "ecpay" || row.payment_method === "linepay") &&
                           (row.refund_status ?? "").trim().toLowerCase() !== "refunded" && (
                             <button
                               type="button"
-                              onClick={() => handleEcpayRefund(row.id)}
+                              onClick={() => handleOnlineRefund(row.id, row.payment_method)}
                               disabled={refundingId === row.id}
-                              title="僅限綠界信用卡；需有交易編號與 PaymentType"
+                              title={
+                                row.payment_method === "linepay"
+                                  ? "LINE Pay 退款（需有 line_pay_transaction_id 與店家 linePayApi）"
+                                  : "綠界信用卡退刷（需有交易編號與 PaymentType）"
+                              }
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
                             >
                               {refundingId === row.id ? (
@@ -533,7 +536,7 @@ export default function AdminBookingsPage() {
                               ) : (
                                 <RotateCcw className="w-3.5 h-3.5" />
                               )}
-                              綠界退刷
+                              {row.payment_method === "linepay" ? "LINE 退款" : "綠界退刷"}
                             </button>
                           )}
                         <button

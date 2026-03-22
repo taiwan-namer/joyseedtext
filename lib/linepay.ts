@@ -295,3 +295,110 @@ export async function confirmLinePayPayment(
   }
   return result;
 }
+
+/** LINE Pay Refund：退款成功 */
+const LINE_PAY_REFUND_SUCCESS = "0000";
+/** 該筆交易已退款過（冪等，可視為成功結案） */
+const LINE_PAY_REFUND_ALREADY = "1165";
+
+export type LinePayRefundResult =
+  | { ok: true; returnCode: string; returnMessage: string }
+  | { ok: false; error: string; returnCode?: string; returnMessage?: string };
+
+async function executeLinePayRefundOnce(
+  transactionId: string,
+  refundAmount: number,
+  channelId: string,
+  channelSecret: string
+): Promise<LinePayRefundResult> {
+  const tid = transactionId.trim();
+  if (!tid) {
+    return { ok: false, error: "transactionId 不可為空", returnCode: "9000", returnMessage: "transactionId 不可為空" };
+  }
+
+  const amt = Math.round(Number(refundAmount));
+  if (!Number.isFinite(amt) || amt <= 0) {
+    return { ok: false, error: "退款金額無效", returnCode: "9000", returnMessage: "退款金額無效" };
+  }
+
+  const uri = `/v3/payments/${tid}/refund`;
+  const body = JSON.stringify({ refundAmount: amt });
+  const nonce = randomUUID();
+
+  const signature = generateSignature(channelSecret, uri, body, nonce);
+  const baseUrl = getLinePayBaseUrl();
+  const url = `${baseUrl}${uri}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), LINE_PAY_REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "X-LINE-ChannelId": channelId,
+        "X-LINE-Authorization-Nonce": nonce,
+        "X-LINE-Authorization": signature,
+      },
+      body,
+    });
+  } catch (e) {
+    clearTimeout(timeoutId);
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `連線失敗：${msg}`, returnCode: "9000", returnMessage: msg };
+  }
+
+  clearTimeout(timeoutId);
+  const text = await res.text();
+  const raw = (() => {
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return { returnCode: "9000", returnMessage: "Invalid response" };
+    }
+  })();
+
+  const returnCode = String(raw.returnCode ?? "");
+  const returnMessage = String(raw.returnMessage ?? "-");
+
+  if (returnCode === LINE_PAY_REFUND_SUCCESS || returnCode === LINE_PAY_REFUND_ALREADY) {
+    return { ok: true, returnCode, returnMessage };
+  }
+
+  return {
+    ok: false,
+    error: `${returnMessage}（${returnCode}）`,
+    returnCode,
+    returnMessage,
+  };
+}
+
+/**
+ * LINE Pay V3 Refund API：`POST /v3/payments/{transactionId}/refund`
+ * 成功：`returnCode === '0000'` 或已退款 `1165`（冪等）。
+ * 逾時／可重試錯誤時最多再試一次。
+ */
+export async function executeLinePayRefund(
+  transactionId: string,
+  refundAmount: number,
+  channelId: string,
+  channelSecret: string
+): Promise<LinePayRefundResult> {
+  let result = await executeLinePayRefundOnce(transactionId, refundAmount, channelId, channelSecret);
+  if (result.ok) return result;
+
+  const retryable =
+    result.returnCode === "9000" ||
+    (result.error?.toLowerCase().includes("abort") ?? false) ||
+    (result.error?.toLowerCase().includes("timeout") ?? false) ||
+    (result.returnMessage?.toLowerCase().includes("timeout") ?? false) ||
+    (result.returnMessage?.toLowerCase().includes("network") ?? false);
+
+  if (!retryable) return result;
+
+  result = await executeLinePayRefundOnce(transactionId, refundAmount, channelId, channelSecret);
+  return result;
+}

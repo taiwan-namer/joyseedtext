@@ -351,16 +351,16 @@ export default function MemberDashboardPage() {
         }
         alert(res.message ?? "已取消預約");
       } else if (st === "paid") {
-        if (pm === "ecpay") {
+        if (pm === "ecpay" || pm === "linepay") {
           const res = await processMemberBookingRefund(selectedOrderId);
           if (!res.success) {
             alert(res.error);
             return;
           }
-          alert(res.message ?? "退刷成功");
+          alert(res.message ?? "退款成功");
         } else {
           alert(
-            "此訂單付款方式非綠界信用卡自動退刷範圍，請透過 LINE 官方帳號或客服辦理退款。"
+            "此訂單付款方式不支援線上自動退款，請透過 LINE 官方帳號或客服辦理。"
           );
           return;
         }
@@ -486,7 +486,8 @@ export default function MemberDashboardPage() {
               className="text-lg font-bold text-gray-900 mb-4"
             >
               {selectedBooking?.status === "paid"
-                ? selectedBooking.payment_method === "ecpay"
+                ? selectedBooking.payment_method === "ecpay" ||
+                    selectedBooking.payment_method === "linepay"
                   ? "確認取消預約與退款？"
                   : "確認申請退款？"
                 : "確認取消預約？"}
@@ -497,9 +498,13 @@ export default function MemberDashboardPage() {
                   <>
                     綠界信用卡將嘗試自動退刷；依據平台政策，開課前 24 小時內取消可能酌收手續費。確定要繼續嗎？
                   </>
+                ) : selectedBooking.payment_method === "linepay" ? (
+                  <>
+                    將向 LINE Pay 申請退款；依據平台政策，開課前 24 小時內取消可能酌收手續費。確定要繼續嗎？
+                  </>
                 ) : (
                   <>
-                    此訂單非綠界信用卡線上退刷，按下確認後將提示您聯絡客服辦理，訂單狀態不會自動變更。
+                    此訂單不支援線上自動退款，按下確認後將提示您聯絡客服，訂單狀態不會自動變更。
                   </>
                 )
               ) : (
