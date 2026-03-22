@@ -5,6 +5,8 @@ import { newebpayAesDecrypt, newebpayTradeSha } from "@/lib/payment-utils";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { getNewebpayCreds, getNewebpayCredsForLog } from "@/lib/newebpay/config";
 import { issueInvoice } from "@/lib/invoice/service";
+import { extractNewebpayPaymentTypeFromDecrypted } from "@/lib/newebpay/notifyPaymentType";
+import { queryNewebpayPaymentType } from "@/lib/newebpay/queryTradeInfo";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -169,13 +171,8 @@ export async function POST(request: NextRequest) {
     (decrypted.match(/"merchant_order_no"\s*:\s*"([^"]+)"/) ?? decrypted.match(/merchant_order_no=([^&]+)/))?.[1]?.trim();
   const merchantOrderNo = merchantOrderNoFromDec || getStr("MerchantOrderNo") || getStr("OrderNo");
   const amt = getDecByKey("Amt");
-  /** 藍新付款別：CREDIT、VACC、WEBATM 等；與綠界 ecpay_payment_type 無關 */
-  const paymentTypeDec =
-    getDecByKey("PaymentType") ||
-    getDecByKey("PaymentMethod") ||
-    getDecByKey("PAYMENTTYPE") ||
-    getDecByKey("PaymentMethodType") ||
-    "";
+  /** 解密內能拿到的付款別；若 Notify 回的是送單內容可能為空，稍後用 QueryTradeInfo 補 */
+  let paymentTypeDec = extractNewebpayPaymentTypeFromDecrypted(decryptedObj, decrypted);
   const responseCode = getDecByKey("ResponseCode");
   const returnUrlVal = getDecByKey("ReturnURL");
   const notifyUrlVal = getDecByKey("NotifyURL");
@@ -236,11 +233,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "OK" });
   }
 
+  if (!paymentTypeDec) {
+    const amtNum = parseInt(String(amt).replace(/[^\d]/g, ""), 10) || 0;
+    if (amtNum > 0) {
+      const q = await queryNewebpayPaymentType({ merchantOrderNo, amt: amtNum });
+      if (q) {
+        paymentTypeDec = q;
+        console.log("[NewebPay callback] PaymentType 由 QueryTradeInfo 補齊:", q);
+      }
+    }
+  }
+
   const supabase = createServerSupabase();
   // 與綠界相同：庫存課訂單 merchant_id 為老師，sold_via_merchant_id 為結帳站，不可只 eq merchant_id
   const { data: bookingRows, error: fetchError } = await supabase
     .from("bookings")
-    .select("id, class_id, merchant_id, sold_via_merchant_id, slot_date, slot_time, status")
+    .select("id, class_id, merchant_id, sold_via_merchant_id, slot_date, slot_time, status, order_amount")
     .eq("newebpay_merchant_order_no", merchantOrderNo);
 
   if (fetchError) {
@@ -256,6 +264,18 @@ export async function POST(request: NextRequest) {
         (r as { merchant_id?: string }).merchant_id === merchantId ||
         (r as { sold_via_merchant_id?: string | null }).sold_via_merchant_id === merchantId
     ) as (typeof bRows)[0] | undefined) ?? (bRows.length === 1 ? bRows[0] : undefined);
+
+  if (!paymentTypeDec && booking && merchantOrderNo) {
+    const oa = (booking as { order_amount?: number | null }).order_amount;
+    const amtFallback = typeof oa === "number" && oa > 0 ? Math.round(oa) : 0;
+    if (amtFallback > 0) {
+      const q = await queryNewebpayPaymentType({ merchantOrderNo, amt: amtFallback });
+      if (q) {
+        paymentTypeDec = q;
+        console.log("[NewebPay callback] PaymentType 依訂單 order_amount QueryTradeInfo 補齊:", q);
+      }
+    }
+  }
 
   if (booking) {
     const status = (booking as { status?: string }).status ?? "";
@@ -311,7 +331,7 @@ export async function POST(request: NextRequest) {
   {
     const { data: pending, error: pendingErr } = await supabase
       .from("pending_payments")
-      .select("id")
+      .select("id, order_amount")
       .eq("payment_method", "newebpay")
       .eq("gateway_key", merchantOrderNo)
       .eq("merchant_id", merchantId)
@@ -320,6 +340,17 @@ export async function POST(request: NextRequest) {
     console.log("[NewebPay callback] pending lookup gateway_key:", JSON.stringify(merchantOrderNo), "pending found:", !!pending, "pendingErr:", pendingErr?.message ?? null);
 
     if (!pendingErr && pending) {
+      if (!paymentTypeDec && merchantOrderNo) {
+        const poa = (pending as { order_amount?: number | null }).order_amount;
+        const pamt = typeof poa === "number" && poa > 0 ? Math.round(poa) : 0;
+        if (pamt > 0) {
+          const q = await queryNewebpayPaymentType({ merchantOrderNo, amt: pamt });
+          if (q) {
+            paymentTypeDec = q;
+            console.log("[NewebPay callback] PaymentType 依 pending order_amount QueryTradeInfo 補齊:", q);
+          }
+        }
+      }
       const { data: rpcResult, error: rpcErr } = await supabase.rpc("create_booking_from_pending", {
         p_pending_id: (pending as { id: string }).id,
       });

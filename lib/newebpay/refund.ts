@@ -5,6 +5,7 @@
  */
 import { getNewebpayConfig } from "@/lib/newebpay/config";
 import { newebpayEncryptTradeInfo } from "@/lib/newebpay/encrypt";
+import { queryNewebpayPaymentType } from "@/lib/newebpay/queryTradeInfo";
 
 const CLOSE_STAGE = "https://ccore.newebpay.com/API/CreditCard/Close";
 const CLOSE_PRODUCTION = "https://core.newebpay.com/API/CreditCard/Close";
@@ -124,17 +125,9 @@ export async function executeNewebpayRefund(params: {
   merchantOrderNo: string;
   tradeNo: string | null | undefined;
   amount: number;
-  /** 來自 Notify 解密 PaymentType；非信用卡時不呼叫 Close */
+  /** 來自 Notify／DB；空則會呼叫 QueryTradeInfo 補 PaymentType */
   newebpayPaymentType?: string | null;
 }): Promise<NewebpayRefundResult> {
-  if (!isNewebpayCloseRefundApplicable(params.newebpayPaymentType)) {
-    return {
-      ok: false,
-      error:
-        "此訂單為藍新「非信用卡」付款（例如 ATM 轉帳 VACC／WEBATM），無法使用信用卡 Close API 自動退款；「商店信用卡資格停用」多屬此情形。請至藍新管理中心辦理沖帳／退款，或洽藍新客服。",
-    };
-  }
-
   const cfg = getNewebpayConfig();
   if (!cfg) {
     return {
@@ -153,8 +146,26 @@ export async function executeNewebpayRefund(params: {
     return { ok: false, error: "退款金額無效" };
   }
 
+  let effectivePaymentType = (params.newebpayPaymentType ?? "").trim();
+  if (!effectivePaymentType) {
+    const q = await queryNewebpayPaymentType({ merchantOrderNo: orderNo, amt });
+    if (q) {
+      effectivePaymentType = q;
+    }
+  }
+
+  if (!isNewebpayCloseRefundApplicable(effectivePaymentType)) {
+    return {
+      ok: false,
+      error:
+        "此筆藍新交易付款方式為「非信用卡」（例如 VACC／WEBATM），無法使用 CreditCard/Close 自動退款。請至藍新管理中心對該筆交易辦理沖帳／退款。",
+    };
+  }
+
+  const tn = (params.tradeNo ?? "").trim();
   const ts = String(Math.floor(Date.now() / 1000));
 
+  /** 官方 Close PostData 須含 TradeNo；僅有訂單編號時部分情境會失敗 */
   const closeInner: Record<string, string> = {
     RespondType: "JSON",
     Version: "1.1",
@@ -163,6 +174,7 @@ export async function executeNewebpayRefund(params: {
     TimeStamp: ts,
     IndexType: "1",
     CloseType: "2",
+    ...(tn ? { TradeNo: tn } : {}),
   };
 
   const closeUrl = getCloseUrl(cfg.isProduction);
@@ -182,6 +194,26 @@ export async function executeNewebpayRefund(params: {
     return { ok: true, channel: "close", raw: closeRes.parsed };
   }
 
+  // IndexType=2：以藍新交易序號為索引再試（部分商店／交易類型需要）
+  if (tn) {
+    const closeInnerByTrade: Record<string, string> = {
+      ...closeInner,
+      IndexType: "2",
+      TradeNo: tn,
+      MerchantOrderNo: orderNo,
+    };
+    const close2 = await postMerchantIdAndPostData(
+      closeUrl,
+      cfg.merchantId,
+      cfg.hashKey,
+      cfg.hashIv,
+      closeInnerByTrade
+    );
+    if (!close2.encryptError && close2.parsed != null && isNewebpayApiSuccess(close2.parsed)) {
+      return { ok: true, channel: "close", raw: close2.parsed };
+    }
+  }
+
   let closeErr =
     closeRes.parsed != null
       ? errorMessageFromParsed(closeRes.parsed, "藍新 Close 退款未成功")
@@ -189,15 +221,11 @@ export async function executeNewebpayRefund(params: {
         ? `藍新回應無法解析為 JSON：${closeRes.text.replace(/\s+/g, " ").trim().slice(0, 200)}`
         : "藍新 Close 退款請求失敗";
 
-  if (
-    /信用卡|資格|CREDIT|close/i.test(closeErr) &&
-    !(params.newebpayPaymentType ?? "").trim()
-  ) {
+  if (/信用卡|資格|CREDIT|close|未開放/i.test(closeErr)) {
     closeErr +=
-      " 提示：若客戶實際為藍新 ATM／VACC 付款，請至藍新後台退款，勿使用信用卡 Close；新訂單會寫入 newebpay_payment_type 供判斷。";
+      " 請至藍新後台確認：是否已開通「信用卡」收單；若僅開 ATM／VACC，請在後台對該筆交易操作退款。若 DB 無 newebpay_payment_type，系統已嘗試 QueryTradeInfo 判斷付款方式。";
   }
 
-  const tn = (params.tradeNo ?? "").trim();
   if (!tn) {
     return { ok: false, error: closeErr, raw: closeRes.parsed ?? undefined };
   }
