@@ -1,29 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import NextImage from "next/image";
-import { Image as LucideImage, ChevronLeft, ChevronRight, Facebook, Instagram } from "lucide-react";
+import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
 import FAQ from "./components/FAQ";
 import { HeaderMember } from "./components/HeaderMember";
+import HomeMarketplaceCoursesSection from "./components/home/HomeMarketplaceCoursesSection";
 import { useStoreSettings } from "./providers/StoreSettingsProvider";
-import { useState, useEffect, useRef } from "react";
-import { getCoursesForHomepageLight } from "./actions/productActions";
-import { HOMEPAGE_COURSES_FETCH_LIMIT } from "@/lib/constants";
+import { useState, useEffect } from "react";
 import { getFrontendSettings } from "./actions/frontendSettingsActions";
 import type { CarouselItem } from "./lib/frontendSettingsShared";
 import { getDefaultLayoutBlocks, type LayoutBlock } from "./lib/frontendSettingsShared";
-
-// ========== 課程卡片型別（首頁熱門課程） ==========
-type Activity = {
-  id: string;
-  title: string;
-  price: number;
-  stock: number; // 0 = 已售完
-  imageUrl?: string | null;
-  detailHref: string;
-  ageTags: string[];
-  category?: string;
-};
 
 /** LINE 圖示（lucide 無內建，用 SVG 以 currentColor 套主色） */
 function LineIcon({ className }: { className?: string }) {
@@ -35,9 +21,6 @@ function LineIcon({ className }: { className?: string }) {
 }
 
 const CAROUSEL_INTERVAL_MS = 4000;
-const ACTIVITY_CARD_WIDTH = 280;
-const ACTIVITY_GAP = 16;
-const ACTIVITY_AUTO_SCROLL_MS = 4500;
 
 export default function WonderVoyageHomePage() {
   const {
@@ -57,10 +40,6 @@ export default function WonderVoyageHomePage() {
     ? `https://www.google.com/maps?q=${encodeURIComponent(contactAddress.trim())}&output=embed`
     : "";
   const [wallIndex, setWallIndex] = useState(0);
-  const [activityIndex, setActivityIndex] = useState(0);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [activitiesLoading, setActivitiesLoading] = useState(true);
-  const activityScrollRef = useRef<HTMLDivElement>(null);
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const [carouselItems, setCarouselItems] = useState<CarouselItem[]>([]);
   const [navAboutLabel, setNavAboutLabel] = useState("關於我們");
@@ -88,32 +67,6 @@ export default function WonderVoyageHomePage() {
     });
   }, []);
 
-  // 精簡欄位 + limit，與總站效能標準一致（不載入 course_intro / gallery_urls）
-  useEffect(() => {
-    setActivitiesLoading(true);
-    getCoursesForHomepageLight(HOMEPAGE_COURSES_FETCH_LIMIT)
-      .then((res) => {
-        if (res.success && res.data.length > 0) {
-          setActivities(
-            res.data.map((c) => ({
-              id: c.id,
-              title: c.title,
-              price: c.salePrice != null && c.price != null && c.salePrice < c.price ? c.salePrice : c.price ?? 0,
-              stock: c.capacity ?? 0,
-              imageUrl: c.imageUrl ?? null,
-              detailHref: `/course/${c.id}`,
-              ageTags: c.sidebarOptionLabels ?? c.ageTags ?? [],
-              category: c.marketplace_category?.trim() ? c.marketplace_category : "課程",
-            }))
-          );
-        } else {
-          setActivities([]);
-        }
-      })
-      .catch(() => setActivities([]))
-      .finally(() => setActivitiesLoading(false));
-  }, []);
-
   const getBlock = (id: string) => layoutBlocks.find((b) => b.id === id);
   const getBlockStyle = (id: string): React.CSSProperties => {
     const b = getBlock(id);
@@ -137,22 +90,6 @@ export default function WonderVoyageHomePage() {
     }, CAROUSEL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [carouselList.length]);
-
-  // 熱門課程：自動輪播捲動
-  useEffect(() => {
-    if (activitiesLoading || activities.length === 0) return;
-    const timer = setInterval(() => {
-      setActivityIndex((i) => (i + 1) % activities.length);
-    }, ACTIVITY_AUTO_SCROLL_MS);
-    return () => clearInterval(timer);
-  }, [activities.length, activitiesLoading]);
-
-  useEffect(() => {
-    const el = activityScrollRef.current;
-    if (!el || activitiesLoading || activities.length === 0) return;
-    const step = ACTIVITY_CARD_WIDTH + ACTIVITY_GAP;
-    el.scrollTo({ left: Math.min(activityIndex, activities.length - 1) * step, behavior: "smooth" });
-  }, [activityIndex, activities.length, activitiesLoading]);
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
@@ -219,137 +156,8 @@ export default function WonderVoyageHomePage() {
         )}
       </main>
 
-      {/* 4. 熱門課程 - 全寬區塊，橫向輪播卡片（連動後台新增課程） */}
-      <section className="w-full py-6 pb-8 relative bg-page" style={getBlockStyle("courses")}>
-        <div className="max-w-7xl mx-auto px-4 mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">熱門課程</h2>
-        </div>
-        <div className="relative w-full">
-          <button
-            type="button"
-            disabled={activitiesLoading || activities.length === 0}
-            onClick={() =>
-              setActivityIndex((i) =>
-                i === 0 ? Math.max(0, activities.length - 1) : i - 1
-              )
-            }
-            aria-label="上一則課程"
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-40"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <button
-            type="button"
-            disabled={activitiesLoading || activities.length === 0}
-            onClick={() =>
-              setActivityIndex((i) =>
-                i >= Math.max(0, activities.length - 1) ? 0 : i + 1
-              )
-            }
-            aria-label="下一則課程"
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-40"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-          <div
-            ref={activityScrollRef}
-            className="w-full overflow-x-auto scrollbar-hide px-4 sm:px-12 snap-x snap-mandatory scroll-smooth"
-          >
-            <div className="flex gap-4 min-w-max py-2">
-              {activitiesLoading ? (
-                <>
-                  {Array.from({ length: HOMEPAGE_COURSES_FETCH_LIMIT }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="shrink-0 w-[280px] snap-start bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm animate-pulse flex flex-col"
-                    >
-                      <div className="aspect-square bg-gray-200" />
-                      <div className="p-3 space-y-2 flex-1">
-                        <div className="h-3 bg-gray-200 rounded w-1/3" />
-                        <div className="h-4 bg-gray-200 rounded w-full" />
-                        <div className="h-4 bg-gray-200 rounded w-2/3" />
-                        <div className="h-8 bg-gray-200 rounded-lg w-full mt-2" />
-                      </div>
-                    </div>
-                  ))}
-                </>
-              ) : activities.length === 0 ? (
-                <div className="shrink-0 w-[280px] snap-start bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-500 text-sm">
-                  尚無課程，請至後台新增課程
-                </div>
-              ) : (
-                activities.map((activity) => {
-                  const isSoldOut = activity.stock === 0;
-                  return (
-                    <article
-                      key={activity.id}
-                      className="shrink-0 w-[280px] snap-start bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
-                    >
-                      <div className="relative aspect-square bg-gray-200 flex items-center justify-center overflow-hidden">
-                        {activity.imageUrl ? (
-                          <NextImage
-                            src={activity.imageUrl}
-                            alt=""
-                            fill
-                            className="object-cover"
-                            sizes="280px"
-                          />
-                        ) : (
-                          <LucideImage className="w-14 h-14 text-gray-400 relative z-[1]" strokeWidth={1.5} />
-                        )}
-                      </div>
-                      <div className="p-3 flex-1 flex flex-col min-h-0">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          {activity.category && (
-                            <span className="text-xs text-gray-500 truncate">{activity.category}</span>
-                          )}
-                          {activity.ageTags && activity.ageTags.length > 0 && (
-                            <span className="text-xs text-gray-600 shrink-0">
-                              {activity.ageTags.join("、")}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="font-medium text-gray-800 line-clamp-2 mb-2 text-sm">
-                          {activity.title}
-                        </h3>
-                        <div className="flex items-center justify-end gap-2 mb-3">
-                          <p className="text-amber-600 font-semibold text-sm">
-                            NT$ {activity.price.toLocaleString()} 起
-                          </p>
-                        </div>
-                        <Link
-                          href={activity.detailHref}
-                          className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
-                            isSoldOut ? "bg-gray-200 text-gray-500 cursor-not-allowed pointer-events-none" : "bg-amber-500 text-white hover:bg-amber-600"
-                          }`}
-                        >
-                          立即報名
-                        </Link>
-                      </div>
-                    </article>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-        {/* 輪播指示點：點擊可跳至該課程 */}
-        {!activitiesLoading && activities.length > 0 && (
-          <div className="max-w-7xl mx-auto px-4 flex justify-center gap-2 mt-4">
-            {activities.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setActivityIndex(i)}
-                aria-label={`第 ${i + 1} 個課程`}
-                className={`h-2 rounded-full transition-all ${
-                  i === activityIndex ? "w-6 bg-amber-500" : "w-2 bg-gray-300 hover:bg-gray-400"
-                }`}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {/* 4. 熱門課程：總站主題分籤 + 依 marketplace_category 篩選（與課程列表一致） */}
+      <HomeMarketplaceCoursesSection blockStyle={getBlockStyle("courses")} />
 
       {/* 4.5 關於我們（後台前台設定可編輯富文本） */}
       {(aboutContent != null && aboutContent.trim() !== "") && (
