@@ -10,7 +10,7 @@ import { HeaderMember } from "@/app/components/HeaderMember";
 import { CourseCardSkeleton } from "@/app/components/CourseCardSkeleton";
 import { getCoursesForListpage } from "@/app/actions/productActions";
 import type { CourseForPublic } from "@/app/actions/productActions";
-import { COURSES_LIST_PAGE_SIZE, MARKETPLACE_CATEGORIES } from "@/lib/constants";
+import { COURSES_LIST_PAGE_SIZE, dedupeCategoryList } from "@/lib/constants";
 
 function parsePositiveInt(value: string | null, fallback: number): number {
   if (value == null || value === "") return fallback;
@@ -40,11 +40,6 @@ export default function CoursesListClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [courses, setCourses] = useState<CourseForPublic[]>([]);
-  const [total, setTotal] = useState(0);
-
   const page = parsePositiveInt(searchParams.get("page"), 1);
   const category = searchParams.get("category") ?? "";
   const searchQuery = searchParams.get("searchQuery") ?? "";
@@ -52,6 +47,45 @@ export default function CoursesListClient() {
   const endDate = searchParams.get("endDate") ?? "";
   const minAge = searchParams.get("minAge") ?? "";
   const maxAge = searchParams.get("maxAge") ?? "";
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [courses, setCourses] = useState<CourseForPublic[]>([]);
+  const [total, setTotal] = useState(0);
+  /** 總站 global_categories（僅 API，無寫死清單） */
+  const [remoteCategoryOptions, setRemoteCategoryOptions] = useState<string[]>([]);
+
+  const categoryFilterOptions = useMemo(() => {
+    const list = dedupeCategoryList(remoteCategoryOptions);
+    const c = category.trim();
+    if (c && !list.includes(c)) return [...list, c];
+    return list;
+  }, [remoteCategoryOptions, category]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/global-categories", { method: "GET" });
+        if (!res.ok) throw new Error("failed");
+        const data = (await res.json()) as { categories?: unknown };
+        const raw = data?.categories;
+        if (!Array.isArray(raw)) {
+          if (!cancelled) setRemoteCategoryOptions([]);
+          return;
+        }
+        const list = raw
+          .map((v): string | null => (typeof v === "string" ? v.trim() : null))
+          .filter((v): v is string => !!v);
+        if (!cancelled) setRemoteCategoryOptions(dedupeCategoryList(list));
+      } catch {
+        if (!cancelled) setRemoteCategoryOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const queryKey = useMemo(() => searchParams.toString(), [searchParams]);
 
@@ -172,12 +206,13 @@ export default function CoursesListClient() {
             <label className="block text-sm">
               <span className="text-gray-600 mb-1 block">主題分類</span>
               <select
+                key={`cat-${category}-${categoryFilterOptions.join("\u0001")}`}
                 name="category"
                 defaultValue={category}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
               >
                 <option value="">全部分類</option>
-                {MARKETPLACE_CATEGORIES.map((c) => (
+                {categoryFilterOptions.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>

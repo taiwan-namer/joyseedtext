@@ -46,6 +46,17 @@ export type StoreSettings = {
 
 export type FaqItem = { id: string; question: string; answer: string };
 
+/**
+ * DB `store_settings.global_categories`（jsonb）的允許形狀。
+ * Migration：`20260323120000_store_settings_global_categories.sql`。
+ * 總站列 `merchant_id = 'tongqudao_main'` 為 {@link getGlobalCategoriesFromMain} 讀取來源；分站可為 null。
+ */
+export type StoreSettingsGlobalCategoriesJson =
+  | string[]
+  | { categories?: Array<string | { name?: string; label?: string }> }
+  | Record<string, unknown>
+  | null;
+
 /** 預設常見問題（與 data/faq 一致，可變結構供回傳） */
 function getDefaultFaqItems(): FaqItem[] {
   return FAQ_DATA.map((item) => ({
@@ -197,8 +208,8 @@ export async function getStoreSettingsForMerchant(merchantId: string): Promise<S
 }
 
 /**
- * 從總站（merchant_id = 'tongqudao_main'）讀取 global_categories 設定。
- * 回傳已去除空白、去重後的字串陣列；若發生錯誤或尚未設定則回傳空陣列。
+ * 從總站（merchant_id = 'tongqudao_main'）讀取 `store_settings.global_categories`。
+ * 回傳已去除空白、去重後的字串陣列；若發生錯誤、欄位不存在或尚未設定則回傳空陣列。
  */
 export async function getGlobalCategoriesFromMain(): Promise<string[]> {
   unstable_noStore();

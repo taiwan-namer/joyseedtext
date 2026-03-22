@@ -23,7 +23,7 @@ import {
   寵物攜帶規定選項,
   未達人數處置選項,
 } from "@/lib/courseFormOptions";
-import { MARKETPLACE_CATEGORIES, CITY_REGIONS, mergeMarketplaceCategoryOptions } from "@/lib/constants";
+import { CITY_REGIONS, dedupeCategoryList } from "@/lib/constants";
 import {
   parseInitialAgeFromSidebar,
   buildSidebarOptionFromForm,
@@ -333,8 +333,15 @@ export default function CourseEditForm({
   const imageSlotsRef = useRef(imageSlots);
   imageSlotsRef.current = imageSlots;
 
-  // 總站主題分類（預設用本地靜態列表，成功抓到總站設定後再覆寫）
-  const [globalCategories, setGlobalCategories] = useState<string[]>(() => [...MARKETPLACE_CATEGORIES]);
+  // 總站主題分類：僅來自 /api/global-categories（tongqudao_main.global_categories）
+  const [remoteGlobalCategories, setRemoteGlobalCategories] = useState<string[]>([]);
+
+  const globalCategories = useMemo(() => {
+    const list = dedupeCategoryList(remoteGlobalCategories);
+    const cur = initialData?.marketplace_category?.trim();
+    if (cur && !list.includes(cur)) return [...list, cur];
+    return list;
+  }, [remoteGlobalCategories, initialData?.marketplace_category]);
 
   useEffect(() => {
     const p = parseInitialAgeFromSidebar(initialData?.sidebar_option);
@@ -381,14 +388,10 @@ export default function CourseEditForm({
           .map((v): string | null => (typeof v === "string" ? v.trim() : null))
           .filter((v): v is string => !!v);
         if (!cancelled) {
-          // 一律保留「八大主題」順序與項目，再附加總站 global_categories 多出來的選項（不可只用 API 覆寫以免與列表篩選不一致）
-          setGlobalCategories(mergeMarketplaceCategoryOptions(list));
+          setRemoteGlobalCategories(dedupeCategoryList(list));
         }
       } catch {
-        // 失敗時維持預設 MARKETPLACE_CATEGORIES，確保表單可用
-        if (!cancelled) {
-          setGlobalCategories(() => [...MARKETPLACE_CATEGORIES]);
-        }
+        if (!cancelled) setRemoteGlobalCategories([]);
       }
     })();
     return () => {
@@ -806,15 +809,21 @@ export default function CourseEditForm({
                 </div>
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">總站主題分類</label>
-                  <select name="marketplace_category" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" disabled={isPending} defaultValue={initialData?.marketplace_category ?? ""}>
+                  <select
+                    key={`mc-${initialData?.id ?? "new"}-${globalCategories.join("\u0001")}`}
+                    name="marketplace_category"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                    disabled={isPending}
+                    defaultValue={initialData?.marketplace_category ?? ""}
+                  >
                     <option value="">請選擇</option>
                     {globalCategories.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
                   <p className="mt-1 text-xs text-gray-500">
-                    與前台「課程列表」主題篩選一致（八大主題定義於 <code className="rounded bg-gray-100 px-1">lib/constants.ts</code>
-                    ）；總站後台若另有增補分類，會自動出現在下拉選單後方。
+                    選項僅來自總站 <code className="rounded bg-gray-100 px-1">store_settings.global_categories</code>
+                    （與前台課程列表主題篩選相同）；總站增刪主題後，此處會跟著變更。若本課程為舊分類且已自總站移除，仍會暫時顯示在選單末供你改選。
                   </p>
                 </div>
                 <div className="mb-4">

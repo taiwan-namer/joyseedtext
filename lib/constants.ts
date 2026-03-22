@@ -1,5 +1,7 @@
 /**
- * 分站課程表單常數（與總站資料庫對齊，選項寫死、不從 API 撈取）
+ * 分站課程表單常數。
+ * 總站主題分類僅來自 `store_settings.global_categories`（merchant_id=tongqudao_main），
+ * 經 `/api/global-categories` 提供；此檔不寫死主題清單。
  */
 
 /** 首頁「熱門課程」區塊僅向 DB 索取筆數（排除 course_intro / gallery 等大欄位） */
@@ -8,33 +10,11 @@ export const HOMEPAGE_COURSES_FETCH_LIMIT = 12;
 /** 課程列表頁每頁筆數（與 RPC list_classes_for_merchant_page 上限內一致） */
 export const COURSES_LIST_PAGE_SIZE = 12;
 
-/**
- * 總站主題分類（八大主題）
- * 與課程列表篩選、classes.marketplace_category、後台新增課程下拉選單對齊。
- * 若總站 store_settings.global_categories 另有增補，UI 會在八大之後附加（見 mergeMarketplaceCategoryOptions）。
- */
-export const MARKETPLACE_CATEGORIES = [
-  "藝術創作",
-  "體能運動",
-  "音樂律動",
-  "烘培小屋",
-  "科學邏輯",
-  "語言表達",
-  "戲劇表演",
-  "自然探索",
-] as const;
-
-/** 合併：固定八大主題優先，再接上 API／DB 多出來的分類（去重） */
-export function mergeMarketplaceCategoryOptions(extraFromRemote: string[]): string[] {
+/** 總站主題 API 回傳：去空白、去重，保留首次出現順序 */
+export function dedupeCategoryList(categories: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const c of MARKETPLACE_CATEGORIES) {
-    const t = c.trim();
-    if (!t || seen.has(t)) continue;
-    seen.add(t);
-    out.push(t);
-  }
-  for (const c of extraFromRemote) {
+  for (const c of categories) {
     const t = (c ?? "").trim();
     if (!t || seen.has(t)) continue;
     seen.add(t);
