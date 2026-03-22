@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Loader2, CheckCircle, Trash2, Filter, CheckCheck, Banknote } from "lucide-react";
+import { ChevronLeft, Loader2, CheckCircle, Trash2, Filter, CheckCheck, Banknote, RotateCcw } from "lucide-react";
 import {
   getAdminBookings,
   getAdminPendingPayments,
@@ -15,6 +15,7 @@ import {
   type BookingWithClass,
   type AdminPendingPaymentRow,
 } from "@/app/actions/bookingActions";
+import { processBookingRefund } from "@/app/actions/refundActions";
 
 function formatDate(iso: string) {
   try {
@@ -97,6 +98,7 @@ export default function AdminBookingsPage() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterCourseId, setFilterCourseId] = useState<string>("");
   const [filterStartDate, setFilterStartDate] = useState<string>("");
@@ -194,6 +196,31 @@ export default function AdminBookingsPage() {
     setDeletingId(null);
     if (res.success) {
       setList((prev) => prev.filter((b) => b.id !== bookingId));
+    } else {
+      alert(res.error);
+    }
+  };
+
+  const handleEcpayRefund = async (bookingId: string) => {
+    if (
+      !confirm(
+        "確定要對此筆訂單執行綠界信用卡退刷？成功後訂單將標記為已退款並取消，且無場次時會回補課程名額。"
+      )
+    ) {
+      return;
+    }
+    setRefundingId(bookingId);
+    const res = await processBookingRefund(bookingId);
+    setRefundingId(null);
+    if (res.success) {
+      setList((prev) =>
+        prev.map((b) =>
+          b.id === bookingId
+            ? { ...b, status: "cancelled", refund_status: "refunded" }
+            : b
+        )
+      );
+      alert(res.message ?? "退刷成功");
     } else {
       alert(res.error);
     }
@@ -491,6 +518,24 @@ export default function AdminBookingsPage() {
                             完成課程
                           </button>
                         )}
+                        {row.status === "paid" &&
+                          row.payment_method === "ecpay" &&
+                          (row.refund_status ?? "").trim().toLowerCase() !== "refunded" && (
+                            <button
+                              type="button"
+                              onClick={() => handleEcpayRefund(row.id)}
+                              disabled={refundingId === row.id}
+                              title="僅限綠界信用卡；需有交易編號與 PaymentType"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                            >
+                              {refundingId === row.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              )}
+                              綠界退刷
+                            </button>
+                          )}
                         <button
                           type="button"
                           onClick={() => handleDelete(row.id)}

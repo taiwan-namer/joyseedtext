@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
   const rtnCode = paramsTrimmed.RtnCode ?? "";
   const tradeAmt = paramsTrimmed.TradeAmt ?? "";
   const tradeNo = paramsTrimmed.TradeNo ?? "";
+  const paymentType = (paramsTrimmed.PaymentType ?? "").trim();
 
   console.log("[ECPay callback] raw parsed body keys:", Object.keys(paramsRaw).sort());
   console.log("[ECPay callback] MerchantTradeNo:", merchantTradeNo, "RtnCode:", rtnCode, "TradeAmt:", tradeAmt);
@@ -88,7 +89,15 @@ export async function POST(request: NextRequest) {
   if (!fetchError && booking) {
     const status = (booking as { status?: string }).status ?? "";
     if (status === "paid" || status === "completed") {
-      console.log("[ECPay callback] 訂單已為 paid/completed，冪等直接回 1|OK bookingId:", (booking as { id: string }).id);
+      const bid = (booking as { id: string }).id;
+      if (paymentType) {
+        await supabase
+          .from("bookings")
+          .update({ ecpay_payment_type: paymentType })
+          .eq("id", bid)
+          .eq("merchant_id", merchantId);
+      }
+      console.log("[ECPay callback] 訂單已為 paid/completed，冪等直接回 1|OK bookingId:", bid);
       revalidatePath("/member");
       return new NextResponse(PLAIN_OK, { headers: PLAIN_HEADERS });
     }
@@ -112,6 +121,13 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
       console.error("[ECPay callback] 更新訂單失敗", result.error);
       return new NextResponse("0|更新訂單失敗", { status: 500, headers: PLAIN_HEADERS });
+    }
+    if (paymentType) {
+      await supabase
+        .from("bookings")
+        .update({ ecpay_payment_type: paymentType })
+        .eq("id", bookingRow.id)
+        .eq("merchant_id", bookingRow.merchant_id);
     }
     console.log("[ECPay callback] 訂單已更新為 paid bookingId:", bookingRow.id, "update result: ok");
     const invoiceResult = await issueInvoice(supabase, bookingRow.id, bookingRow.merchant_id);
@@ -164,7 +180,11 @@ export async function POST(request: NextRequest) {
     }
     await supabase
       .from("bookings")
-      .update({ ecpay_merchant_trade_no: merchantTradeNo, ecpay_trade_no: tradeNo })
+      .update({
+        ecpay_merchant_trade_no: merchantTradeNo,
+        ecpay_trade_no: tradeNo,
+        ...(paymentType ? { ecpay_payment_type: paymentType } : {}),
+      })
       .eq("id", res.booking_id);
     console.log("[ECPay callback] 從 pending 建立訂單成功 bookingId:", res.booking_id, "update result: ok");
     const { data: createdBooking } = await supabase

@@ -700,6 +700,12 @@ export type BookingWithClass = {
   addon_indices: number[] | null;
   /** 課程加購項目（來自 classes.addon_prices），與 addon_indices 搭配顯示品名與單價 */
   class_addon_prices: { name: string; price: number }[] | null;
+  /** 後台列表用：綠界交易編號 */
+  ecpay_trade_no?: string | null;
+  /** 後台列表用：綠界 PaymentType（判斷是否信用卡可退刷） */
+  ecpay_payment_type?: string | null;
+  /** 後台列表用：refunded 表示已退刷 */
+  refund_status?: string | null;
 };
 
 /** 後台：線上金流尚未轉成 bookings 的待付款列（callback 未跑完時會留在這裡） */
@@ -748,6 +754,7 @@ export async function getMyBookings(): Promise<
         slot_time,
         order_amount,
         addon_indices,
+        refund_status,
         classes ( title, image_url, price, addon_prices )
       `)
       .or(bookingsVisibleToMerchantOrFilter(merchantId))
@@ -807,12 +814,58 @@ export async function getMyBookings(): Promise<
         class_price: classPrice,
         addon_indices: parseAddonIndicesFromDb(r.addon_indices),
         class_addon_prices: classAddonPrices,
+        refund_status: r.refund_status != null ? String(r.refund_status) : null,
       };
     });
 
     return { success: true, data: list };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "取得訂單失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 會員中心：取消未付款預約（不經金流退刷；未付款不佔用場次／名額計數，無需回補 capacity）。
+ */
+export async function cancelMemberUnpaidBooking(
+  bookingId: string
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    const email = await getCurrentMemberEmail();
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    if (!email) return { success: false, error: "請先登入" };
+
+    const supabase = createServerSupabase();
+    const { data: row, error: fetchError } = await supabase
+      .from("bookings")
+      .select("id, status")
+      .eq("id", bookingId)
+      .eq("member_email", email)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
+      .maybeSingle();
+
+    if (fetchError || !row) return { success: false, error: "訂單不存在或無權限操作" };
+
+    const st = String((row as { status?: string }).status ?? "");
+    if (st !== "unpaid" && st !== "upcoming") {
+      return { success: false, error: "僅未付款訂單可由此取消預約" };
+    }
+
+    const { error: upErr } = await supabase
+      .from("bookings")
+      .update({ status: "cancelled" })
+      .eq("id", bookingId)
+      .eq("member_email", email)
+      .or(bookingsVisibleToMerchantOrFilter(merchantId))
+      .in("status", ["unpaid", "upcoming"]);
+
+    if (upErr) return { success: false, error: upErr.message };
+
+    return { success: true, message: "已取消預約" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "取消失敗";
     return { success: false, error: msg };
   }
 }
@@ -844,6 +897,9 @@ export async function getAdminBookings(): Promise<
         slot_time,
         order_amount,
         addon_indices,
+        ecpay_trade_no,
+        ecpay_payment_type,
+        refund_status,
         classes ( title, image_url, price, addon_prices )
       `),
       access
@@ -902,6 +958,9 @@ export async function getAdminBookings(): Promise<
         class_price: classPrice,
         addon_indices: parseAddonIndicesFromDb(r.addon_indices),
         class_addon_prices: classAddonPrices,
+        ecpay_trade_no: r.ecpay_trade_no != null ? String(r.ecpay_trade_no) : null,
+        ecpay_payment_type: r.ecpay_payment_type != null ? String(r.ecpay_payment_type) : null,
+        refund_status: r.refund_status != null ? String(r.refund_status) : null,
       };
     });
 

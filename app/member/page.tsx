@@ -6,7 +6,13 @@ import { ChevronRight, UserPlus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
-import { getMyBookings, getCurrentMemberName, type BookingWithClass } from "@/app/actions/bookingActions";
+import {
+  getMyBookings,
+  getCurrentMemberName,
+  cancelMemberUnpaidBooking,
+  type BookingWithClass,
+} from "@/app/actions/bookingActions";
+import { processMemberBookingRefund } from "@/app/actions/refundActions";
 
 const MEMBER_STORAGE_KEY = "member_registered";
 
@@ -35,8 +41,8 @@ function useIsMember() {
   return isMember;
 }
 
-/** 後台 status：unpaid, paid, completed, cancelled → 顯示用 */
-type DisplayStatus = "UNPAID" | "PAID" | "COMPLETED" | "REFUNDED";
+/** 後台 status：unpaid, paid, completed, cancelled + refund_status → 顯示用 */
+type DisplayStatus = "UNPAID" | "PAID" | "COMPLETED" | "REFUNDED" | "CANCELLED";
 
 function getStatusBadgeClass(status: DisplayStatus): string {
   switch (status) {
@@ -48,6 +54,8 @@ function getStatusBadgeClass(status: DisplayStatus): string {
       return "bg-blue-100 text-blue-700";
     case "REFUNDED":
       return "bg-gray-100 text-gray-700";
+    case "CANCELLED":
+      return "bg-stone-100 text-stone-600";
     default:
       return "bg-gray-100 text-gray-700";
   }
@@ -63,16 +71,20 @@ function getStatusLabel(status: DisplayStatus): string {
       return "已完成課程";
     case "REFUNDED":
       return "已退款";
+    case "CANCELLED":
+      return "已取消";
     default:
       return status;
   }
 }
 
 /** 將後台訂單轉成顯示用狀態 */
-function bookingToDisplayStatus(status: string): DisplayStatus {
+function bookingToDisplayStatus(status: string, refundStatus?: string | null): DisplayStatus {
   if (status === "completed") return "COMPLETED";
   if (status === "paid") return "PAID";
-  if (status === "cancelled") return "REFUNDED";
+  if (status === "cancelled") {
+    return (refundStatus ?? "").trim().toLowerCase() === "refunded" ? "REFUNDED" : "CANCELLED";
+  }
   return "UNPAID"; // unpaid, upcoming 等
 }
 
@@ -161,7 +173,11 @@ function OrderCard({
             {showRefundButton && onRefundClick && (
               <button
                 type="button"
-                onClick={onRefundClick}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRefundClick();
+                }}
                 className="inline-flex items-center justify-center h-6 px-2.5 rounded-md border border-gray-300 text-gray-600 text-xs hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0 leading-none"
               >
                 申請退款/取消
@@ -204,7 +220,7 @@ function mapBookingToOrder(b: BookingWithClass): OrderDisplay {
     date: formatBookingDate(b.created_at),
     participant: b.parent_name?.trim() || "—",
     amount: b.class_price ?? 0,
-    status: bookingToDisplayStatus(b.status),
+    status: bookingToDisplayStatus(b.status, b.refund_status),
     imageUrl: b.class_image_url ?? null,
     addonSummary: buildAddonSummary(b),
   };
@@ -216,6 +232,7 @@ export default function MemberDashboardPage() {
   const [activeTab, setActiveTab] = useState<"orders" | "history">("orders");
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [bookings, setBookings] = useState<BookingWithClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -246,8 +263,10 @@ export default function MemberDashboardPage() {
   const ordersDisplay = bookings.map(mapBookingToOrder);
   /** 我的預約：未付款 + 已付款 */
   const upcomingOrders = ordersDisplay.filter((o) => o.status === "UNPAID" || o.status === "PAID");
-  /** 歷史訂單：已完成課程 + 已退款（後台點選完成課程後才跳至此處） */
-  const historyOrders = ordersDisplay.filter((o) => o.status === "COMPLETED" || o.status === "REFUNDED");
+  /** 歷史訂單：已完成課程、已退款、已取消（未付款取消等） */
+  const historyOrders = ordersDisplay.filter(
+    (o) => o.status === "COMPLETED" || o.status === "REFUNDED" || o.status === "CANCELLED"
+  );
 
   // 需註冊為會員才能進入，未登入顯示註冊引導
   if (isMember === null) {
@@ -311,9 +330,51 @@ export default function MemberDashboardPage() {
     setSelectedOrderId(null);
   };
 
-  const handleConfirmRefund = () => {
-    console.log("API: 執行退款");
-    closeRefundModal();
+  const selectedBooking =
+    selectedOrderId != null ? bookings.find((b) => b.id === selectedOrderId) ?? null : null;
+
+  const handleConfirmRefund = async () => {
+    if (!selectedOrderId || !selectedBooking) {
+      closeRefundModal();
+      return;
+    }
+    const st = selectedBooking.status;
+    const pm = selectedBooking.payment_method;
+
+    setRefundSubmitting(true);
+    try {
+      if (st === "unpaid" || st === "upcoming") {
+        const res = await cancelMemberUnpaidBooking(selectedOrderId);
+        if (!res.success) {
+          alert(res.error);
+          return;
+        }
+        alert(res.message ?? "已取消預約");
+      } else if (st === "paid") {
+        if (pm === "ecpay") {
+          const res = await processMemberBookingRefund(selectedOrderId);
+          if (!res.success) {
+            alert(res.error);
+            return;
+          }
+          alert(res.message ?? "退刷成功");
+        } else {
+          alert(
+            "此訂單付款方式非綠界信用卡自動退刷範圍，請透過 LINE 官方帳號或客服辦理退款。"
+          );
+          return;
+        }
+      } else {
+        alert("此訂單狀態無法由此操作。");
+        return;
+      }
+
+      const refreshed = await getMyBookings();
+      if (refreshed.success) setBookings(refreshed.data);
+      closeRefundModal();
+    } finally {
+      setRefundSubmitting(false);
+    }
   };
 
   const canRefund = (status: DisplayStatus) =>
@@ -424,26 +485,43 @@ export default function MemberDashboardPage() {
               id="refund-modal-title"
               className="text-lg font-bold text-gray-900 mb-4"
             >
-              確認取消預約與退款？
+              {selectedBooking?.status === "paid"
+                ? selectedBooking.payment_method === "ecpay"
+                  ? "確認取消預約與退款？"
+                  : "確認申請退款？"
+                : "確認取消預約？"}
             </h2>
             <p className="text-sm text-orange-600 font-medium mb-6">
-              依據平台政策，開課前 24 小時內取消將酌收 50%
-              手續費。確定要繼續嗎？
+              {selectedBooking?.status === "paid" ? (
+                selectedBooking.payment_method === "ecpay" ? (
+                  <>
+                    綠界信用卡將嘗試自動退刷；依據平台政策，開課前 24 小時內取消可能酌收手續費。確定要繼續嗎？
+                  </>
+                ) : (
+                  <>
+                    此訂單非綠界信用卡線上退刷，按下確認後將提示您聯絡客服辦理，訂單狀態不會自動變更。
+                  </>
+                )
+              ) : (
+                <>取消後此筆未付款預約將關閉。確定要繼續嗎？</>
+              )}
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 type="button"
+                disabled={refundSubmitting}
                 onClick={closeRefundModal}
-                className="px-4 py-2.5 rounded-lg bg-gray-200 text-gray-700 font-medium hover:bg-gray-300 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-gray-200 text-gray-700 font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
               >
                 保留預約
               </button>
               <button
                 type="button"
-                onClick={handleConfirmRefund}
-                className="px-4 py-2.5 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+                disabled={refundSubmitting}
+                onClick={() => void handleConfirmRefund()}
+                className="px-4 py-2.5 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-60 inline-flex items-center gap-2"
               >
-                確認取消
+                {refundSubmitting ? "處理中…" : "確認取消"}
               </button>
             </div>
           </div>
