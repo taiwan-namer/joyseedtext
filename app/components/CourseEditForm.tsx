@@ -23,7 +23,7 @@ import {
   寵物攜帶規定選項,
   未達人數處置選項,
 } from "@/lib/courseFormOptions";
-import { MARKETPLACE_CATEGORIES, CITY_REGIONS } from "@/lib/constants";
+import { MARKETPLACE_CATEGORIES, CITY_REGIONS, mergeMarketplaceCategoryOptions } from "@/lib/constants";
 import {
   parseInitialAgeFromSidebar,
   buildSidebarOptionFromForm,
@@ -380,8 +380,9 @@ export default function CourseEditForm({
         const list = raw
           .map((v): string | null => (typeof v === "string" ? v.trim() : null))
           .filter((v): v is string => !!v);
-        if (!cancelled && list.length > 0) {
-          setGlobalCategories(Array.from(new Set(list)));
+        if (!cancelled) {
+          // 一律保留「八大主題」順序與項目，再附加總站 global_categories 多出來的選項（不可只用 API 覆寫以免與列表篩選不一致）
+          setGlobalCategories(mergeMarketplaceCategoryOptions(list));
         }
       } catch {
         // 失敗時維持預設 MARKETPLACE_CATEGORIES，確保表單可用
@@ -811,6 +812,10 @@ export default function CourseEditForm({
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    與前台「課程列表」主題篩選一致（八大主題定義於 <code className="rounded bg-gray-100 px-1">lib/constants.ts</code>
+                    ）；總站後台若另有增補分類，會自動出現在下拉選單後方。
+                  </p>
                 </div>
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">分站自訂分類</label>

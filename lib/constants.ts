@@ -8,14 +8,40 @@ export const HOMEPAGE_COURSES_FETCH_LIMIT = 12;
 /** 課程列表頁每頁筆數（與 RPC list_classes_for_merchant_page 上限內一致） */
 export const COURSES_LIST_PAGE_SIZE = 12;
 
-/** 總站主題分類選項（總站 marketplace 用） */
+/**
+ * 總站主題分類（八大主題）
+ * 與課程列表篩選、classes.marketplace_category、後台新增課程下拉選單對齊。
+ * 若總站 store_settings.global_categories 另有增補，UI 會在八大之後附加（見 mergeMarketplaceCategoryOptions）。
+ */
 export const MARKETPLACE_CATEGORIES = [
   "藝術創作",
   "體能運動",
   "音樂律動",
   "烘培小屋",
   "科學邏輯",
+  "語言表達",
+  "戲劇表演",
+  "自然探索",
 ] as const;
+
+/** 合併：固定八大主題優先，再接上 API／DB 多出來的分類（去重） */
+export function mergeMarketplaceCategoryOptions(extraFromRemote: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of MARKETPLACE_CATEGORIES) {
+    const t = c.trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  for (const c of extraFromRemote) {
+    const t = (c ?? "").trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
 
 /** 上課地區選項 */
 export const CITY_REGIONS = [
