@@ -5,6 +5,7 @@ import { getLinePaySandboxCredentials, validateLinePayCredentials, confirmLinePa
 import { logPaymentApi } from "@/lib/paymentLogs";
 import { ensureCapacityAndMarkPaid } from "@/lib/bookingPayment";
 import { resolvePublicBaseUrl } from "@/lib/appUrl";
+import { issueInvoice } from "@/lib/invoice/service";
 
 /** 勿使用 request.url：建置預渲染會觸發 Dynamic server usage，catch 內 redirect 若 base 無 https 會 malformed */
 export const dynamic = "force-dynamic";
@@ -179,6 +180,11 @@ export async function GET(request: NextRequest) {
       return redirectFail("更新訂單狀態失敗", updateResult.error);
     }
 
+    const invoiceResult = await issueInvoice(supabase, bookingRow.id, bookingRow.merchant_id);
+    if (!invoiceResult.ok) {
+      console.error("[LINE Pay Confirm] 發票開立失敗（不影響付款結果）bookingId:", bookingRow.id, invoiceResult.error);
+    }
+
     finalBookingId = orderId;
   } else {
     const { data: pending, error: pendingErr } = await supabase
@@ -287,6 +293,22 @@ export async function GET(request: NextRequest) {
     }
     finalBookingId = res.booking_id;
     await supabase.from("bookings").update({ line_pay_transaction_id: transactionId }).eq("id", finalBookingId);
+
+    const { data: createdForInvoice } = await supabase
+      .from("bookings")
+      .select("merchant_id")
+      .eq("id", finalBookingId)
+      .maybeSingle();
+    const bookingOwnerMerchant =
+      (createdForInvoice as { merchant_id?: string } | null)?.merchant_id ?? merchantId;
+    const invoiceResultPending = await issueInvoice(supabase, finalBookingId, bookingOwnerMerchant);
+    if (!invoiceResultPending.ok) {
+      console.error(
+        "[LINE Pay Confirm] 發票開立失敗（不影響付款結果）bookingId:",
+        finalBookingId,
+        invoiceResultPending.error
+      );
+    }
   }
 
     revalidatePath("/member");
