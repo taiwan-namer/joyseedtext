@@ -2,7 +2,7 @@
  * 綠界 B2C 發票開立：組參數、加密、送 API。
  * 供 POST /api/invoice/issue 與 issueInvoice(bookingId) 共用。
  */
-import { ecpayInvoiceEncryptData } from "@/lib/ecpay/invoice-encrypt";
+import { ecpayInvoiceEncryptData, ecpayInvoiceDecryptData } from "@/lib/invoice/invoice-encrypt";
 import { getStoreSettings } from "@/app/actions/storeSettingsActions";
 
 const ECPAY_INVOICE_STAGE_URL = "https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue";
@@ -91,12 +91,55 @@ export async function buildEcpayItemsFromStore(total: number): Promise<{ items: 
   };
 }
 
+function responseBodyOneLineSummary(raw: string, maxLen = 240): string {
+  return String(raw ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}
+
+function parseIssueResponse(
+  raw: string,
+  hashKey: string,
+  hashIv: string
+): { ok: true; invoiceNo?: string } | { ok: false; error: string } {
+  let outer: { Data?: string; TransCode?: string; TransMsg?: string };
+  try {
+    outer = JSON.parse(raw) as typeof outer;
+  } catch {
+    return {
+      ok: false,
+      error: `回傳非 JSON: ${responseBodyOneLineSummary(raw)}`,
+    };
+  }
+
+  if (!outer.Data || typeof outer.Data !== "string") {
+    return {
+      ok: false,
+      error: String(outer.TransMsg ?? outer.TransCode ?? "回傳缺少 Data"),
+    };
+  }
+
+  try {
+    const inner = ecpayInvoiceDecryptData(outer.Data, hashKey, hashIv) as Record<string, unknown>;
+    const rc = inner.RtnCode;
+    const success = rc === 1 || rc === "1";
+    if (!success) {
+      return { ok: false, error: String(inner.RtnMsg ?? inner.Message ?? "開立失敗") };
+    }
+    const invoiceNo = inner.InvoiceNo != null ? String(inner.InvoiceNo).trim() : "";
+    return { ok: true, invoiceNo: invoiceNo || undefined };
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message) };
+  }
+}
+
 /**
- * 送綠界 B2C 開立發票 API。失敗不拋錯，回傳 { ok: false, error }。
+ * 送綠界 B2C 開立發票 API。成功時解密 Data，驗證 RtnCode===1 並取得 InvoiceNo。
  */
 export async function issueEcpayInvoice(
   payload: IssueEcpayInvoicePayload
-): Promise<{ ok: true; raw: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; raw: string; invoiceNo?: string } | { ok: false; error: string }> {
   const creds = getEcpayInvoiceCreds();
   if (!creds) {
     return { ok: false, error: "ECPAY_INVOICE_* 未設定" };
@@ -144,8 +187,12 @@ export async function issueEcpayInvoice(
       body: JSON.stringify(requestBody),
     });
     const raw = await res.text();
-    if (res.ok) return { ok: true, raw };
-    return { ok: false, error: `HTTP ${res.status}: ${raw.slice(0, 200)}` };
+    const parsed = parseIssueResponse(raw, creds.hashKey, creds.hashIv);
+    if (!parsed.ok) {
+      const prefix = res.ok ? "" : `HTTP ${res.status} `;
+      return { ok: false, error: prefix + parsed.error };
+    }
+    return { ok: true, raw, invoiceNo: parsed.invoiceNo };
   } catch (e) {
     return { ok: false, error: String((e as Error).message) };
   }

@@ -8,7 +8,7 @@ import { buildEcpayItemsFromStore, issueEcpayInvoice } from "@/lib/invoice/ecpay
 import { issueEzpayInvoice } from "@/lib/invoice/ezpay-issue";
 
 export type IssueInvoiceResult =
-  | { ok: true; raw?: string }
+  | { ok: true; raw?: string; invoiceNo?: string }
   | { ok: false; error: string };
 
 function envTrim(key: string): string {
@@ -64,6 +64,22 @@ export async function issueInvoice(
   const store = await getStoreSettings();
   const provider = store.invoiceProvider === "ezpay" ? "ezpay" : "ecpay";
 
+  const invoiceFail = async () => {
+    await supabase
+      .from("bookings")
+      .update({ invoice_status: "failed" })
+      .eq("id", bookingId)
+      .eq("merchant_id", safeMerchantId);
+  };
+
+  const invoiceIssued = async (patch: { invoice_no?: string | null }) => {
+    const row: { invoice_status: string; invoice_no?: string | null } = { invoice_status: "issued" };
+    if (patch.invoice_no != null && String(patch.invoice_no).trim() !== "") {
+      row.invoice_no = String(patch.invoice_no).trim();
+    }
+    await supabase.from("bookings").update(row).eq("id", bookingId).eq("merchant_id", safeMerchantId);
+  };
+
   if (provider === "ezpay") {
     const result = await issueEzpayInvoice({
       relateNumber,
@@ -73,7 +89,12 @@ export async function issueInvoice(
       customerEmail,
       salesAmount: amount,
     });
-    return result;
+    if (!result.ok) {
+      await invoiceFail();
+      return result;
+    }
+    await invoiceIssued({});
+    return { ok: true, raw: result.raw };
   }
 
   const { items: ecpayItems, salesAmount } = await buildEcpayItemsFromStore(amount);
@@ -88,5 +109,11 @@ export async function issueInvoice(
     ecpayItems,
   });
 
-  return result;
+  if (!result.ok) {
+    await invoiceFail();
+    return { ok: false, error: result.error };
+  }
+
+  await invoiceIssued({ invoice_no: result.invoiceNo ?? null });
+  return { ok: true, raw: result.raw, invoiceNo: result.invoiceNo };
 }

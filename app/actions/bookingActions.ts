@@ -10,6 +10,7 @@ import { logPaymentApi } from "@/lib/paymentLogs";
 import { getAppUrl, resolvePaymentPublicBaseUrl } from "@/lib/appUrl";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { normalizeSlotTime } from "@/lib/slotTime";
+import { bookingHasExplicitSessionSlot } from "@/lib/bookingSessionSlot";
 import {
   bookingsVisibleToMerchantOrFilter,
   getAdminBookingMerchantScope,
@@ -17,6 +18,10 @@ import {
   getOrderAdminClassCreatorMerchantIdFilter,
   type AdminBookingsAccessFilter,
 } from "@/lib/bookingsMerchantFilter";
+
+/** 付款成功後開立發票並寫入 `invoice_no`／`invoice_status`（實作於 lib/invoice/service） */
+export { issueInvoice } from "@/lib/invoice/service";
+export type { IssueInvoiceResult } from "@/lib/invoice/service";
 
 function applyAdminBookingsAccess<T>(q: T, access: AdminBookingsAccessFilter): T {
   if (access.mode === "class_creator") {
@@ -630,7 +635,10 @@ export async function deleteBooking(
 
     const classId = (booking as { class_id?: string }).class_id;
     const ownerMerchantId = String((booking as { merchant_id?: string }).merchant_id ?? "");
-    const hadSlot = (booking as { slot_date?: string | null; slot_time?: string | null }).slot_date != null && (booking as { slot_time?: string | null }).slot_time != null;
+    const hadSlot = bookingHasExplicitSessionSlot(
+      (booking as { slot_date?: string | null }).slot_date,
+      (booking as { slot_time?: string | null }).slot_time
+    );
     const { error: deleteError } = await applyAdminBookingsAccess(
       supabase.from("bookings").delete().eq("id", bookingId),
       access

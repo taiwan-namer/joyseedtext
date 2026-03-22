@@ -118,9 +118,7 @@ export async function applyEcpayPaymentNotification(paramsRaw: Record<string, st
     }
     const invoiceResult = await issueInvoice(supabase, bookingRow.id, bookingRow.merchant_id);
     if (!invoiceResult.ok) {
-      await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", bookingRow.id).eq("merchant_id", bookingRow.merchant_id);
-    } else {
-      await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", bookingRow.id).eq("merchant_id", bookingRow.merchant_id);
+      console.error("[ECPay apply] 發票開立失敗 bookingId:", bookingRow.id, invoiceResult.error);
     }
     revalidatePath("/member");
     return { status: "success" };
@@ -180,9 +178,7 @@ export async function applyEcpayPaymentNotification(paramsRaw: Record<string, st
   const bookingOwnerMerchant = (createdBooking as { merchant_id?: string } | null)?.merchant_id ?? merchantId;
   const invoiceResult = await issueInvoice(supabase, res.booking_id, bookingOwnerMerchant);
   if (!invoiceResult.ok) {
-    await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", res.booking_id);
-  } else {
-    await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", res.booking_id);
+    console.error("[ECPay apply] 發票開立失敗 bookingId:", res.booking_id, invoiceResult.error);
   }
 
   revalidatePath("/member");

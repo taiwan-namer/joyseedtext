@@ -246,17 +246,6 @@ export async function POST(request: NextRequest) {
       const invoiceResult = await issueInvoice(supabase, bookingRow.id, bookingRow.merchant_id);
       if (!invoiceResult.ok) {
         console.error("[NewebPay callback] 發票開立失敗（不影響付款結果）bookingId:", bookingRow.id, "error:", invoiceResult.error);
-        await supabase
-          .from("bookings")
-          .update({ invoice_status: "failed" })
-          .eq("id", bookingRow.id)
-          .eq("merchant_id", bookingRow.merchant_id);
-      } else {
-        await supabase
-          .from("bookings")
-          .update({ invoice_status: "issued" })
-          .eq("id", bookingRow.id)
-          .eq("merchant_id", bookingRow.merchant_id);
       }
       revalidatePath("/member");
       return NextResponse.json({ message: "OK" });
@@ -300,9 +289,6 @@ export async function POST(request: NextRequest) {
           const invoiceResult = await issueInvoice(supabase, res.booking_id, bookingOwnerMerchant);
           if (!invoiceResult.ok) {
             console.error("[NewebPay callback] 發票開立失敗（不影響付款結果）bookingId:", res.booking_id, "error:", invoiceResult.error);
-            await supabase.from("bookings").update({ invoice_status: "failed" }).eq("id", res.booking_id);
-          } else {
-            await supabase.from("bookings").update({ invoice_status: "issued" }).eq("id", res.booking_id);
           }
         }
       }
