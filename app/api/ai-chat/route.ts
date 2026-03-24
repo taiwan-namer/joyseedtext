@@ -10,8 +10,7 @@ function envTrim(key: string): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-// AI 客服「讀課程」特例：總店 merchant_id（可用環境變數覆寫）
-const HQ_MERCHANT_ID = envTrim("HQ_MERCHANT_ID") || "tongqudao_main";
+// AI 客服課程查詢：與前台課程頁一致，使用當前站台 merchant_id
 
 /** 簡單關鍵字判斷意圖：訂單 / 課程 / 其他(FAQ) */
 function classifyIntent(message: string): "order" | "course" | "faq" {
@@ -123,7 +122,7 @@ export async function POST(request: NextRequest) {
       const { data: classesRows } = await supabase
         .from("classes")
         .select("id, title, image_url, price, scheduled_slots, sidebar_option")
-        .eq("merchant_id", HQ_MERCHANT_ID);
+        .eq("merchant_id", merchantId);
 
       const courses: AiChatCourseItem[] = (classesRows ?? []).map((row: Record<string, unknown>) => {
         const id = String(row.id ?? "");
