@@ -1,5 +1,10 @@
 "use server";
 
+/**
+ * 前台／首頁畫布讀寫：一律以 **`NEXT_PUBLIC_CLIENT_ID`** 對應 `store_settings` 列（**分站**）。
+ * 總站 model 的整包設定在 `merchant_id = "model"`；從總站複製範本至分站時，合入本分站 id 之 `frontend_settings`，勿直接改寫總站列（見 `MARKETPLACE_MERCHANT_ID`）。
+ */
+
 import { unstable_noStore } from "next/cache";
 import { uploadOneToR2, uploadOneToR2WithPrefix } from "@/app/actions/productActions";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
@@ -20,7 +25,10 @@ function envTrim(key: string): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-/** 取得前台設定（首頁大圖、輪播） */
+/**
+ * 取得本分站前台設定（首頁大圖、輪播、`layout_blocks` 畫布等）。
+ * 查詢 `store_settings.merchant_id === NEXT_PUBLIC_CLIENT_ID`，非總站 `"model"`。
+ */
 export async function getFrontendSettings(): Promise<FrontendSettings> {
   unstable_noStore();
   try {

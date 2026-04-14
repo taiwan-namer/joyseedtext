@@ -1,5 +1,7 @@
 "use client";
 
+/** 首頁畫布後台：寫入本分站 `store_settings.frontend_settings`（`NEXT_PUBLIC_CLIENT_ID`）；總站範本列為 `merchant_id = "model"`。 */
+
 import { useEffect, useState, useTransition, useRef } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronUp, ChevronDown, Loader2, Save, Plus, Image as ImageIcon, GripVertical, ExternalLink, Pencil } from "lucide-react";

@@ -1,4 +1,9 @@
-/** 前台設定共用型別與常數（供 actions 與 client 使用，不可放在 "use server" 檔案） */
+/**
+ * 前台設定共用型別與常數（供 actions 與 client 使用，不可放在 "use server" 檔案）。
+ *
+ * **儲存位置（分站）**：`store_settings.frontend_settings`（jsonb），列為 **`merchant_id = NEXT_PUBLIC_CLIENT_ID`**。
+ * 畫布資料為 `frontend_settings.layout_blocks` 陣列，非獨立表。總站範本列為 `merchant_id = "model"`（見 `lib/constants.ts`），勿與分站混淆。
+ */
 
 export type CarouselItem = {
   id: string;
@@ -55,7 +60,7 @@ export type FrontendSettings = {
   layoutBlocks: LayoutBlock[];
 };
 
-/** 單一畫布區塊（存於 frontend_settings.layout_blocks） */
+/** 單一畫布區塊（存於本分站 `store_settings.frontend_settings.layout_blocks`） */
 export type LayoutBlock = {
   id: string;
   order: number;
