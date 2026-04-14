@@ -9,6 +9,12 @@ import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { pushInventoryBindToHqListing } from "@/lib/syncListingInventoryFromTeacher";
 import { syncListingInventoryFromBindToken } from "@/lib/syncListingInventoryFromBindToken";
 import { normalizeSlotTime } from "@/lib/slotTime";
+import {
+  isUuidString,
+  isValidCourseSlugFormat,
+  normalizeCourseSlugInput,
+  slugifyCourseTitle,
+} from "@/lib/courseSlug";
 
 /** 首頁課程列表等快取：與 model 對齊之集中 revalidate（joyseed 目前以 path 為主） */
 export async function revalidateHomepageCoursesListCache(): Promise<void> {
@@ -22,6 +28,30 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 function envTrim(key: string): string {
   const raw = process.env[key];
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+/** 網址參數（UUID 或 slug）解析為本店課程 id */
+async function resolveClassIdForMerchant(param: string, merchantId: string): Promise<string | null> {
+  const t = param.trim();
+  if (!t) return null;
+  const { createServerSupabase } = await import("@/lib/supabase/server");
+  const supabase = createServerSupabase();
+  if (isUuidString(t)) {
+    const { data } = await supabase
+      .from("classes")
+      .select("id")
+      .eq("id", t)
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
+    return data?.id != null ? String(data.id) : null;
+  }
+  const { data } = await supabase
+    .from("classes")
+    .select("id")
+    .eq("slug", t.toLowerCase())
+    .eq("merchant_id", merchantId)
+    .maybeSingle();
+  return data?.id != null ? String(data.id) : null;
 }
 
 /**
@@ -403,6 +433,51 @@ export async function deleteClasses(ids: string[]): Promise<
   }
 }
 
+/** 單一課程常見問題（與總站共用 `classes.course_faq_items` jsonb） */
+export type CourseFaqItem = { question: string; answer: string };
+
+function parseCourseFaqItems(raw: string | null): CourseFaqItem[] {
+  if (!raw || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((x) => {
+        const row = x as Record<string, unknown>;
+        return {
+          question: String(row.question ?? "").trim(),
+          answer: String(row.answer ?? "").trim(),
+        };
+      })
+      .filter((x) => x.question.length > 0 && x.answer.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/** Supabase jsonb 多為陣列；少數情境為 JSON 字串，一併正規化 */
+function courseFaqItemsFromRow(row: Record<string, unknown>): CourseFaqItem[] | undefined {
+  const raw = row.course_faq_items;
+  if (raw == null) return undefined;
+  if (Array.isArray(raw)) {
+    const items = raw
+      .map((x) => {
+        const o = x as Record<string, unknown>;
+        return {
+          question: String(o.question ?? "").trim(),
+          answer: String(o.answer ?? "").trim(),
+        };
+      })
+      .filter((x) => x.question && x.answer);
+    return items.length > 0 ? items : undefined;
+  }
+  if (typeof raw === "string") {
+    const parsed = parseCourseFaqItems(raw);
+    return parsed.length > 0 ? parsed : undefined;
+  }
+  return undefined;
+}
+
 /** 客戶需知表單欄位對應 DB 的 customer_notice JSON */
 export type CustomerNoticeForm = {
   活動場域類型: string;
@@ -424,7 +499,7 @@ export type CustomerNoticeForm = {
  * 需在 Supabase classes 表新增欄位：course_intro, post_content, gallery_urls (jsonb), customer_notice (jsonb), notes (text)。
  */
 export async function createCourseFull(formData: FormData): Promise<
-  | { success: true; message?: string; id?: string; listing_bind_token?: string }
+  | { success: true; message?: string; id?: string; listing_bind_token?: string; slug?: string }
   | { success: false; error: string }
 > {
   try {
@@ -500,6 +575,8 @@ export async function createCourseFull(formData: FormData): Promise<
       }
     })();
 
+    const course_faq_items = parseCourseFaqItems((formData.get("course_faq_items") as string | null) ?? null);
+
     const customerNotice: CustomerNoticeForm = {
       活動場域類型: (formData.get("customer_venue") as string)?.trim() ?? "室內",
       課程時段長度: (formData.get("customer_duration") as string)?.trim() ?? "",
@@ -545,6 +622,10 @@ export async function createCourseFull(formData: FormData): Promise<
     const store_category = (formData.get("store_category") as string)?.trim() || null;
     const city_region = (formData.get("city_region") as string)?.trim() || null;
     const city_district = (formData.get("city_district") as string)?.trim() || null;
+    const activity_address = (formData.get("activity_address") as string)?.trim() || null;
+    const map_embed_html_raw = (formData.get("map_embed_html") as string)?.trim() ?? "";
+    const map_embed_html = map_embed_html_raw || null;
+    const nearby_transport = (formData.get("nearby_transport") as string)?.trim() || null;
     const inventory_merchant_id = (formData.get("inventory_merchant_id") as string)?.trim() || null;
     const inventory_class_id_raw = (formData.get("inventory_class_id") as string)?.trim() || null;
     const inventory_class_id =
@@ -572,8 +653,20 @@ export async function createCourseFull(formData: FormData): Promise<
       !hq_listing_bind_token &&
       !hasInventoryBind;
 
+    const slugRaw = (formData.get("course_slug") as string)?.trim() ?? "";
+    const finalSlug = normalizeCourseSlugInput(slugRaw || slugifyCourseTitle(title));
+    if (!isValidCourseSlugFormat(finalSlug)) {
+      return {
+        success: false,
+        error: "網址代稱僅能使用小寫英數與連字號（2～120 字），且不可為保留字或 UUID 格式。",
+      };
+    }
+    const { data: dupSlugRow } = await supabase.from("classes").select("id").eq("slug", finalSlug).maybeSingle();
+    if (dupSlugRow) return { success: false, error: "此網址代稱已被使用，請更換。" };
+
     const baseRow: Record<string, unknown> = {
       merchant_id: effectiveMerchantId,
+      slug: finalSlug,
       title,
       price: Math.round(price),
       capacity: Math.floor(capacity),
@@ -593,8 +686,12 @@ export async function createCourseFull(formData: FormData): Promise<
       store_category,
       city_region,
       city_district,
+      activity_address,
+      map_embed_html,
+      nearby_transport,
       inventory_merchant_id: inventory_merchant_id || null,
       inventory_class_id: inventory_class_id || null,
+      course_faq_items: course_faq_items.length > 0 ? course_faq_items : null,
       ...hqListingForRow,
     };
 
@@ -628,6 +725,11 @@ export async function createCourseFull(formData: FormData): Promise<
         const { listing_bind_token: _lb, ...rest } = attemptRow;
         attemptRow = rest;
         mintedListingToken = null;
+        continue;
+      }
+      if (/slug/i.test(errMsg) && "slug" in attemptRow) {
+        const { slug: _s, ...rest } = attemptRow;
+        attemptRow = rest;
         continue;
       }
       return {
@@ -702,6 +804,7 @@ export async function createCourseFull(formData: FormData): Promise<
       success: true,
       message,
       id: newId,
+      slug: finalSlug,
       ...(listingTokenForResponse ? { listing_bind_token: listingTokenForResponse } : {}),
     };
   } catch (e) {
@@ -744,6 +847,14 @@ export type CourseForPublic = {
   capacity?: number | null;
   /** 總站主題分類（列表／RPC 可能帶入） */
   marketplace_category?: string | null;
+  /** 該課程常見問題（與總站共用 DB 欄位 course_faq_items） */
+  courseFaqItems?: CourseFaqItem[];
+  /** 活動詳細地址（classes.activity_address） */
+  activityAddress?: string | null;
+  /** 地圖嵌入 HTML（classes.map_embed_html） */
+  mapEmbedHtml?: string | null;
+  /** 附近大眾運輸（classes.nearby_transport） */
+  nearbyTransport?: string | null;
 }
 
 function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic {
@@ -760,9 +871,10 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
   const 最低成行 = Number(notice?.最低成行人數) || 0;
   const 未達處置 = String(notice?.未達人數處置 ?? "改期");
   const 活動成行條件 = 最低成行 ? `最低 ${最低成行} 人成行 ，${未達處置}` : 未達處置;
+  const slugCol = row.slug != null ? String(row.slug).trim() : "";
   return {
     id,
-    slug: id,
+    slug: slugCol || id,
     title: String(row.title ?? ""),
     ageRange: "",
     ageTags: labels.length > 0 ? labels : [],
@@ -800,6 +912,10 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
     capacity: row.capacity !== undefined && row.capacity !== null ? Number(row.capacity) : undefined,
     marketplace_category:
       row.marketplace_category != null ? String(row.marketplace_category) : null,
+    courseFaqItems: courseFaqItemsFromRow(row),
+    activityAddress: row.activity_address != null ? String(row.activity_address) : undefined,
+    mapEmbedHtml: row.map_embed_html != null ? String(row.map_embed_html) : undefined,
+    nearbyTransport: row.nearby_transport != null ? String(row.nearby_transport) : undefined,
   };
 }
 
@@ -887,29 +1003,30 @@ export async function getCoursesForListpage(params: ListCoursesParams = {}): Pro
 }
 
 /**
- * 依 id 取得單一課程（供前台 /course/[id] 使用），含 capacity 供剩餘人數顯示。
+ * 依課程 UUID 或 slug 取得單一課程（供前台 /course/[slug] 使用），含 capacity 供剩餘人數顯示。
  * 強制以伺服器端 NEXT_PUBLIC_CLIENT_ID 過濾 merchant_id；不可依客戶端傳入略過隔離。
- * （舊第二參數已忽略，避免 Client 元件內讀 env 為 undefined 時誤撈全庫任意一筆課程／圖片。）
  */
-export async function getCourseById(id: string, _legacyMerchantParam?: string): Promise<CourseForPublic | null> {
+export async function getCourseById(idOrSlug: string, _legacyMerchantParam?: string): Promise<CourseForPublic | null> {
   try {
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) {
       return null;
     }
+    const classId = await resolveClassIdForMerchant(idOrSlug, merchantId);
+    if (!classId) return null;
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
       .select(
-        "id, title, price, sale_price, capacity, image_url, course_intro, post_content, gallery_urls, customer_notice, notes, sidebar_option, scheduled_slots, addon_prices, inventory_merchant_id, inventory_class_id"
+        "id, slug, title, price, sale_price, capacity, image_url, course_intro, post_content, gallery_urls, customer_notice, notes, sidebar_option, scheduled_slots, addon_prices, inventory_merchant_id, inventory_class_id, course_faq_items, activity_address, map_embed_html, nearby_transport"
       )
-      .eq("id", id)
+      .eq("id", classId)
       .eq("merchant_id", merchantId)
       .single();
     if (error || !data) return null;
     const row = data as Record<string, unknown>;
-    const inv = await fetchInventoryResolution(supabase, merchantId, id);
+    const inv = await fetchInventoryResolution(supabase, merchantId, classId);
     if (inv && inv.inventoryClassId !== inv.listingClassId) {
       const { data: invRow, error: invErr } = await supabase
         .from("classes")
@@ -939,6 +1056,8 @@ export async function getCourseById(id: string, _legacyMerchantParam?: string): 
 /** 後台編輯用：取得單一課程原始資料（含 customer_notice 等） */
 export type CourseForEdit = {
   id: string;
+  /** 前台網址 /course/{slug} */
+  slug: string;
   title: string | null;
   price: number | null;
   capacity: number | null;
@@ -972,6 +1091,14 @@ export type CourseForEdit = {
   hq_listing_class_id: string | null;
   /** 課程所屬商家（與 classes.merchant_id 一致） */
   merchant_id: string;
+  /** 該課程常見問題（與總站共用 classes.course_faq_items） */
+  course_faq_items: CourseFaqItem[] | null;
+  /** 活動詳細地址（與總站共用 classes.activity_address） */
+  activity_address: string | null;
+  /** 地圖嵌入 HTML（與總站共用 classes.map_embed_html） */
+  map_embed_html: string | null;
+  /** 附近大眾運輸（與總站共用 classes.nearby_transport） */
+  nearby_transport: string | null;
 };
 
 export async function getCourseForEdit(id: string): Promise<CourseForEdit | null> {
@@ -994,8 +1121,10 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
     const class_date = classDateRaw != null ? String(classDateRaw).slice(0, 10) : null;
     const class_time = classTimeRaw != null ? String(classTimeRaw).slice(0, 5) : null; // "09:00:00" -> "09:00"
 
+    const slugStr = row.slug != null ? String(row.slug).trim() : "";
     return {
       id: String(row.id),
+      slug: slugStr || String(row.id),
       title: row.title != null ? String(row.title) : null,
       price: row.price != null ? Number(row.price) : null,
       capacity: row.capacity != null ? Number(row.capacity) : null,
@@ -1029,6 +1158,10 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       hq_listing_class_id: row.hq_listing_class_id != null ? String(row.hq_listing_class_id) : null,
       merchant_id:
         row.merchant_id != null ? String(row.merchant_id).trim() || merchantId : merchantId,
+      course_faq_items: courseFaqItemsFromRow(row) ?? null,
+      activity_address: row.activity_address != null ? String(row.activity_address) : null,
+      map_embed_html: row.map_embed_html != null ? String(row.map_embed_html) : null,
+      nearby_transport: row.nearby_transport != null ? String(row.nearby_transport) : null,
     };
   } catch {
     return null;
@@ -1133,6 +1266,8 @@ export async function updateCourseFull(
       }
     })();
 
+    const course_faq_items = parseCourseFaqItems((formData.get("course_faq_items") as string | null) ?? null);
+
     const customerNotice: CustomerNoticeForm = {
       活動場域類型: (formData.get("customer_venue") as string)?.trim() ?? "室內",
       課程時段長度: (formData.get("customer_duration") as string)?.trim() ?? "",
@@ -1157,8 +1292,13 @@ export async function updateCourseFull(
       mainUrl = await uploadOneToR2(formData, "image_main");
     }
 
-    const { data: existing } = await supabase.from("classes").select("image_url, gallery_urls").eq("id", id).eq("merchant_id", merchantId).single();
-    const existingRow = existing as { image_url?: string; gallery_urls?: string[] } | null;
+    const { data: existing } = await supabase
+      .from("classes")
+      .select("image_url, gallery_urls, slug")
+      .eq("id", id)
+      .eq("merchant_id", merchantId)
+      .single();
+    const existingRow = existing as { image_url?: string; gallery_urls?: string[]; slug?: string | null } | null;
     const keepMain = mainUrl ?? existingRow?.image_url ?? null;
     const existingGallery: string[] = Array.isArray(existingRow?.gallery_urls) ? (existingRow.gallery_urls as string[]) : [];
 
@@ -1178,6 +1318,10 @@ export async function updateCourseFull(
     const store_category = (formData.get("store_category") as string)?.trim() || null;
     const city_region = (formData.get("city_region") as string)?.trim() || null;
     const city_district = (formData.get("city_district") as string)?.trim() || null;
+    const activity_address = (formData.get("activity_address") as string)?.trim() || null;
+    const map_embed_html_raw = (formData.get("map_embed_html") as string)?.trim() ?? "";
+    const map_embed_html = map_embed_html_raw || null;
+    const nearby_transport = (formData.get("nearby_transport") as string)?.trim() || null;
     const inventory_merchant_id = (formData.get("inventory_merchant_id") as string)?.trim() || null;
     const inventory_class_id_raw = (formData.get("inventory_class_id") as string)?.trim() || null;
     const inventory_class_id =
@@ -1196,7 +1340,24 @@ export async function updateCourseFull(
           hq_listing_class_id: hq_listing_class_id || null,
         };
 
+    const slugRaw = (formData.get("course_slug") as string)?.trim() ?? "";
+    const finalSlug = normalizeCourseSlugInput(slugRaw || slugifyCourseTitle(title));
+    if (!isValidCourseSlugFormat(finalSlug)) {
+      return {
+        success: false,
+        error: "網址代稱僅能使用小寫英數與連字號（2～120 字），且不可為保留字或 UUID 格式。",
+      };
+    }
+    const { data: dupSlugRow } = await supabase
+      .from("classes")
+      .select("id")
+      .eq("slug", finalSlug)
+      .neq("id", id)
+      .maybeSingle();
+    if (dupSlugRow) return { success: false, error: "此網址代稱已被使用，請更換。" };
+
     const row: Record<string, unknown> = {
+      slug: finalSlug,
       title,
       price: Math.round(price),
       capacity: Math.floor(capacity),
@@ -1216,14 +1377,27 @@ export async function updateCourseFull(
       store_category,
       city_region,
       city_district,
+      activity_address,
+      map_embed_html,
+      nearby_transport,
       inventory_merchant_id: inventory_merchant_id || null,
       inventory_class_id: inventory_class_id || null,
+      course_faq_items: course_faq_items.length > 0 ? course_faq_items : null,
       ...hqListingPatch,
     };
 
-    const { error } = await supabase.from("classes").update(row).eq("id", id).eq("merchant_id", merchantId);
-
-    if (error) return { success: false, error: error.message };
+    let attemptRow: Record<string, unknown> = { ...row };
+    for (;;) {
+      const { error: upErr } = await supabase.from("classes").update(attemptRow).eq("id", id).eq("merchant_id", merchantId);
+      if (!upErr) break;
+      const errMsg = upErr.message ?? "";
+      if (/slug/i.test(errMsg) && "slug" in attemptRow) {
+        const { slug: _s, ...rest } = attemptRow;
+        attemptRow = rest;
+        continue;
+      }
+      return { success: false, error: errMsg };
+    }
 
     let message: string | undefined = "課程已更新";
     if (hq_listing_bind_token) {
@@ -1262,6 +1436,12 @@ export async function updateCourseFull(
     }
     await revalidateHomepageCoursesListCache();
     revalidatePath(`/course/${id}`);
+    const prevPublic =
+      existingRow?.slug != null && String(existingRow.slug).trim() !== ""
+        ? String(existingRow.slug).trim()
+        : id;
+    revalidatePath(`/course/${prevPublic}`);
+    revalidatePath(`/course/${finalSlug}`);
     return { success: true, message: message ?? "課程已更新" };
   } catch (e) {
     const message = e instanceof Error ? e.message : "更新課程時發生錯誤";
@@ -1285,7 +1465,7 @@ export async function getCoursesForHomepage(): Promise<
     const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
-      .select("id, title, price, sale_price, capacity, image_url, sidebar_option, marketplace_category")
+      .select("id, slug, title, price, sale_price, capacity, image_url, sidebar_option, marketplace_category")
       .eq("merchant_id", merchantId)
       .order("id", { ascending: true });
     if (error) {
@@ -1315,7 +1495,7 @@ export async function getCoursesForHomepageLight(
     const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from("classes")
-      .select("id, title, price, sale_price, capacity, image_url, sidebar_option, marketplace_category")
+      .select("id, slug, title, price, sale_price, capacity, image_url, sidebar_option, marketplace_category")
       .eq("merchant_id", merchantId)
       .order("id", { ascending: true })
       .limit(cap);

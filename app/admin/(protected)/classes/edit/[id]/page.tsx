@@ -46,7 +46,7 @@ export default function AdminEditClassPage() {
         </Link>
         {data && (
           <Link
-            href={`/course/${id}`}
+            href={`/course/${data.slug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"

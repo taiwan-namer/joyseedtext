@@ -30,6 +30,7 @@ import {
   sidebarOptionToDisplayLabels,
 } from "@/lib/sidebarAgeOption";
 import { getDistrictsForCity } from "@/lib/taiwanDistricts";
+import { slugifyCourseTitle } from "@/lib/courseSlug";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i + 9); // 9～21
@@ -115,6 +116,8 @@ function WheelColumn({
 }
 
 export type ScheduledSlot = { date: string; time: string; capacity: number };
+
+type CourseFaqFormItem = { question: string; answer: string };
 
 function DateTimeModal({
   open,
@@ -313,6 +316,19 @@ export default function CourseEditForm({
   const [cityDistrict, setCityDistrict] = useState(() => initialData?.city_district ?? "");
   const [hasSale, setHasSale] = useState(() => !!initialData?.sale_price);
   const [addonItems, setAddonItems] = useState<{ name: string; price: string }[]>(() => (initialData?.addon_prices ?? []).map((a) => ({ name: a.name, price: String(a.price) })));
+  const [courseFaqItems, setCourseFaqItems] = useState<CourseFaqFormItem[]>(() => {
+    const raw = initialData?.course_faq_items;
+    if (!Array.isArray(raw) || raw.length === 0) return [{ question: "", answer: "" }];
+    return raw.map((x) => ({
+      question: String(x?.question ?? ""),
+      answer: String(x?.answer ?? ""),
+    }));
+  });
+  const [activityAddress, setActivityAddress] = useState(() => initialData?.activity_address ?? "");
+  const [nearbyTransport, setNearbyTransport] = useState(() => initialData?.nearby_transport ?? "");
+  const [mapEmbedHtml, setMapEmbedHtml] = useState(() => initialData?.map_embed_html ?? "");
+  const [slugInput, setSlugInput] = useState(() => initialData?.slug ?? slugifyCourseTitle(initialData?.title ?? ""));
+  const slugManuallyEditedRef = useRef(false);
   const [merchants, setMerchants] = useState<MerchantSummaryRow[]>([]);
   const [selectedCreateMerchantId, setSelectedCreateMerchantId] = useState(siteHqMerchantId);
   const districtOptions = useMemo(() => getDistrictsForCity(cityRegion), [cityRegion]);
@@ -354,6 +370,17 @@ export default function CourseEditForm({
     setCityRegion(initialData?.city_region ?? "");
     setCityDistrict(initialData?.city_district ?? "");
   }, [initialData?.city_region, initialData?.city_district]);
+
+  useEffect(() => {
+    setActivityAddress(initialData?.activity_address ?? "");
+    setNearbyTransport(initialData?.nearby_transport ?? "");
+    setMapEmbedHtml(initialData?.map_embed_html ?? "");
+  }, [initialData?.activity_address, initialData?.nearby_transport, initialData?.map_embed_html]);
+
+  useEffect(() => {
+    setSlugInput(initialData?.slug ?? slugifyCourseTitle(initialData?.title ?? ""));
+    slugManuallyEditedRef.current = false;
+  }, [initialData?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -488,6 +515,18 @@ export default function CourseEditForm({
       .map((a) => ({ name: a.name.trim(), price: Number(a.price) }))
       .filter((a) => !Number.isNaN(a.price) && a.price >= 0);
     formData.set("addon_prices", JSON.stringify(addonPayload));
+    formData.set(
+      "course_faq_items",
+      JSON.stringify(
+        courseFaqItems
+          .map((x) => ({ question: x.question.trim(), answer: x.answer.trim() }))
+          .filter((x) => x.question && x.answer)
+      )
+    );
+    formData.set("activity_address", activityAddress.trim());
+    formData.set("nearby_transport", nearbyTransport.trim());
+    formData.set("map_embed_html", mapEmbedHtml.trim());
+    formData.set("course_slug", slugInput.trim());
     if (!isEdit) {
       formData.set("merchant_id", selectedCreateMerchantId);
     }
@@ -501,6 +540,12 @@ export default function CourseEditForm({
           setImageSlots(Array(5).fill(null).map(emptySlot));
           setScheduledSlots([]);
           setAddonItems([]);
+          setCourseFaqItems([{ question: "", answer: "" }]);
+          setActivityAddress("");
+          setNearbyTransport("");
+          setMapEmbedHtml("");
+          setSlugInput(slugifyCourseTitle(""));
+          slugManuallyEditedRef.current = false;
           setAgeMin("");
           setAgeMax("");
           setAdultAccompany(false);
@@ -508,7 +553,10 @@ export default function CourseEditForm({
           setCityDistrict("");
           form.reset();
           if (editorRef.current) editorRef.current.innerHTML = "";
-          if ("id" in result && result.id) window.open(`/course/${result.id}`, "_blank");
+          if ("id" in result && result.id) {
+            const pathSlug = "slug" in result && result.slug ? result.slug : result.id;
+            window.open(`/course/${pathSlug}`, "_blank");
+          }
         }
       } else {
         setError(result.error);
@@ -745,6 +793,111 @@ export default function CourseEditForm({
                 <textarea name="notes" rows={6} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder={注意事項範例} disabled={isPending} defaultValue={initialData?.notes ?? ""} />
               </section>
 
+              {/* 活動地點與交通（classes.activity_address / map_embed_html / nearby_transport，與總站共用 DB） */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">活動地點與交通</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">活動詳細地址</label>
+                    <input
+                      type="text"
+                      value={activityAddress}
+                      onChange={(e) => setActivityAddress(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                      placeholder="例如：台北市士林區士商路150號"
+                      disabled={isPending}
+                    />
+                    <p className="mt-1.5 text-xs text-gray-500">
+                      前台會依此地址自動嵌入 Google 地圖；若無地址但有下方「地圖嵌入 HTML」，仍會顯示地圖。
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">地圖嵌入 HTML（選填）</label>
+                    <textarea
+                      value={mapEmbedHtml}
+                      onChange={(e) => setMapEmbedHtml(e.target.value)}
+                      rows={5}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
+                      placeholder="貼上 Google Maps 等 iframe 完整 HTML（需含 https）"
+                      disabled={isPending}
+                    />
+                    <p className="mt-1.5 text-xs text-gray-500">
+                      與總站共用同一欄位；從總站複製課程時請在此確認或貼上 iframe，避免儲存時被清空。
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">附近大眾運輸</label>
+                    <textarea
+                      value={nearbyTransport}
+                      onChange={(e) => setNearbyTransport(e.target.value)}
+                      rows={4}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                      placeholder={"公車 ○○站，步行 4 分鐘\n捷運 ○○站出口，步行 10 分鐘"}
+                      disabled={isPending}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* 該課程常見問題（寫入 classes.course_faq_items，與總站共用 DB） */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <h2 className="text-lg font-semibold text-gray-900">常見問題（該課程）</h2>
+                  <button
+                    type="button"
+                    onClick={() => setCourseFaqItems((prev) => [...prev, { question: "", answer: "" }])}
+                    className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600"
+                    disabled={isPending}
+                  >
+                    + 新增問答
+                  </button>
+                </div>
+                <p className="mb-3 text-xs text-gray-500">
+                  與全站 FAQ（後台「常見問題」）不同；此處僅屬本課程，資料存於資料庫 <code className="rounded bg-gray-100 px-1">course_faq_items</code>，總站與分站共用同一欄位。
+                </p>
+                <div className="space-y-3">
+                  {courseFaqItems.map((item, i) => (
+                    <div key={i} className="rounded-lg border border-gray-200 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-gray-800">Q{i + 1}</p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCourseFaqItems((prev) =>
+                              prev.length <= 1 ? [{ question: "", answer: "" }] : prev.filter((_, idx) => idx !== i)
+                            )
+                          }
+                          className="rounded bg-rose-500 px-2 py-1 text-xs font-medium text-white hover:bg-rose-600"
+                          disabled={isPending}
+                        >
+                          刪除
+                        </button>
+                      </div>
+                      <label className="mb-1 block text-sm text-gray-700">問題：</label>
+                      <input
+                        type="text"
+                        value={item.question}
+                        onChange={(e) =>
+                          setCourseFaqItems((prev) => prev.map((x, idx) => (idx === i ? { ...x, question: e.target.value } : x)))
+                        }
+                        className="mb-2 w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
+                        disabled={isPending}
+                      />
+                      <label className="mb-1 block text-sm text-gray-700">回答：</label>
+                      <textarea
+                        rows={3}
+                        value={item.answer}
+                        onChange={(e) =>
+                          setCourseFaqItems((prev) => prev.map((x, idx) => (idx === i ? { ...x, answer: e.target.value } : x)))
+                        }
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
+                        disabled={isPending}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               <div className="flex justify-end">
                 <button type="submit" disabled={isPending} className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-3 font-medium text-white hover:bg-amber-600 disabled:opacity-60">
                   {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
@@ -805,7 +958,41 @@ export default function CourseEditForm({
                 </div>
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">標題</label>
-                  <input name="title" type="text" required className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder="課程名稱" disabled={isPending} defaultValue={initialData?.title ?? ""} />
+                  <input
+                    name="title"
+                    type="text"
+                    required
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                    placeholder="課程名稱"
+                    disabled={isPending}
+                    defaultValue={initialData?.title ?? ""}
+                    onChange={(e) => {
+                      if (!slugManuallyEditedRef.current) {
+                        setSlugInput(slugifyCourseTitle(e.target.value));
+                      }
+                    }}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-gray-700">網址代稱（英文）</label>
+                  <input
+                    type="text"
+                    value={slugInput}
+                    onChange={(e) => {
+                      slugManuallyEditedRef.current = true;
+                      setSlugInput(e.target.value);
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
+                    placeholder="kids-baking-class"
+                    disabled={isPending}
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="網址代稱"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    前台網址為 <code className="rounded bg-gray-100 px-1">/course/代稱</code>
+                    ；小寫英數與連字號，勿與 booking、page 等保留字或 UUID 格式相同。變更標題時會自動建議代稱，若已手動編輯則不再覆寫。
+                  </p>
                 </div>
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">總站主題分類</label>

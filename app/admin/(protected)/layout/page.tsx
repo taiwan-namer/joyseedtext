@@ -84,7 +84,7 @@ export default function AdminLayoutPage() {
               price: c.salePrice != null && c.price != null && c.salePrice < c.price ? c.salePrice : c.price ?? 0,
               stock: c.capacity ?? 0,
               imageUrl: c.imageUrl ?? null,
-              detailHref: `/course/${c.id}`,
+              detailHref: `/course/${c.slug || c.id}`,
               ageTags: c.sidebarOptionLabels ?? c.ageTags ?? [],
               category: c.marketplace_category?.trim() ? c.marketplace_category : "課程",
             }))

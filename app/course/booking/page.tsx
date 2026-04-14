@@ -59,7 +59,7 @@ export default function CourseBookingPage() {
               return (
                 <li key={course.id}>
                   <Link
-                    href={`/course/${course.id}`}
+                    href={`/course/${course.slug || course.id}`}
                     className="flex overflow-hidden bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
                   >
                     <div className="relative w-36 h-28 shrink-0 rounded-l-lg bg-gray-200 flex items-center justify-center overflow-hidden">

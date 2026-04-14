@@ -84,14 +84,15 @@ export async function POST(request: NextRequest) {
         const supabase = createServerSupabase();
         const { data: bookingsRows } = await supabase
           .from("bookings")
-          .select("id, status, slot_date, slot_time, order_amount, class_id, classes(title)")
+          .select("id, status, slot_date, slot_time, order_amount, class_id, classes(title, slug)")
           .eq("merchant_id", merchantId)
           .order("created_at", { ascending: false })
           .limit(2);
 
         const orders: AiChatOrderItem[] = (bookingsRows ?? []).map((b: Record<string, unknown>) => {
-          const c = b.classes as { title?: string } | null;
+          const c = b.classes as { title?: string; slug?: string | null } | null;
           const classId = b.class_id != null ? String(b.class_id) : "";
+          const slugSeg = c?.slug != null && String(c.slug).trim() !== "" ? String(c.slug).trim() : classId;
           return {
             id: String(b.id ?? ""),
             courseTitle: c?.title ?? "課程",
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
             slotDate: b.slot_date != null ? String(b.slot_date) : null,
             slotTime: b.slot_time != null ? String(b.slot_time) : null,
             amount: b.order_amount != null ? Number(b.order_amount) : null,
-            courseUrl: classId ? `/course/${classId}` : "/course",
+            courseUrl: classId ? `/course/${slugSeg}` : "/course",
           };
         });
 
@@ -121,11 +122,13 @@ export async function POST(request: NextRequest) {
     if (intent === "course") {
       const { data: classesRows } = await supabase
         .from("classes")
-        .select("id, title, image_url, price, scheduled_slots, sidebar_option")
+        .select("id, slug, title, image_url, price, scheduled_slots, sidebar_option")
         .eq("merchant_id", merchantId);
 
       const courses: AiChatCourseItem[] = (classesRows ?? []).map((row: Record<string, unknown>) => {
         const id = String(row.id ?? "");
+        const slugSeg =
+          row.slug != null && String(row.slug).trim() !== "" ? String(row.slug).trim() : id;
         const sidebar = (row.sidebar_option as string[] | null) ?? [];
         const ageLabels = sidebarOptionToDisplayLabels(sidebar);
         return {
@@ -134,7 +137,7 @@ export async function POST(request: NextRequest) {
           image_url: row.image_url != null ? String(row.image_url) : null,
           price: row.price != null ? Number(row.price) : null,
           age_range: ageLabels.join("、") || "未標示",
-          url: `/course/${id}`,
+          url: `/course/${slugSeg}`,
         };
       });
 
@@ -148,15 +151,16 @@ export async function POST(request: NextRequest) {
     if (intent === "order" && memberEmail) {
       const { data: bookingsRows } = await supabase
         .from("bookings")
-        .select("id, status, slot_date, slot_time, order_amount, class_id, classes(title)")
+        .select("id, status, slot_date, slot_time, order_amount, class_id, classes(title, slug)")
         .eq("merchant_id", merchantId)
         .eq("member_email", memberEmail)
         .order("created_at", { ascending: false })
         .limit(20);
 
       const orders: AiChatOrderItem[] = (bookingsRows ?? []).map((b: Record<string, unknown>) => {
-        const c = b.classes as { title?: string } | null;
+        const c = b.classes as { title?: string; slug?: string | null } | null;
         const classId = b.class_id != null ? String(b.class_id) : "";
+        const slugSeg = c?.slug != null && String(c.slug).trim() !== "" ? String(c.slug).trim() : classId;
         return {
           id: String(b.id ?? ""),
           courseTitle: c?.title ?? "課程",
@@ -164,7 +168,7 @@ export async function POST(request: NextRequest) {
           slotDate: b.slot_date != null ? String(b.slot_date) : null,
           slotTime: b.slot_time != null ? String(b.slot_time) : null,
           amount: b.order_amount != null ? Number(b.order_amount) : null,
-          courseUrl: classId ? `/course/${classId}` : "/course",
+          courseUrl: classId ? `/course/${slugSeg}` : "/course",
         };
       });
 

@@ -342,7 +342,7 @@ export default function CoursesListClient() {
                           NT$ {price.toLocaleString()} 起
                         </p>
                         <Link
-                          href={`/course/${course.id}`}
+                          href={`/course/${course.slug || course.id}`}
                           className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
                             soldOut
                               ? "bg-gray-200 text-gray-500 pointer-events-none"

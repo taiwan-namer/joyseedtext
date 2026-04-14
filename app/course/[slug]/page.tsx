@@ -8,6 +8,8 @@ import { getCourseBySlug } from "../course-data";
 import { getCourseById } from "@/app/actions/productActions";
 import { getSlotRemainingCounts, type SlotRemaining } from "@/app/actions/bookingActions";
 import { normalizeSlotTime } from "@/lib/slotTime";
+import { googleMapsEmbedSrcFromAddress } from "@/lib/googleMapsEmbed";
+import { stripGoogleFontsFromHtml } from "@/lib/stripGoogleFontsFromHtml";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import type { CustomerNotice } from "../course-data";
@@ -23,6 +25,13 @@ function getCalendarDays(year: number, month: number): (number | null)[] {
   const leading = Array(startWeekday).fill(null);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   return [...leading, ...days];
+}
+
+function isSafeMapEmbedHtml(raw: string): boolean {
+  const html = raw.trim().toLowerCase();
+  if (!html.includes("<iframe")) return false;
+  if (!html.includes("https://")) return false;
+  return true;
 }
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -427,6 +436,29 @@ export default function CourseDetailPage() {
     : 0;
   const totalPrice = basePrice + addonTotal;
 
+  const courseFaqList =
+    "courseFaqItems" in course ? (course as CourseForPublic).courseFaqItems : undefined;
+
+  const { activityAddr, mapFromAddress, legacyMapHtml, showMapSection, hasTransport } = useMemo(() => {
+    const cp = course as CourseForPublic;
+    const addr = cp.activityAddress?.trim() ?? "";
+    const fromAddr = addr ? googleMapsEmbedSrcFromAddress(addr) : null;
+    const legacy =
+      !fromAddr &&
+      cp.mapEmbedHtml?.trim() &&
+      isSafeMapEmbedHtml(cp.mapEmbedHtml)
+        ? cp.mapEmbedHtml
+        : null;
+    const transport = cp.nearbyTransport?.trim() ?? "";
+    return {
+      activityAddr: addr,
+      mapFromAddress: fromAddr,
+      legacyMapHtml: legacy,
+      showMapSection: !!addr || !!fromAddr || !!legacy,
+      hasTransport: !!transport,
+    };
+  }, [course]);
+
   const toggleAddon = (index: number) => {
     setSelectedAddonIndices((prev) =>
       prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
@@ -528,6 +560,79 @@ export default function CourseDetailPage() {
             {/* 客戶須知（含顯示全部/收合） */}
             {course.customerNotice && (
               <CustomerNoticeSection notice={course.customerNotice} />
+            )}
+
+            {/* 活動地點與交通（與 customer_notice「活動場域類型」不同） */}
+            {(showMapSection || hasTransport) && (
+                <div className="mt-6 space-y-6">
+                  {showMapSection ? (
+                    <section
+                      className="overflow-hidden rounded-xl border border-gray-100 bg-gray-50/80 p-6 shadow-sm"
+                      aria-label="地圖"
+                    >
+                      <h2 className="mb-3 text-lg font-bold text-gray-900">地圖</h2>
+                      {activityAddr ? (
+                        <p className="mb-4 whitespace-pre-line leading-relaxed text-gray-800">
+                          {(course as CourseForPublic).activityAddress}
+                        </p>
+                      ) : null}
+                      {mapFromAddress ? (
+                        <div className="aspect-video w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                          <iframe
+                            src={mapFromAddress}
+                            title="地圖"
+                            className="h-full min-h-[220px] w-full border-0"
+                            allowFullScreen
+                            loading="lazy"
+                            referrerPolicy="no-referrer-when-downgrade"
+                          />
+                        </div>
+                      ) : legacyMapHtml ? (
+                        <div
+                          className="overflow-hidden rounded-xl border border-gray-200"
+                          dangerouslySetInnerHTML={{ __html: stripGoogleFontsFromHtml(legacyMapHtml) }}
+                        />
+                      ) : null}
+                    </section>
+                  ) : null}
+                  {hasTransport ? (
+                    <section
+                      className="overflow-hidden rounded-xl border border-gray-100 bg-gray-50/80 p-6 shadow-sm"
+                      aria-label="大眾交通"
+                    >
+                      <h2 className="mb-3 text-lg font-bold text-gray-900">大眾交通</h2>
+                      <p className="whitespace-pre-line leading-relaxed text-gray-800">
+                        {(course as CourseForPublic).nearbyTransport}
+                      </p>
+                    </section>
+                  ) : null}
+                </div>
+              )}
+
+            {/* 該課程常見問題（classes.course_faq_items，與總站共用 DB） */}
+            {courseFaqList && courseFaqList.length > 0 && (
+              <section className="mt-8 rounded-xl border border-gray-100 bg-gray-50/80 p-6" aria-label="常見問題">
+                <h2 className="mb-3 text-lg font-bold text-gray-900">常見問題</h2>
+                <div className="w-full space-y-0">
+                  {courseFaqList.map((item, idx) => (
+                    <details
+                      key={`${item.question}-${idx}`}
+                      className="group border-b border-gray-100 py-3.5 last:border-b-0"
+                    >
+                      <summary className="flex cursor-pointer list-none items-start justify-between gap-3 text-sm font-medium leading-snug text-gray-900 marker:content-none [&::-webkit-details-marker]:hidden">
+                        <span className="min-w-0 flex-1">{item.question}</span>
+                        <ChevronDown
+                          className="pointer-events-none mt-0.5 h-4 w-4 shrink-0 text-amber-600 transition-transform duration-200 group-open:rotate-180"
+                          aria-hidden
+                        />
+                      </summary>
+                      <div className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-600">
+                        {item.answer}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
             )}
           </article>
 

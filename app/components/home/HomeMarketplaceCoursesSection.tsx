@@ -22,7 +22,7 @@ function courseToActivity(c: CourseForPublic): Activity {
     price,
     stock: c.capacity ?? 0,
     imageUrl: c.imageUrl ?? null,
-    detailHref: `/course/${c.id}`,
+    detailHref: `/course/${c.slug || c.id}`,
     ageTags: c.sidebarOptionLabels ?? c.ageTags ?? [],
     category: c.marketplace_category?.trim() ? c.marketplace_category.trim() : "課程",
   };
