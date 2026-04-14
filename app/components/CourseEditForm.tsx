@@ -355,7 +355,7 @@ export default function CourseEditForm({
   const imageSlotsRef = useRef(imageSlots);
   imageSlotsRef.current = imageSlots;
 
-  // 總站主題分類：僅來自 /api/global-categories（tongqudao_main.global_categories）
+  // 總站主題分類：僅來自 /api/global-categories（store_settings.global_categories，merchant_id=model）
   const [remoteGlobalCategories, setRemoteGlobalCategories] = useState<string[]>([]);
 
   const globalCategories = useMemo(() => {

@@ -4,6 +4,7 @@ import { unstable_noStore } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { FAQ_DATA } from "@/app/data/faq";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID } from "@/lib/constants";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -49,7 +50,8 @@ export type FaqItem = { id: string; question: string; answer: string };
 /**
  * DB `store_settings.global_categories`（jsonb）的允許形狀。
  * Migration：`20260323120000_store_settings_global_categories.sql`。
- * 總站列 `merchant_id = 'tongqudao_main'` 為 {@link getGlobalCategoriesFromMain} 讀取來源；分站可為 null。
+ * {@link getGlobalCategoriesFromMain} 讀取 `store_settings.global_categories` 的那一列：
+ * merchant_id 固定為 {@link GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID}（與 model 總站一致）。
  */
 export type StoreSettingsGlobalCategoriesJson =
   | string[]
@@ -208,7 +210,7 @@ export async function getStoreSettingsForMerchant(merchantId: string): Promise<S
 }
 
 /**
- * 從總站（merchant_id = 'tongqudao_main'）讀取 `store_settings.global_categories`。
+ * 從總站讀取 `store_settings.global_categories`（固定 {@link GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID}）。
  * 回傳已去除空白、去重後的字串陣列；若發生錯誤、欄位不存在或尚未設定則回傳空陣列。
  */
 export async function getGlobalCategoriesFromMain(): Promise<string[]> {
@@ -218,7 +220,7 @@ export async function getGlobalCategoriesFromMain(): Promise<string[]> {
     const { data, error } = await supabase
       .from("store_settings")
       .select("global_categories")
-      .eq("merchant_id", "tongqudao_main")
+      .eq("merchant_id", GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID)
       .maybeSingle();
 
     if (error || !data || !("global_categories" in data)) {

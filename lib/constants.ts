@@ -1,8 +1,11 @@
 /**
  * 分站課程表單常數。
- * 總站主題分類僅來自 `store_settings.global_categories`（merchant_id=tongqudao_main），
- * 經 `/api/global-categories` 提供；此檔不寫死主題清單。
+ * 總站主題分類僅來自 `store_settings.global_categories`（固定 {@link GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID}，與 model 總站一致），
+ * 經 `/api/global-categories`；此檔不寫死「主題標籤文字」清單。
  */
+
+/** 總站 `store_settings` 帶有 global_categories 的列（與 model 專案約定之 merchant_id） */
+export const GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID = "model";
 
 /** 首頁「熱門課程」區塊僅向 DB 索取筆數（排除 course_intro / gallery 等大欄位） */
 export const HOMEPAGE_COURSES_FETCH_LIMIT = 12;
