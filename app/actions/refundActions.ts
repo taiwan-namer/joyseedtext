@@ -11,11 +11,7 @@ import {
   validateLinePayCredentials,
   type LinePayCredentials,
 } from "@/lib/linepay";
-import {
-  bookingsVisibleToMerchantOrFilter,
-  getAdminBookingsAccessFilter,
-  type AdminBookingsAccessFilter,
-} from "@/lib/bookingsMerchantFilter";
+import { getAdminBookingsAccessFilter, type AdminBookingsAccessFilter } from "@/lib/bookingsMerchantFilter";
 import { voidEcpayInvoice } from "@/lib/invoice/ecpay-void";
 import { bookingHasExplicitSessionSlot } from "@/lib/bookingSessionSlot";
 
@@ -356,13 +352,13 @@ export async function processMemberBookingRefund(
     if (!email) return { success: false, error: "請先登入" };
 
     const supabase = createServerSupabase();
-    const { data: row, error: fetchError } = await supabase
-      .from("bookings")
-      .select(BOOKING_REFUND_SELECT)
-      .eq("id", bookingId)
-      .eq("member_email", email)
-      .or(bookingsVisibleToMerchantOrFilter(merchantId))
-      .maybeSingle();
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: row, error: fetchError } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select(BOOKING_REFUND_SELECT).eq("id", bookingId).eq("member_email", email),
+      access
+    ).maybeSingle();
 
     if (fetchError || !row) return { success: false, error: "訂單不存在或無權限操作" };
 
@@ -387,13 +383,10 @@ export async function processMemberBookingRefund(
       }
 
       const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, async (patch) => {
-        return await supabase
-          .from("bookings")
-          .update(patch)
-          .eq("id", bookingId)
-          .eq("member_email", email)
-          .or(bookingsVisibleToMerchantOrFilter(merchantId))
-          .eq("status", "paid");
+        return await applyAdminBookingsAccess(
+          supabase.from("bookings").update(patch).eq("id", bookingId).eq("member_email", email).eq("status", "paid"),
+          access
+        );
       });
       if (upErr) return { success: false, error: upErr };
 
@@ -418,13 +411,10 @@ export async function processMemberBookingRefund(
       }
 
       const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, async (patch) => {
-        return await supabase
-          .from("bookings")
-          .update(patch)
-          .eq("id", bookingId)
-          .eq("member_email", email)
-          .or(bookingsVisibleToMerchantOrFilter(merchantId))
-          .eq("status", "paid");
+        return await applyAdminBookingsAccess(
+          supabase.from("bookings").update(patch).eq("id", bookingId).eq("member_email", email).eq("status", "paid"),
+          access
+        );
       });
       if (upErr) return { success: false, error: upErr };
 
@@ -446,13 +436,10 @@ export async function processMemberBookingRefund(
       }
 
       const { error: upErr } = await applyRefundSuccessToBooking(supabase, bookingId, b, async (patch) => {
-        return await supabase
-          .from("bookings")
-          .update(patch)
-          .eq("id", bookingId)
-          .eq("member_email", email)
-          .or(bookingsVisibleToMerchantOrFilter(merchantId))
-          .eq("status", "paid");
+        return await applyAdminBookingsAccess(
+          supabase.from("bookings").update(patch).eq("id", bookingId).eq("member_email", email).eq("status", "paid"),
+          access
+        );
       });
       if (upErr) return { success: false, error: upErr };
 

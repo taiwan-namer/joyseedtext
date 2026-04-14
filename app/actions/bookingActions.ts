@@ -12,7 +12,6 @@ import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { normalizeSlotTime } from "@/lib/slotTime";
 import { bookingHasExplicitSessionSlot } from "@/lib/bookingSessionSlot";
 import {
-  bookingsVisibleToMerchantOrFilter,
   getAdminBookingMerchantScope,
   getAdminBookingsAccessFilter,
   getOrderAdminClassCreatorMerchantIdFilter,
@@ -783,9 +782,11 @@ export async function getMyBookings(): Promise<
     if (!email) return { success: false, error: "請先登入" };
 
     const supabase = createServerSupabase();
-    const { data: rows, error } = await supabase
-      .from("bookings")
-      .select(`
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: rows, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select(`
         id,
         member_email,
         parent_name,
@@ -800,8 +801,9 @@ export async function getMyBookings(): Promise<
         addon_indices,
         refund_status,
         classes ( title, image_url, price, addon_prices )
-      `)
-      .or(bookingsVisibleToMerchantOrFilter(merchantId))
+      `),
+      access
+    )
       .eq("member_email", email)
       .order("created_at", { ascending: false });
 
@@ -882,13 +884,13 @@ export async function cancelMemberUnpaidBooking(
     if (!email) return { success: false, error: "請先登入" };
 
     const supabase = createServerSupabase();
-    const { data: row, error: fetchError } = await supabase
-      .from("bookings")
-      .select("id, status")
-      .eq("id", bookingId)
-      .eq("member_email", email)
-      .or(bookingsVisibleToMerchantOrFilter(merchantId))
-      .maybeSingle();
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: row, error: fetchError } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select("id, status").eq("id", bookingId).eq("member_email", email),
+      access
+    ).maybeSingle();
 
     if (fetchError || !row) return { success: false, error: "訂單不存在或無權限操作" };
 
@@ -897,13 +899,15 @@ export async function cancelMemberUnpaidBooking(
       return { success: false, error: "僅未付款訂單可由此取消預約" };
     }
 
-    const { error: upErr } = await supabase
-      .from("bookings")
-      .update({ status: "cancelled" })
-      .eq("id", bookingId)
-      .eq("member_email", email)
-      .or(bookingsVisibleToMerchantOrFilter(merchantId))
-      .in("status", ["unpaid", "upcoming"]);
+    const { error: upErr } = await applyAdminBookingsAccess(
+      supabase
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .eq("id", bookingId)
+        .eq("member_email", email)
+        .in("status", ["unpaid", "upcoming"]),
+      access
+    );
 
     if (upErr) return { success: false, error: upErr.message };
 

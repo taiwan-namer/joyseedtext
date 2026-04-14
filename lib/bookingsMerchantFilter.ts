@@ -61,6 +61,8 @@ export function getAdminBookingMerchantScope(): string[] {
  * 後台訂單列表專用：合併
  * 1) 範圍內各商家的 merchant_id／sold_via／class_creator_merchant_id
  * 2) 各商家「列表課 → 庫存課」綁定所對應之庫存訂單（補 sold_via 為 null 的舊資料）
+ * 3) **依課程歸屬**：`class_id` 落在 `classes` 且該課為本 scope 擁有，或為掛載至本 scope 庫存之列表課（`inventory_merchant_id`）。
+ *    補齊 `bookings.merchant_id` 誤為平台／總站代號（如 `model`）、且 sold_via／class_creator 皆未寫入之列。
  */
 export async function buildAdminBookingsOrClause(supabase: SupabaseClient): Promise<string> {
   const scope = getAdminBookingMerchantScope();
@@ -90,7 +92,33 @@ export async function buildAdminBookingsOrClause(supabase: SupabaseClient): Prom
     }
   }
 
-  return invFilters.length > 0 ? `${base},${invFilters.join(",")}` : base;
+  const classIdInParts = await buildClassIdInOrParts(supabase, scope);
+
+  const segments = [base, ...invFilters, ...classIdInParts].filter((s) => s.length > 0);
+  return segments.join(",");
+}
+
+/** PostgREST：`class_id.in.(a,b,c)`，過長時拆成多段再以逗號併入外層 `or` */
+async function buildClassIdInOrParts(supabase: SupabaseClient, scope: string[]): Promise<string[]> {
+  const { data: byMerchant } = await supabase.from("classes").select("id").in("merchant_id", scope);
+  const { data: byInvHost } = await supabase.from("classes").select("id").in("inventory_merchant_id", scope);
+
+  const seen = new Set<string>();
+  for (const row of [...(byMerchant ?? []), ...(byInvHost ?? [])]) {
+    const id = (row as { id?: string }).id;
+    if (id) seen.add(String(id).trim());
+  }
+
+  const ids = Array.from(seen);
+  if (ids.length === 0) return [];
+
+  const CHUNK = 100;
+  const parts: string[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    parts.push(`class_id.in.(${chunk.join(",")})`);
+  }
+  return parts;
 }
 
 /**
