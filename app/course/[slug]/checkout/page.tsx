@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
-import { useParams, useSearchParams, notFound } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { CreditCard, Building, Smartphone, Loader2 } from "lucide-react";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import LoginModal from "@/app/components/LoginModal";
@@ -46,6 +46,7 @@ export default function CheckoutPage() {
   const slug = typeof params.slug === "string" ? params.slug : params.slug?.[0];
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay | null>(null);
+  const [courseMissing, setCourseMissing] = useState(false);
 
   const [parentName, setParentName] = useState("");
   const [parentPhone, setParentPhone] = useState("");
@@ -77,16 +78,26 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
+    setCourse(null);
+    setCourseMissing(false);
     (async () => {
-      const fromDb = await getCourseById(slug);
+      try {
+        const fromDb = await getCourseById(slug);
+        if (cancelled) return;
+        if (fromDb) {
+          setCourse(fromDb);
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+      }
       if (cancelled) return;
-      if (fromDb) {
-        setCourse(fromDb);
+      const fromStatic = getCourseBySlug(slug);
+      if (fromStatic) {
+        setCourse(fromStatic);
         return;
       }
-      const fromStatic = getCourseBySlug(slug);
-      if (fromStatic) setCourse(fromStatic);
-      else notFound();
+      setCourseMissing(true);
     })();
     return () => { cancelled = true; };
   }, [slug]);
@@ -295,6 +306,16 @@ export default function CheckoutPage() {
   };
 
   if (!course) {
+    if (courseMissing) {
+      return (
+        <div className="min-h-screen bg-page flex flex-col items-center justify-center gap-4 px-4">
+          <p className="text-gray-700 text-center">找不到此課程或連結已失效。</p>
+          <Link href="/" className="text-amber-600 font-medium hover:underline">
+            回首頁
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-page flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams, notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { getCourseBySlug } from "../../course-data";
 import { getCourseById } from "@/app/actions/productActions";
@@ -48,25 +48,46 @@ export default function CoursePostPage() {
   const slug = typeof params.slug === "string" ? params.slug : params.slug?.[0];
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay | null>(null);
+  const [courseMissing, setCourseMissing] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
+    setCourse(null);
+    setCourseMissing(false);
     (async () => {
-      const fromDb = await getCourseById(slug);
+      try {
+        const fromDb = await getCourseById(slug);
+        if (cancelled) return;
+        if (fromDb) {
+          setCourse(fromDb);
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+      }
       if (cancelled) return;
-      if (fromDb) {
-        setCourse(fromDb);
+      const fromStatic = getCourseBySlug(slug);
+      if (fromStatic) {
+        setCourse(fromStatic);
         return;
       }
-      const fromStatic = getCourseBySlug(slug);
-      if (fromStatic) setCourse(fromStatic);
-      else notFound();
+      setCourseMissing(true);
     })();
     return () => { cancelled = true; };
   }, [slug]);
 
   if (!course) {
+    if (courseMissing) {
+      return (
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4 px-4">
+          <p className="text-gray-700 text-center">找不到此課程或連結已失效。</p>
+          <Link href="/" className="text-amber-600 font-medium hover:underline">
+            回首頁
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>
@@ -75,7 +96,8 @@ export default function CoursePostPage() {
   }
 
   const category = "category" in course ? (course as CourseDetail).category : "課程";
-  const ageTags = course.sidebarOptionLabels ?? (course as CourseDetail).ageTags ?? [];
+  const rawAgeTags = course.sidebarOptionLabels ?? (course as CourseDetail).ageTags ?? [];
+  const ageTags = Array.isArray(rawAgeTags) ? rawAgeTags : [];
   const ageRange = "ageRange" in course ? (course as CourseDetail).ageRange : "";
 
   return (

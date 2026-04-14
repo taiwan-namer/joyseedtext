@@ -46,13 +46,24 @@ async function resolveClassIdForMerchant(param: string, merchantId: string): Pro
       .maybeSingle();
     return data?.id != null ? String(data.id) : null;
   }
+  const lower = t.toLowerCase();
   const { data } = await supabase
     .from("classes")
     .select("id")
-    .eq("slug", t.toLowerCase())
+    .eq("slug", lower)
     .eq("merchant_id", merchantId)
     .maybeSingle();
-  return data?.id != null ? String(data.id) : null;
+  if (data?.id != null) return String(data.id);
+  if (t !== lower) {
+    const { data: exactCase } = await supabase
+      .from("classes")
+      .select("id")
+      .eq("slug", t)
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
+    if (exactCase?.id != null) return String(exactCase.id);
+  }
+  return null;
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter, notFound } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ChevronRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight as ChevronRightArrow, X } from "lucide-react";
 import { getCourseBySlug } from "../course-data";
 import { getCourseById } from "@/app/actions/productActions";
@@ -89,20 +89,24 @@ function DateTimeModal({
   );
 
   // 有開課的日期集合（YYYY-MM-DD）
-  const datesWithSlots = useMemo(
-    () => new Set(availableSlots.map((s) => s.date)),
+  const safeSlots = useMemo(
+    () =>
+      (availableSlots ?? []).filter(
+        (s): s is { date: string; time: string } =>
+          !!s && typeof s.date === "string" && typeof s.time === "string"
+      ),
     [availableSlots]
   );
+
+  const datesWithSlots = useMemo(() => new Set(safeSlots.map((s) => s.date)), [safeSlots]);
 
   // 選中日期當天的可選時段（唯一、排序）
   const timesForSelectedDate = useMemo(() => {
     if (!selectedDate) return [];
     const dateStr = formatDateKey(selectedDate.y, selectedDate.m, selectedDate.d);
-    const times = availableSlots
-      .filter((s) => s.date === dateStr)
-      .map((s) => s.time);
+    const times = safeSlots.filter((s) => s.date === dateStr).map((s) => s.time);
     return Array.from(new Set(times)).sort();
-  }, [selectedDate, availableSlots]);
+  }, [selectedDate, safeSlots]);
 
   const prevMonth = () => {
     if (viewMonth === 1) {
@@ -384,6 +388,8 @@ export default function CourseDetailPage() {
   const slug = typeof params.slug === "string" ? params.slug : params.slug?.[0];
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay | null>(null);
+  /** 已嘗試載入但 DB／靜態皆無此課程（勿在 useEffect 呼叫 notFound，會觸發客戶端例外） */
+  const [courseMissing, setCourseMissing] = useState(false);
   const [dateTimeModalOpen, setDateTimeModalOpen] = useState(false);
   const [selectedDateTime, setSelectedDateTime] = useState<{ date: string; time: string } | null>(null);
   const [selectedAddonIndices, setSelectedAddonIndices] = useState<number[]>([]);
@@ -393,6 +399,8 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
+    setCourse(null);
+    setCourseMissing(false);
     (async () => {
       // merchant 隔離在 Server Action 內以環境變數強制，勿在 Client 讀 NEXT_PUBLIC_* 傳入（建置／執行時易為 undefined 而誤撈全庫）
       try {
@@ -403,12 +411,15 @@ export default function CourseDetailPage() {
           return;
         }
       } catch {
-        /* 伺服端 map／序列化拋錯時改走靜態或 notFound，避免未處理 rejection 白屏 */
+        /* 伺服端 map／序列化拋錯時改走靜態或顯示找不到 */
       }
       if (cancelled) return;
       const fromStatic = getCourseBySlug(slug);
-      if (fromStatic) setCourse(fromStatic);
-      else notFound();
+      if (fromStatic) {
+        setCourse(fromStatic);
+        return;
+      }
+      setCourseMissing(true);
     })();
     return () => { cancelled = true; };
   }, [slug]);
@@ -425,6 +436,16 @@ export default function CourseDetailPage() {
   }, [dateTimeModalOpen, course]);
 
   if (!course) {
+    if (courseMissing) {
+      return (
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4 px-4">
+          <p className="text-gray-700 text-center">找不到此課程或連結已失效。</p>
+          <Link href="/" className="text-amber-600 font-medium hover:underline">
+            回首頁
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <p className="text-gray-500">載入中…</p>
@@ -552,7 +573,7 @@ export default function CourseDetailPage() {
             )}
             <div className="mt-6">
               <Link
-                href={`/course/${course.slug}/post`}
+                href={`/course/${("slug" in course && course.slug ? course.slug : slug) ?? ""}/post`}
                 className="block w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium text-center transition-colors"
               >
                 READ MORE
