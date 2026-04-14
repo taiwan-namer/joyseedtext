@@ -741,6 +741,15 @@ export type BookingWithClass = {
   ecpay_payment_type?: string | null;
   /** 後台列表用：refunded 表示已退刷 */
   refund_status?: string | null;
+  /** 庫存課／訂單歸屬商家 id（與 DB `bookings.merchant_id` 一致） */
+  merchant_id?: string;
+  /**
+   * 經哪個商家網站結帳（DB `sold_via_merchant_id`；總站代銷時通常為總站 id）。
+   * null 表示未寫入或本店自售且未註記。
+   */
+  sold_via_merchant_id?: string | null;
+  /** 庫存課開課商家快照（DB `class_creator_merchant_id`） */
+  class_creator_merchant_id?: string | null;
 };
 
 /** 後台：線上金流尚未轉成 bookings 的待付款列（callback 未跑完時會留在這裡） */
@@ -935,6 +944,9 @@ export async function getAdminBookings(): Promise<
         ecpay_trade_no,
         ecpay_payment_type,
         refund_status,
+        merchant_id,
+        sold_via_merchant_id,
+        class_creator_merchant_id,
         classes ( title, image_url, price, addon_prices )
       `),
       access
@@ -996,6 +1008,15 @@ export async function getAdminBookings(): Promise<
         ecpay_trade_no: r.ecpay_trade_no != null ? String(r.ecpay_trade_no) : null,
         ecpay_payment_type: r.ecpay_payment_type != null ? String(r.ecpay_payment_type) : null,
         refund_status: r.refund_status != null ? String(r.refund_status) : null,
+        merchant_id: r.merchant_id != null ? String(r.merchant_id).trim() : "",
+        sold_via_merchant_id:
+          r.sold_via_merchant_id != null && String(r.sold_via_merchant_id).trim() !== ""
+            ? String(r.sold_via_merchant_id).trim()
+            : null,
+        class_creator_merchant_id:
+          r.class_creator_merchant_id != null && String(r.class_creator_merchant_id).trim() !== ""
+            ? String(r.class_creator_merchant_id).trim()
+            : null,
       };
     });
 
@@ -1303,6 +1324,9 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
         slot_time,
         order_amount,
         addon_indices,
+        merchant_id,
+        sold_via_merchant_id,
+        class_creator_merchant_id,
         classes ( title, image_url, price, addon_prices )
       `),
       access
@@ -1362,6 +1386,15 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
         class_price: classPrice,
         addon_indices: parseAddonIndicesFromDb(r.addon_indices),
         class_addon_prices: classAddonPrices,
+        merchant_id: r.merchant_id != null ? String(r.merchant_id).trim() : "",
+        sold_via_merchant_id:
+          r.sold_via_merchant_id != null && String(r.sold_via_merchant_id).trim() !== ""
+            ? String(r.sold_via_merchant_id).trim()
+            : null,
+        class_creator_merchant_id:
+          r.class_creator_merchant_id != null && String(r.class_creator_merchant_id).trim() !== ""
+            ? String(r.class_creator_merchant_id).trim()
+            : null,
       };
     });
     return { success: true, data: list };

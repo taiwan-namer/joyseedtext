@@ -61,6 +61,21 @@ function statusLabel(s: string) {
   }
 }
 
+/** DB：`sold_via_merchant_id`＝結帳網站；與 `merchant_id` 相同時為本店結帳 */
+function checkoutSourceCell(row: BookingWithClass): { text: string; title: string } {
+  const sold = row.sold_via_merchant_id?.trim();
+  const inv = row.merchant_id?.trim();
+  const title = [
+    `庫存歸屬 merchant_id：${inv ?? "—"}`,
+    `結帳站 sold_via_merchant_id：${sold ?? "（未填）"}`,
+    `開課快照 class_creator_merchant_id：${row.class_creator_merchant_id?.trim() ?? "—"}`,
+  ].join("\n");
+  if (!sold) return { text: "—", title };
+  if (inv && sold === inv) return { text: "本店", title };
+  const s = sold.length > 14 ? `${sold.slice(0, 12)}…` : sold;
+  return { text: s, title };
+}
+
 function formatCourseDate(row: BookingWithClass) {
   const datePart = row.slot_date?.trim?.() || row.slot_date;
   if (!datePart) return "—";
@@ -437,12 +452,18 @@ export default function AdminBookingsPage() {
           ) : filteredList.length === 0 ? (
             <p className="py-8 px-4 text-gray-500 text-sm">篩選後無符合的訂單</p>
           ) : (
-            <table className="w-full min-w-[860px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-24">訂單編號</th>
                   <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-36">課程日期</th>
                   <th className="text-left py-2.5 px-3 font-medium text-gray-700 min-w-[100px]">課程名稱</th>
+                  <th
+                    className="text-left py-2.5 px-3 font-medium text-gray-700 w-[7.5rem]"
+                    title="結帳網站商家 ID（bookings.sold_via_merchant_id）；總站代銷時通常為總站 id"
+                  >
+                    結帳來源
+                  </th>
                   <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-24">家長姓名</th>
                   <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-28">電話</th>
                   <th className="text-left py-2.5 px-3 font-medium text-gray-700 min-w-[140px]">購買人信箱</th>
@@ -453,7 +474,9 @@ export default function AdminBookingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredList.map((row) => (
+                {filteredList.map((row) => {
+                  const src = checkoutSourceCell(row);
+                  return (
                   <tr
                     key={row.id}
                     className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors py-1"
@@ -465,6 +488,12 @@ export default function AdminBookingsPage() {
                       {formatCourseDate(row)}
                     </td>
                     <td className="py-2.5 px-3 text-gray-900 truncate">{row.class_title || "—"}</td>
+                    <td
+                      className="py-2.5 px-3 text-gray-700 font-mono text-xs truncate max-w-[8rem]"
+                      title={src.title}
+                    >
+                      {src.text}
+                    </td>
                     <td className="py-2.5 px-3 text-gray-900 truncate">{row.parent_name || "—"}</td>
                     <td className="py-2.5 px-3 text-gray-600 truncate">{row.parent_phone || "—"}</td>
                     <td className="py-2.5 px-3 text-gray-900 truncate" title={row.member_email}>{row.member_email}</td>
@@ -566,7 +595,8 @@ export default function AdminBookingsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
