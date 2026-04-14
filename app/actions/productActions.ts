@@ -31,12 +31,34 @@ function envTrim(key: string): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-/** 網址參數（UUID 或 slug）解析為本店課程 id */
+/**
+ * 網址參數（UUID 或 slug）解析為「本店」課程 id。
+ * - slug 在 DB 為**全庫唯一**（見 migration idx_classes_slug），總站列表課與老師課無法共用同一字串；
+ *   使用者若帶總站連結（slug 或列表課 UUID）到老師分站，需經 inventory_* 轉成老師端課程 id。
+ */
 async function resolveClassIdForMerchant(param: string, merchantId: string): Promise<string | null> {
   const t = param.trim();
   if (!t) return null;
   const { createServerSupabase } = await import("@/lib/supabase/server");
   const supabase = createServerSupabase();
+
+  const resolveViaInventoryPointer = (row: {
+    merchant_id?: unknown;
+    inventory_merchant_id?: unknown;
+    inventory_class_id?: unknown;
+    id?: unknown;
+  }): string | null => {
+    const own = String(row.merchant_id ?? "").trim();
+    if (own === merchantId && row.id != null) return String(row.id);
+    const invMid =
+      typeof row.inventory_merchant_id === "string" ? row.inventory_merchant_id.trim() : "";
+    const invCid = row.inventory_class_id;
+    if (invMid === merchantId && invCid != null && String(invCid).trim() !== "") {
+      return String(invCid);
+    }
+    return null;
+  };
+
   if (isUuidString(t)) {
     const { data } = await supabase
       .from("classes")
@@ -44,8 +66,20 @@ async function resolveClassIdForMerchant(param: string, merchantId: string): Pro
       .eq("id", t)
       .eq("merchant_id", merchantId)
       .maybeSingle();
-    return data?.id != null ? String(data.id) : null;
+    if (data?.id != null) return String(data.id);
+
+    const { data: rowById } = await supabase
+      .from("classes")
+      .select("id, merchant_id, inventory_merchant_id, inventory_class_id")
+      .eq("id", t)
+      .maybeSingle();
+    if (rowById) {
+      const resolved = resolveViaInventoryPointer(rowById as Record<string, unknown>);
+      if (resolved) return resolved;
+    }
+    return null;
   }
+
   const lower = t.toLowerCase();
   const { data } = await supabase
     .from("classes")
@@ -62,6 +96,27 @@ async function resolveClassIdForMerchant(param: string, merchantId: string): Pro
       .eq("merchant_id", merchantId)
       .maybeSingle();
     if (exactCase?.id != null) return String(exactCase.id);
+  }
+
+  const { data: globalSlug } = await supabase
+    .from("classes")
+    .select("id, merchant_id, inventory_merchant_id, inventory_class_id")
+    .eq("slug", lower)
+    .maybeSingle();
+  if (globalSlug) {
+    const resolved = resolveViaInventoryPointer(globalSlug as Record<string, unknown>);
+    if (resolved) return resolved;
+  }
+  if (t !== lower) {
+    const { data: globalExact } = await supabase
+      .from("classes")
+      .select("id, merchant_id, inventory_merchant_id, inventory_class_id")
+      .eq("slug", t)
+      .maybeSingle();
+    if (globalExact) {
+      const resolved = resolveViaInventoryPointer(globalExact as Record<string, unknown>);
+      if (resolved) return resolved;
+    }
   }
   return null;
 }
