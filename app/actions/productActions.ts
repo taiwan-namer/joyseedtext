@@ -977,7 +977,16 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
       : undefined,
     price: row.price != null ? Number(row.price) : undefined,
     salePrice: row.sale_price != null ? Number(row.sale_price) : null,
-    addonPrices: Array.isArray(row.addon_prices) ? (row.addon_prices as { name: string; price: number }[]) : undefined,
+    addonPrices: Array.isArray(row.addon_prices)
+      ? (row.addon_prices as unknown[])
+          .map((x) => {
+            const o = x as Record<string, unknown>;
+            const name = String(o.name ?? "").trim();
+            const price = Number(o.price);
+            return { name, price: Number.isFinite(price) && price >= 0 ? price : 0 };
+          })
+          .filter((a) => a.name.length > 0)
+      : undefined,
     postContent: row.post_content != null ? String(row.post_content) : null,
     capacity: row.capacity !== undefined && row.capacity !== null ? Number(row.capacity) : undefined,
     marketplace_category:

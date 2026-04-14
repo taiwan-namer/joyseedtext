@@ -29,8 +29,8 @@ function getCalendarDays(year: number, month: number): (number | null)[] {
   return [...leading, ...days];
 }
 
-function isSafeMapEmbedHtml(raw: string): boolean {
-  const html = raw.trim().toLowerCase();
+function isSafeMapEmbedHtml(raw: unknown): boolean {
+  const html = String(raw ?? "").trim().toLowerCase();
   if (!html.includes("<iframe")) return false;
   if (!html.includes("https://")) return false;
   return true;
@@ -324,35 +324,35 @@ function CustomerNoticeSection({ notice }: { notice: CustomerNotice }) {
       <dl className="space-y-3 text-sm">
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">活動場域類型</dt>
-          <dd className="text-gray-800 ml-28">{notice.活動場域類型}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.活動場域類型 ?? "")}</dd>
         </div>
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">課程時段/長度</dt>
-          <dd className="text-gray-800 ml-28">{notice.課程時段長度}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.課程時段長度 ?? "")}</dd>
         </div>
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">教學語言</dt>
-          <dd className="text-gray-800 ml-28">{notice.教學語言}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.教學語言 ?? "")}</dd>
         </div>
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">家長陪同規則</dt>
-          <dd className="text-gray-800 ml-28">{notice.家長陪同規則}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.家長陪同規則 ?? "")}</dd>
         </div>
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">體驗成果</dt>
-          <dd className="text-gray-800 ml-28">{notice.體驗成果}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.體驗成果 ?? "")}</dd>
         </div>
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">費用包含項目</dt>
-          <dd className="text-gray-800 ml-28">{notice.費用包含項目}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.費用包含項目 ?? "")}</dd>
         </div>
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">寵物攜帶規定</dt>
-          <dd className="text-gray-800 ml-28">{notice.寵物攜帶規定}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.寵物攜帶規定 ?? "")}</dd>
         </div>
         <div>
           <dt className="text-gray-500 float-left w-28 shrink-0">師生比例</dt>
-          <dd className="text-gray-800 ml-28">{notice.師生比例}</dd>
+          <dd className="text-gray-800 ml-28">{String(notice.師生比例 ?? "")}</dd>
         </div>
         <div className="clear-left pt-2">
           <dt className="text-gray-500 mb-1">注意事項</dt>
@@ -375,7 +375,7 @@ function CustomerNoticeSection({ notice }: { notice: CustomerNotice }) {
         </div>
         <div className="clear-left pt-2 border-t border-gray-200">
           <dt className="text-gray-500 mb-1">活動成行條件</dt>
-          <dd className="text-gray-800">{notice.活動成行條件}</dd>
+          <dd className="text-gray-800">{String(notice.活動成行條件 ?? "")}</dd>
         </div>
       </dl>
     </div>
@@ -436,6 +436,45 @@ export default function CourseDetailPage() {
     return () => { cancelled = true; };
   }, [dateTimeModalOpen, course]);
 
+  const courseFaqList = useMemo(() => {
+    if (!course || !("courseFaqItems" in course)) return undefined;
+    const raw = (course as CourseForPublic).courseFaqItems;
+    if (!Array.isArray(raw)) return undefined;
+    return raw.filter(
+      (it): it is { question: string; answer: string } =>
+        !!it &&
+        typeof (it as { question?: unknown }).question === "string" &&
+        typeof (it as { answer?: unknown }).answer === "string"
+    );
+  }, [course]);
+
+  const { activityAddr, safeMapHtml, mapIframeSrc, showMapSection, hasTransport, nearbyTransportText } = useMemo(() => {
+    if (!course) {
+      return {
+        activityAddr: "",
+        safeMapHtml: null as string | null,
+        mapIframeSrc: null as string | null,
+        showMapSection: false,
+        hasTransport: false,
+        nearbyTransportText: "",
+      };
+    }
+    const cp = course as CourseForPublic;
+    const addr = String(cp.activityAddress ?? "").trim();
+    const rawHtml = String(cp.mapEmbedHtml ?? "").trim();
+    const safeHtml = rawHtml && isSafeMapEmbedHtml(rawHtml) ? rawHtml : null;
+    const iframeSrc = !safeHtml && addr ? googleMapsEmbedSrcFromAddress(addr) : null;
+    const transport = String(cp.nearbyTransport ?? "").trim();
+    return {
+      activityAddr: addr,
+      safeMapHtml: safeHtml,
+      mapIframeSrc: iframeSrc,
+      showMapSection: !!(addr || safeHtml || iframeSrc),
+      hasTransport: !!transport,
+      nearbyTransportText: transport,
+    };
+  }, [course]);
+
   if (!course) {
     if (courseMissing) {
       return (
@@ -459,29 +498,14 @@ export default function CourseDetailPage() {
   const basePrice = course.salePrice != null && course.price != null && course.salePrice < course.price
     ? course.salePrice
     : course.price ?? 0;
-  const addonTotal = course.addonPrices
-    ? selectedAddonIndices.reduce((sum, i) => sum + (course.addonPrices![i]?.price ?? 0), 0)
-    : 0;
+  const addonTotal =
+    Array.isArray(course.addonPrices) && course.addonPrices.length > 0
+      ? selectedAddonIndices.reduce((sum, i) => {
+          const p = Number(course.addonPrices![i]?.price);
+          return sum + (Number.isFinite(p) && p >= 0 ? p : 0);
+        }, 0)
+      : 0;
   const totalPrice = basePrice + addonTotal;
-
-  const courseFaqList =
-    "courseFaqItems" in course ? (course as CourseForPublic).courseFaqItems : undefined;
-
-  const { activityAddr, safeMapHtml, mapIframeSrc, showMapSection, hasTransport } = useMemo(() => {
-    const cp = course as CourseForPublic;
-    const addr = cp.activityAddress?.trim() ?? "";
-    const rawHtml = cp.mapEmbedHtml?.trim() ?? "";
-    const safeHtml = rawHtml && isSafeMapEmbedHtml(rawHtml) ? rawHtml : null;
-    const iframeSrc = !safeHtml && addr ? googleMapsEmbedSrcFromAddress(addr) : null;
-    const transport = cp.nearbyTransport?.trim() ?? "";
-    return {
-      activityAddr: addr,
-      safeMapHtml: safeHtml,
-      mapIframeSrc: iframeSrc,
-      showMapSection: !!(addr || safeHtml || iframeSrc),
-      hasTransport: !!transport,
-    };
-  }, [course]);
 
   const toggleAddon = (index: number) => {
     setSelectedAddonIndices((prev) =>
@@ -532,7 +556,7 @@ export default function CourseDetailPage() {
             </li>
             <li className="flex items-center gap-1">
               <ChevronRight className="w-4 h-4 shrink-0" />
-              <span className="text-gray-700">{course.title}</span>
+              <span className="text-gray-700">{String(course.title ?? "")}</span>
             </li>
           </ol>
         </nav>
@@ -549,10 +573,12 @@ export default function CourseDetailPage() {
                 )}
               </div>
               <div className="flex flex-col gap-2 w-20 shrink-0">
-                {"galleryUrls" in course && course.galleryUrls && course.galleryUrls.length > 0
+                {"galleryUrls" in course &&
+                Array.isArray(course.galleryUrls) &&
+                course.galleryUrls.length > 0
                   ? course.galleryUrls.slice(0, 4).map((url, i) => (
                       <div key={i} className="aspect-square rounded-lg bg-gray-200 overflow-hidden">
-                        <img src={url} alt="" className="w-full h-full object-cover" />
+                        <img src={String(url)} alt="" className="w-full h-full object-cover" />
                       </div>
                     ))
                   : Array.from({ length: thumbCount }).map((_, i) => (
@@ -596,9 +622,7 @@ export default function CourseDetailPage() {
                     >
                       <h2 className="mb-3 text-lg font-bold text-gray-900">地圖</h2>
                       {activityAddr ? (
-                        <p className="mb-4 whitespace-pre-line leading-relaxed text-gray-800">
-                          {(course as CourseForPublic).activityAddress}
-                        </p>
+                        <p className="mb-4 whitespace-pre-line leading-relaxed text-gray-800">{activityAddr}</p>
                       ) : null}
                       {safeMapHtml ? (
                         <div
@@ -625,9 +649,7 @@ export default function CourseDetailPage() {
                       aria-label="大眾交通"
                     >
                       <h2 className="mb-3 text-lg font-bold text-gray-900">大眾交通</h2>
-                      <p className="whitespace-pre-line leading-relaxed text-gray-800">
-                        {(course as CourseForPublic).nearbyTransport}
-                      </p>
+                      <p className="whitespace-pre-line leading-relaxed text-gray-800">{nearbyTransportText}</p>
                     </section>
                   ) : null}
                 </div>
@@ -670,9 +692,9 @@ export default function CourseDetailPage() {
                     : undefined) ??
                   (Array.isArray(course.ageTags) ? course.ageTags : undefined) ??
                   []
-                ).map((tag) => (
+                ).map((tag, tagIdx) => (
                   <span
-                    key={tag}
+                    key={`${tag}-${tagIdx}`}
                     className="inline-block px-3 py-1 text-sm text-gray-600 bg-gray-200 rounded-full"
                   >
                     {tag}
@@ -722,11 +744,14 @@ export default function CourseDetailPage() {
               )}
 
               {/* 加購價：可勾選，下方總計 */}
-              {course.addonPrices && course.addonPrices.length > 0 && (
+              {Array.isArray(course.addonPrices) && course.addonPrices.length > 0 && (
                 <div className="mb-6">
                   <p className="text-sm font-medium text-gray-700 mb-2">加購價</p>
                   <ul className="space-y-3">
-                    {course.addonPrices.map((addon, i) => (
+                    {course.addonPrices.map((addon, i) => {
+                      const addonPrice = Number(addon.price);
+                      const safeAddonPrice = Number.isFinite(addonPrice) && addonPrice >= 0 ? addonPrice : 0;
+                      return (
                       <li key={i} className="flex items-center gap-3">
                         <button
                           type="button"
@@ -739,10 +764,11 @@ export default function CourseDetailPage() {
                             <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                           )}
                         </button>
-                        <span className="flex-1 text-gray-700">{addon.name}</span>
-                        <span className="font-medium text-gray-900">+ NT$ {addon.price.toLocaleString()}</span>
+                        <span className="flex-1 text-gray-700">{String(addon.name ?? "")}</span>
+                        <span className="font-medium text-gray-900">+ NT$ {safeAddonPrice.toLocaleString()}</span>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <p className="flex justify-between items-center text-base font-bold text-gray-900">
@@ -754,7 +780,16 @@ export default function CourseDetailPage() {
                         課程 {basePrice.toLocaleString()}
                         {selectedAddonIndices.map((i) => {
                           const addon = course.addonPrices![i];
-                          return addon ? <span key={i}> + {addon.name}{addon.price}</span> : null;
+                          if (!addon) return null;
+                          const ap = Number(addon.price);
+                          const safeAp = Number.isFinite(ap) && ap >= 0 ? ap : 0;
+                          return (
+                            <span key={i}>
+                              {" "}
+                              + {String(addon.name ?? "")}
+                              {safeAp}
+                            </span>
+                          );
                         })}
                       </p>
                     )}

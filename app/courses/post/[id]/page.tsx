@@ -5,15 +5,16 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
-import { getCourseIntroPostById } from "@/app/actions/courseIntroActions";
-import { useParams, notFound } from "next/navigation";
+import { getCourseIntroPostById, type CourseIntroPost } from "@/app/actions/courseIntroActions";
+import { useParams } from "next/navigation";
 
 /** 手動新增的課程介紹文章詳情（無對應課程時點 READ MORE 進入此頁） */
 export default function CourseIntroPostPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : params.id?.[0];
   const { siteName } = useStoreSettings();
-  const [post, setPost] = useState<Awaited<ReturnType<typeof getCourseIntroPostById>>>(null);
+  /** undefined＝尚未載入；null＝查無文章（勿在 client 呼叫 notFound，會觸發 Application error） */
+  const [post, setPost] = useState<CourseIntroPost | null | undefined>(undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -24,7 +25,16 @@ export default function CourseIntroPostPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  if (!id) notFound();
+  if (!id) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4 px-4">
+        <p className="text-gray-700">找不到文章。</p>
+        <Link href="/courses/intro" className="text-amber-600 font-medium hover:underline">
+          回課程介紹
+        </Link>
+      </div>
+    );
+  }
   if (post === undefined) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -32,7 +42,16 @@ export default function CourseIntroPostPage() {
       </div>
     );
   }
-  if (post === null) notFound();
+  if (post === null) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4 px-4">
+        <p className="text-gray-700">找不到此文章或連結已失效。</p>
+        <Link href="/courses/intro" className="text-amber-600 font-medium hover:underline">
+          回課程介紹
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
