@@ -1571,13 +1571,19 @@ export async function getRollcallDatesWithCounts(): Promise<
 
     const countClassIds = Array.from(new Set(sources.map((s) => s.countClassId)));
 
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
     let countMap = new Map<string, number>();
     if (countClassIds.length > 0) {
-      const { data: countRows, error: countError } = await supabase
-        .from("bookings")
-        .select("class_id, slot_date, slot_time")
-        .in("class_id", countClassIds)
-        .in("status", ["paid", "completed"]);
+      const { data: countRows, error: countError } = await applyAdminBookingsAccess(
+        supabase
+          .from("bookings")
+          .select("class_id, slot_date, slot_time")
+          .in("class_id", countClassIds)
+          .in("status", ["paid", "completed"]),
+        access
+      );
 
       if (!countError && countRows) {
         for (const b of countRows) {
@@ -1686,11 +1692,17 @@ export async function getRollcallSessionsByDate(
 
     if (sessions.length === 0) return { success: true, data: [] };
 
-    const { data: countRows, error: countError } = await supabase
-      .from("bookings")
-      .select("class_id, slot_date, slot_time")
-      .in("class_id", countClassIds)
-      .in("status", ["paid", "completed"]);
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: countRows, error: countError } = await applyAdminBookingsAccess(
+      supabase
+        .from("bookings")
+        .select("class_id, slot_date, slot_time")
+        .in("class_id", countClassIds)
+        .in("status", ["paid", "completed"]),
+      access
+    );
 
     if (countError) return { success: false, error: countError.message };
 

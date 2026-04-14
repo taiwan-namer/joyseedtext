@@ -6,11 +6,11 @@ function envTrim(key: string): string {
 }
 
 /**
- * 後台／會員中心：可見訂單 = 庫存擁有者為本商家，或經由本商家網站售出（總站代銷）。
+ * 後台／會員中心：可見訂單 = 庫存擁有者、經由本商家售出，或開課商家快照為本商家（見 `class_creator_merchant_id`）。
  * 用於 Supabase .or() filter。
  */
 export function bookingsVisibleToMerchantOrFilter(merchantId: string): string {
-  return `merchant_id.eq.${merchantId},sold_via_merchant_id.eq.${merchantId}`;
+  return `merchant_id.eq.${merchantId},sold_via_merchant_id.eq.${merchantId},class_creator_merchant_id.eq.${merchantId}`;
 }
 
 /**
