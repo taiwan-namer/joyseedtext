@@ -6,17 +6,17 @@ function envTrim(key: string): string {
 }
 
 /**
- * 後台／會員中心：可見訂單 = 庫存擁有者、經由本商家售出，或開課商家快照為本商家（見 `class_creator_merchant_id`）。
- * 用於 Supabase .or() filter。
+ * 後台／會員中心：可見訂單（.or 任一成立即可）
+ * - 庫存擁有者、經由本商家售出（總站代銷）
+ * - `class_creator_merchant_id` 為本商家（與 DB 庫存課 `classes.merchant_id` 快照一致；補總站／舊資料寫入與前兩項不一致時仍應讓開課端後台看到）
  */
 export function bookingsVisibleToMerchantOrFilter(merchantId: string): string {
   return `merchant_id.eq.${merchantId},sold_via_merchant_id.eq.${merchantId},class_creator_merchant_id.eq.${merchantId}`;
 }
 
 /**
- * 歷史用途：曾僅依 `class_creator_merchant_id` 篩後台訂單；已改為**一律**併入
- * `merchant_id`／`sold_via_merchant_id`／庫存對應（見 `buildAdminBookingsOrClause`），
- * 否則總站代銷（庫存為老師、`sold_via` 為總站）會在分站後台被誤排除。
+ * 歷史用途：曾僅依 `class_creator_merchant_id` 篩後台訂單；現已併入
+ * `bookingsVisibleToMerchantOrFilter`（含 `class_creator_merchant_id`）與庫存對應（見 `buildAdminBookingsOrClause`）。
  */
 export function getOrderAdminClassCreatorMerchantIdFilter(): string | null {
   const v = envTrim("BOOKINGS_ORDER_ADMIN_CLASS_CREATOR_MERCHANT_ID");
@@ -28,8 +28,7 @@ export type AdminBookingsAccessFilter =
   | { mode: "merchant_scope"; orClause: string };
 
 /**
- * 後台訂單列／儀表板／匯出：與 `buildAdminBookingsOrClause` 一致（本店 merchant／sold_via、列表課庫存對應）。
- * 不再使用「僅 class_creator」模式，避免與總站下單實際寫入之 `merchant_id` 不一致。
+ * 後台訂單列／儀表板／匯出：與 `buildAdminBookingsOrClause` 一致（merchant／sold_via／class_creator、列表課庫存對應）。
  */
 export async function getAdminBookingsAccessFilter(
   supabase: SupabaseClient
@@ -60,7 +59,7 @@ export function getAdminBookingMerchantScope(): string[] {
 
 /**
  * 後台訂單列表專用：合併
- * 1) 範圍內各商家的 merchant_id／sold_via
+ * 1) 範圍內各商家的 merchant_id／sold_via／class_creator_merchant_id
  * 2) 各商家「列表課 → 庫存課」綁定所對應之庫存訂單（補 sold_via 為 null 的舊資料）
  */
 export async function buildAdminBookingsOrClause(supabase: SupabaseClient): Promise<string> {
