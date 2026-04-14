@@ -183,7 +183,7 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
     });
   }
   blocks.sort((a, b) => a.order - b.order);
-  return blocks.length > 0 ? blocks : getDefaultLayoutBlocks();
+  return blocks;
 }
 
 /** 舊版頂層 heroFloatingIcons：若 hero 區塊尚無 floatingIcons，讀取時併入 */

@@ -54,6 +54,7 @@ export default function AdminLayoutPage() {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [floatingEditViewport, setFloatingEditViewport] = useState<"desktop" | "mobile">("desktop");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const floatFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -71,7 +72,12 @@ export default function AdminLayoutPage() {
   useEffect(() => {
     Promise.all([getFrontendSettings(), getCoursesForHomepage()])
       .then(([s, coursesRes]) => {
-        setBlocks(s.layoutBlocks && s.layoutBlocks.length > 0 ? s.layoutBlocks : getDefaultLayoutBlocks());
+        const raw = s.layoutBlocks ?? [];
+        const nextBlocks =
+          raw.length > 0
+            ? [...raw].sort((a, b) => a.order - b.order).map((b, i) => ({ ...b, order: i }))
+            : [];
+        setBlocks(nextBlocks);
         setHeroImageUrl(s.heroImageUrl);
         setCarouselItems(s.carouselItems.length > 0 ? s.carouselItems : [
           { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
@@ -404,7 +410,48 @@ export default function AdminLayoutPage() {
                 navFaqLabel={navFaqLabel}
                 activities={activities}
                 fullWidthImageUrl={fullWidthImageUrl}
+                floatingIconsCoordinateMode="desktop"
               />
+            </div>
+            <div className="border-t border-gray-200 bg-white p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-700">手機版畫布預覽（可直接拖曳裝飾圖）</span>
+                <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                  <button
+                    type="button"
+                    onClick={() => setFloatingEditViewport("desktop")}
+                    className={`px-2 py-1 text-xs ${floatingEditViewport === "desktop" ? "bg-amber-500 text-white" : "bg-white text-gray-700"}`}
+                  >
+                    編輯桌機
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFloatingEditViewport("mobile")}
+                    className={`px-2 py-1 text-xs ${floatingEditViewport === "mobile" ? "bg-amber-500 text-white" : "bg-white text-gray-700"}`}
+                  >
+                    編輯手機
+                  </button>
+                </div>
+              </div>
+              <div className="mx-auto w-full max-w-[390px] overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                <LayoutCanvas
+                  blocks={blocks}
+                  selectedBlockId={selectedBlockId}
+                  onSelectBlock={setSelectedBlockId}
+                  onBlockResizeHeight={onBlockResizeHeight}
+                  onBlockFloatingIconsChange={onBlockFloatingIconsChange}
+                  heroImageUrl={heroImageUrl}
+                  carouselItems={carouselItems}
+                  aboutContent={aboutContent}
+                  navAboutLabel={navAboutLabel}
+                  navCoursesLabel={navCoursesLabel}
+                  navBookingLabel={navBookingLabel}
+                  navFaqLabel={navFaqLabel}
+                  activities={activities}
+                  fullWidthImageUrl={fullWidthImageUrl}
+                  floatingIconsCoordinateMode={floatingEditViewport}
+                />
+              </div>
             </div>
           </div>
 

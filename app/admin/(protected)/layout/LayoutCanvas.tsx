@@ -43,6 +43,7 @@ type LayoutCanvasProps = {
   navFaqLabel: string;
   activities: Activity[];
   fullWidthImageUrl: string | null;
+  floatingIconsCoordinateMode?: "desktop" | "mobile";
 };
 
 export default function LayoutCanvas({
@@ -60,6 +61,7 @@ export default function LayoutCanvas({
   navFaqLabel,
   activities,
   fullWidthImageUrl,
+  floatingIconsCoordinateMode = "desktop",
 }: LayoutCanvasProps) {
   const {
     siteName,
@@ -91,11 +93,11 @@ export default function LayoutCanvas({
         <div className="relative w-full">
           {inner}
           <div className="pointer-events-none absolute inset-0 z-[30]">
-            <HeroFloatingIconsLayer coordinateViewport="desktop" icons={icons} />
+            <HeroFloatingIconsLayer coordinateViewport={floatingIconsCoordinateMode} icons={icons} />
             {isSelected ? (
               <HeroFloatingIconsEditor
                 overlayMode
-                coordinateMode="desktop"
+                coordinateMode={floatingIconsCoordinateMode}
                 icons={icons}
                 onChange={(next) => onBlockFloatingIconsChange(block.id, next)}
               />
@@ -129,7 +131,7 @@ export default function LayoutCanvas({
         case "hero":
           return wrapWithFloats(<HeroSection heroImageUrl={heroImageUrl} />);
         case "hero_carousel":
-          return <HeroCarouselSection carouselList={carouselList} />;
+          return wrapWithFloats(<HeroCarouselSection carouselList={carouselList} />);
         case "featured_categories":
           return (
             <section className="py-10 px-4 bg-gray-50 text-center text-gray-600">
