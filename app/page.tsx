@@ -5,6 +5,7 @@ import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
 import FAQ from "./components/FAQ";
 import { HeaderMember } from "./components/HeaderMember";
 import HomeMarketplaceCoursesSection from "./components/home/HomeMarketplaceCoursesSection";
+import HeroFloatingIconsLayer from "./components/home/HeroFloatingIconsLayer";
 import { useStoreSettings } from "./providers/StoreSettingsProvider";
 import { useState, useEffect } from "react";
 import { getFrontendSettings } from "./actions/frontendSettingsActions";
@@ -114,6 +115,9 @@ export default function WonderVoyageHomePage() {
             <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
               <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none" aria-hidden />
+              {(getBlock("hero")?.floatingIcons?.length ?? 0) > 0 && (
+                <HeroFloatingIconsLayer icons={getBlock("hero")?.floatingIcons} />
+              )}
             </div>
           </section>
         )}

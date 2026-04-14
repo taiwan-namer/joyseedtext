@@ -10,6 +10,8 @@ type Props = {
   onResizeHeight: (heightPx: number | null) => void;
   children: React.ReactNode;
   blockLabel: string;
+  /** 子元件已自行鋪背景時勿在外層重複鋪圖 */
+  skipBackgroundImage?: boolean;
 };
 
 /** 畫布上的區塊外層：可點選、可拖曳底部改變高度 */
@@ -20,6 +22,7 @@ export default function BlockWrapper({
   onResizeHeight,
   children,
   blockLabel,
+  skipBackgroundImage = false,
 }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const startYRef = useRef(0);
@@ -62,9 +65,13 @@ export default function BlockWrapper({
 
   const blockStyle: React.CSSProperties = {
     minHeight: block.heightPx != null && block.heightPx > 0 ? block.heightPx : undefined,
-    backgroundImage: block.backgroundImageUrl ? `url(${block.backgroundImageUrl})` : undefined,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
+    ...(skipBackgroundImage || !block.backgroundImageUrl
+      ? {}
+      : {
+          backgroundImage: `url(${block.backgroundImageUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }),
   };
 
   return (
@@ -77,7 +84,9 @@ export default function BlockWrapper({
         role="button"
         tabIndex={0}
         onClick={(e) => {
-          if ((e.target as HTMLElement).closest("[data-resize-handle]")) return;
+          const t = e.target as HTMLElement;
+          if (t.closest("[data-resize-handle]")) return;
+          if (t.closest("[data-floating-icon-editor]")) return;
           onSelect();
         }}
         onKeyDown={(e) => {

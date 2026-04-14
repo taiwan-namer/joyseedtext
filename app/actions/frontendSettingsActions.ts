@@ -17,8 +17,15 @@ import {
   DEFAULT_HERO_TITLE,
   DEFAULT_NAV,
   DEFAULT_LAYOUT_ORDER,
+  LAYOUT_SECTION_LABELS,
   getDefaultLayoutBlocks,
+  parseHeroFloatingIcons,
+  serializeLayoutBlockForPersist,
 } from "@/app/lib/frontendSettingsShared";
+
+function persistLayoutBlocks(blocks: LayoutBlock[]): Record<string, unknown>[] {
+  return blocks.map((b) => serializeLayoutBlockForPersist(b));
+}
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -117,7 +124,7 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
         ? (raw.layout_order as unknown[]).filter((x): x is string => typeof x === "string")
         : DEFAULT_LAYOUT_ORDER,
       fullWidthImageUrl: typeof raw.fullWidthImageUrl === "string" ? raw.fullWidthImageUrl : null,
-      layoutBlocks: parseLayoutBlocks(raw.layout_blocks),
+      layoutBlocks: applyLegacyHeroFloatingIconsToBlocks(parseLayoutBlocks(raw.layout_blocks), raw),
     };
   } catch {
     return {
@@ -152,7 +159,9 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
 }
 
 function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
-  if (!Array.isArray(raw) || raw.length === 0) return getDefaultLayoutBlocks();
+  if (raw === undefined || raw === null) return getDefaultLayoutBlocks();
+  if (!Array.isArray(raw)) return getDefaultLayoutBlocks();
+  if (raw.length === 0) return [];
   const blocks: LayoutBlock[] = [];
   for (let i = 0; i < raw.length; i++) {
     const o = raw[i] as Record<string, unknown> | null;
@@ -160,10 +169,35 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
     const order = typeof o.order === "number" ? o.order : i;
     const heightPx = typeof o.heightPx === "number" && o.heightPx > 0 ? o.heightPx : null;
     const backgroundImageUrl = typeof o.backgroundImageUrl === "string" ? o.backgroundImageUrl : null;
-    blocks.push({ id: o.id, order, heightPx, backgroundImageUrl });
+    const enabled = o.enabled === false ? false : true;
+    const title = o.title != null && typeof o.title === "string" ? o.title : (LAYOUT_SECTION_LABELS[o.id] ?? null);
+    const floatingIcons = parseHeroFloatingIcons(o.floatingIcons);
+    blocks.push({
+      id: o.id,
+      order,
+      heightPx,
+      backgroundImageUrl,
+      enabled,
+      title,
+      floatingIcons: floatingIcons.length > 0 ? floatingIcons : undefined,
+    });
   }
   blocks.sort((a, b) => a.order - b.order);
   return blocks.length > 0 ? blocks : getDefaultLayoutBlocks();
+}
+
+/** 舊版頂層 heroFloatingIcons：若 hero 區塊尚無 floatingIcons，讀取時併入 */
+function applyLegacyHeroFloatingIconsToBlocks(
+  blocks: LayoutBlock[],
+  raw: Record<string, unknown>
+): LayoutBlock[] {
+  const legacy = parseHeroFloatingIcons(raw.heroFloatingIcons);
+  if (legacy.length === 0) return blocks;
+  return blocks.map((b) => {
+    if (b.id !== "hero") return b;
+    if ((b.floatingIcons?.length ?? 0) > 0) return b;
+    return { ...b, floatingIcons: legacy };
+  });
 }
 
 /** 更新畫布區塊（後台「首頁版面」儲存用）；會一併寫入 layout_order 以相容舊版 */
@@ -205,12 +239,7 @@ export async function updateLayoutBlocks(blocks: LayoutBlock[]): Promise<
       paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
       layout_order,
       fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-      layout_blocks: sorted.map((b) => ({
-        id: b.id,
-        order: b.order,
-        heightPx: b.heightPx,
-        backgroundImageUrl: b.backgroundImageUrl,
-      })),
+      layout_blocks: persistLayoutBlocks(sorted),
     };
     const { error } = await supabase
       .from("store_settings")
@@ -237,6 +266,21 @@ export async function uploadLayoutBlockBackground(formData: FormData): Promise<
   try {
     await verifyAdminSession();
     const url = await uploadOneToR2WithPrefix(formData, "background_image", "layout-bg");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 上傳首頁／區塊裝飾小圖至 R2（與 model 畫布一致，key：`float_image`） */
+export async function uploadHeroFloatingIcon(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "float_image", "hero-float");
     if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
     return { success: true, url };
   } catch (e) {
@@ -286,7 +330,16 @@ export async function updateLayoutOrder(order: string[]): Promise<
       fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
       layout_blocks: uniqueOrder.map((id, i) => {
         const b = existing.layoutBlocks.find((x) => x.id === id);
-        return b ? { id: b.id, order: i, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl } : { id, order: i, heightPx: null, backgroundImageUrl: null };
+        return b
+          ? serializeLayoutBlockForPersist({ ...b, order: i })
+          : serializeLayoutBlockForPersist({
+              id,
+              order: i,
+              heightPx: null,
+              backgroundImageUrl: null,
+              enabled: true,
+              title: LAYOUT_SECTION_LABELS[id] ?? null,
+            });
       }),
     };
     const { error } = await supabase
@@ -345,7 +398,7 @@ export async function updateFullWidthImageUrl(url: string | null): Promise<
       paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
       layout_order: existing.layoutOrder,
       fullWidthImageUrl: value,
-      layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
+      layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
     };
     const { error } = await supabase
       .from("store_settings")
@@ -465,7 +518,7 @@ export async function updateFrontendSettings(formData: FormData): Promise<
             atmBankCode: existing.atmBankCode ?? null,
             layout_order: existing.layoutOrder,
             fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
+            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
           },
           updated_at: new Date().toISOString(),
         },
@@ -524,7 +577,7 @@ export async function updateAboutPage(formData: FormData): Promise<
             atmBankCode: existing.atmBankCode ?? null,
             layout_order: existing.layoutOrder,
             fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
+            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
           },
           updated_at: new Date().toISOString(),
         },
@@ -608,7 +661,7 @@ export async function updateSeoSettings(formData: FormData): Promise<
             paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
             layout_order: existing.layoutOrder,
             fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
+            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
           },
           updated_at: new Date().toISOString(),
         },
@@ -696,7 +749,7 @@ export async function updatePaymentSettings(formData: FormData): Promise<
             paymentAtmEnabled,
             layout_order: existing.layoutOrder,
             fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: existing.layoutBlocks.map((b) => ({ id: b.id, order: b.order, heightPx: b.heightPx, backgroundImageUrl: b.backgroundImageUrl })),
+            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
           },
           updated_at: new Date().toISOString(),
         },

@@ -9,12 +9,14 @@ import {
   getFrontendSettings,
   updateLayoutBlocks,
   uploadLayoutBlockBackground,
+  uploadHeroFloatingIcon,
 } from "@/app/actions/frontendSettingsActions";
 import { getCoursesForHomepage } from "@/app/actions/productActions";
 import {
   LAYOUT_SECTION_IDS,
   LAYOUT_SECTION_LABELS,
   getDefaultLayoutBlocks,
+  type HeroFloatingIcon,
   type LayoutBlock,
 } from "@/app/lib/frontendSettingsShared";
 import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
@@ -35,6 +37,9 @@ const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
   courses: { href: "/admin", label: "商品管理（課程）" },
   courses_grid: { href: "/admin", label: "商品管理（課程）" },
   courses_list: { href: "/admin", label: "商品管理（課程）" },
+  featured_categories: { href: "/admin/frontend-settings", label: "前台設定（精選分類）" },
+  new_courses: { href: "/admin", label: "商品管理（課程）" },
+  popular_experiences: { href: "/admin", label: "商品管理（課程）" },
   about: { href: "/admin/about", label: "關於我們" },
   faq: { href: "/admin/faq", label: "常見問題" },
   contact: { href: "/admin/settings", label: "基本資料（聯絡資訊）" },
@@ -50,6 +55,7 @@ export default function AdminLayoutPage() {
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const floatFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 畫布用資料（與前台一致）
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
@@ -102,7 +108,17 @@ export default function AdminLayoutPage() {
 
   const addBlock = (sectionId: string) => {
     const nextOrder = blocks.length;
-    setBlocks([...blocks, { id: sectionId, order: nextOrder, heightPx: null, backgroundImageUrl: null }]);
+    setBlocks([
+      ...blocks,
+      {
+        id: sectionId,
+        order: nextOrder,
+        heightPx: null,
+        backgroundImageUrl: null,
+        enabled: true,
+        title: LAYOUT_SECTION_LABELS[sectionId] ?? null,
+      },
+    ]);
     setMessage(null);
   };
 
@@ -171,6 +187,46 @@ export default function AdminLayoutPage() {
     setBlocks((prev) =>
       prev.map((b) => (b.id === blockId ? { ...b, heightPx: heightPx && heightPx > 0 ? heightPx : null } : b))
     );
+  };
+
+  const onBlockFloatingIconsChange = (blockId: string, next: HeroFloatingIcon[]) => {
+    setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, floatingIcons: next } : b)));
+  };
+
+  const handleFloatingIconUpload = async (file: File) => {
+    if (selectedBlockId == null) return;
+    const index = getBlockIndex(selectedBlockId);
+    if (index < 0) return;
+    setUploadingBlockId(selectedBlockId);
+    setMessage(null);
+    const formData = new FormData();
+    formData.set("float_image", file);
+    try {
+      const result = await uploadHeroFloatingIcon(formData);
+      if (result.success) {
+        const newIcon: HeroFloatingIcon = {
+          id: `float-${Date.now()}`,
+          imageUrl: result.url,
+          leftPct: 50,
+          topPct: 40,
+          widthPx: 80,
+          zIndex: 0,
+          enabled: true,
+        };
+        setBlocks((prev) =>
+          prev.map((b, i) =>
+            i === index ? { ...b, floatingIcons: [...(b.floatingIcons ?? []), newIcon] } : b
+          )
+        );
+        setMessage({ type: "success", text: "裝飾圖已加入，請按「儲存版面」寫入資料庫" });
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof Error ? e.message : "上傳失敗" });
+    } finally {
+      setUploadingBlockId(null);
+    }
   };
 
   const handleBackgroundUpload = async (file: File) => {
@@ -338,6 +394,7 @@ export default function AdminLayoutPage() {
                 selectedBlockId={selectedBlockId}
                 onSelectBlock={setSelectedBlockId}
                 onBlockResizeHeight={onBlockResizeHeight}
+                onBlockFloatingIconsChange={onBlockFloatingIconsChange}
                 heroImageUrl={heroImageUrl}
                 carouselItems={carouselItems}
                 aboutContent={aboutContent}
@@ -435,6 +492,37 @@ export default function AdminLayoutPage() {
                   {selectedBlock.backgroundImageUrl ? "更換背景圖" : "上傳背景圖"}
                 </button>
               </div>
+
+              {selectedBlock.id === "hero" && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">首頁大圖裝飾圖（可拖曳位置）</label>
+                  <input
+                    ref={floatFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleFloatingIconUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => floatFileInputRef.current?.click()}
+                    disabled={uploadingBlockId === selectedBlockId}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                  >
+                    {uploadingBlockId === selectedBlockId ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    新增裝飾圖
+                  </button>
+                  <p className="text-[11px] text-gray-500 mt-1">上傳後於畫布拖曳調整位置，與 model 總站畫布行為一致。</p>
+                </div>
+              )}
             </div>
           )}
         </aside>

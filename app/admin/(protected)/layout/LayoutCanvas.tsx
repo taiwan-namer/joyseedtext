@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   HeroSection,
@@ -14,7 +15,9 @@ import {
 } from "@/app/components/home";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import BlockWrapper from "./BlockWrapper";
-import type { LayoutBlock } from "@/app/lib/frontendSettingsShared";
+import HeroFloatingIconsEditor from "./HeroFloatingIconsEditor";
+import HeroFloatingIconsLayer from "@/app/components/home/HeroFloatingIconsLayer";
+import type { HeroFloatingIcon, LayoutBlock } from "@/app/lib/frontendSettingsShared";
 import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 import { LAYOUT_SECTION_LABELS } from "@/app/lib/frontendSettingsShared";
@@ -30,6 +33,7 @@ type LayoutCanvasProps = {
   selectedBlockId: string | null;
   onSelectBlock: (id: string) => void;
   onBlockResizeHeight: (blockId: string, heightPx: number | null) => void;
+  onBlockFloatingIconsChange: (blockId: string, next: HeroFloatingIcon[]) => void;
   heroImageUrl: string | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;
@@ -46,6 +50,7 @@ export default function LayoutCanvas({
   selectedBlockId,
   onSelectBlock,
   onBlockResizeHeight,
+  onBlockFloatingIconsChange,
   heroImageUrl,
   carouselItems,
   aboutContent,
@@ -76,7 +81,29 @@ export default function LayoutCanvas({
 
   const renderSection = (block: LayoutBlock) => {
     const isSelected = selectedBlockId === block.id;
-    const label = LAYOUT_SECTION_LABELS[block.id] ?? block.id;
+    const label = block.title?.trim() || LAYOUT_SECTION_LABELS[block.id] || block.id;
+
+    const wrapWithFloats = (inner: ReactNode) => {
+      const icons = block.floatingIcons ?? [];
+      const showFloat = icons.length > 0;
+      if (!showFloat) return inner;
+      return (
+        <div className="relative w-full">
+          {inner}
+          <div className="pointer-events-none absolute inset-0 z-[30]">
+            <HeroFloatingIconsLayer coordinateViewport="desktop" icons={icons} />
+            {isSelected ? (
+              <HeroFloatingIconsEditor
+                overlayMode
+                coordinateMode="desktop"
+                icons={icons}
+                onChange={(next) => onBlockFloatingIconsChange(block.id, next)}
+              />
+            ) : null}
+          </div>
+        </div>
+      );
+    };
 
     const content = (() => {
       switch (block.id) {
@@ -87,8 +114,12 @@ export default function LayoutCanvas({
                 <h1 className="text-xl font-bold text-amber-600 shrink-0">{siteName}</h1>
                 <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0 overflow-x-auto scrollbar-hide text-sm text-gray-600">
                   <span className="whitespace-nowrap">{navAboutLabel || "關於我們"}</span>
-                  <Link href="/courses" className="whitespace-nowrap hover:text-amber-600">{navCoursesLabel || "課程介紹"}</Link>
-                  <Link href="/course/booking" className="whitespace-nowrap hover:text-amber-600">{navBookingLabel || "課程預約"}</Link>
+                  <Link href="/courses" className="whitespace-nowrap hover:text-amber-600">
+                    {navCoursesLabel || "課程介紹"}
+                  </Link>
+                  <Link href="/course/booking" className="whitespace-nowrap hover:text-amber-600">
+                    {navBookingLabel || "課程預約"}
+                  </Link>
                   <span className="whitespace-nowrap">{navFaqLabel || "常見問題"}</span>
                   <span className="whitespace-nowrap text-gray-400">登入</span>
                 </div>
@@ -96,9 +127,15 @@ export default function LayoutCanvas({
             </header>
           );
         case "hero":
-          return <HeroSection heroImageUrl={heroImageUrl} />;
+          return wrapWithFloats(<HeroSection heroImageUrl={heroImageUrl} />);
         case "hero_carousel":
           return <HeroCarouselSection carouselList={carouselList} />;
+        case "featured_categories":
+          return (
+            <section className="py-10 px-4 bg-gray-50 text-center text-gray-600">
+              <p className="text-sm text-gray-500">精選課程分館（前台完整版將與總站一致）</p>
+            </section>
+          );
         case "carousel":
         case "carousel_2":
           return <CarouselSection carouselList={carouselList} />;
@@ -110,6 +147,20 @@ export default function LayoutCanvas({
           return <CoursesSection activities={activities} variant="grid" />;
         case "courses_list":
           return <CoursesSection activities={activities} variant="list" />;
+        case "new_courses":
+          return (
+            <section className="py-10 px-4 bg-white text-center">
+              <p className="text-sm text-gray-500">新上架課程（與熱門課程同資料來源；樣式可於前台擴充）</p>
+              <CoursesSection activities={activities} variant="carousel" />
+            </section>
+          );
+        case "popular_experiences":
+          return (
+            <section className="py-10 px-4 bg-gray-50 text-center">
+              <p className="text-sm text-gray-500">熱門體驗（與熱門課程同資料來源；樣式可於前台擴充）</p>
+              <CoursesSection activities={activities} variant="grid" />
+            </section>
+          );
         case "about":
           return (
             <AboutSection
@@ -161,7 +212,7 @@ export default function LayoutCanvas({
 
   return (
     <div className="w-full space-y-0 bg-gray-50 rounded-b-lg">
-      {blocks.map((block) => renderSection(block))}
+      {blocks.filter((b) => b.enabled !== false).map((block) => renderSection(block))}
     </div>
   );
 }
