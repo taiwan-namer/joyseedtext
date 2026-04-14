@@ -439,22 +439,18 @@ export default function CourseDetailPage() {
   const courseFaqList =
     "courseFaqItems" in course ? (course as CourseForPublic).courseFaqItems : undefined;
 
-  const { activityAddr, mapFromAddress, legacyMapHtml, showMapSection, hasTransport } = useMemo(() => {
+  const { activityAddr, safeMapHtml, mapIframeSrc, showMapSection, hasTransport } = useMemo(() => {
     const cp = course as CourseForPublic;
     const addr = cp.activityAddress?.trim() ?? "";
-    const fromAddr = addr ? googleMapsEmbedSrcFromAddress(addr) : null;
-    const legacy =
-      !fromAddr &&
-      cp.mapEmbedHtml?.trim() &&
-      isSafeMapEmbedHtml(cp.mapEmbedHtml)
-        ? cp.mapEmbedHtml
-        : null;
+    const rawHtml = cp.mapEmbedHtml?.trim() ?? "";
+    const safeHtml = rawHtml && isSafeMapEmbedHtml(rawHtml) ? rawHtml : null;
+    const iframeSrc = !safeHtml && addr ? googleMapsEmbedSrcFromAddress(addr) : null;
     const transport = cp.nearbyTransport?.trim() ?? "";
     return {
       activityAddr: addr,
-      mapFromAddress: fromAddr,
-      legacyMapHtml: legacy,
-      showMapSection: !!addr || !!fromAddr || !!legacy,
+      safeMapHtml: safeHtml,
+      mapIframeSrc: iframeSrc,
+      showMapSection: !!(addr || safeHtml || iframeSrc),
       hasTransport: !!transport,
     };
   }, [course]);
@@ -576,10 +572,15 @@ export default function CourseDetailPage() {
                           {(course as CourseForPublic).activityAddress}
                         </p>
                       ) : null}
-                      {mapFromAddress ? (
+                      {safeMapHtml ? (
+                        <div
+                          className="overflow-hidden rounded-xl border border-gray-200"
+                          dangerouslySetInnerHTML={{ __html: stripGoogleFontsFromHtml(safeMapHtml) }}
+                        />
+                      ) : mapIframeSrc ? (
                         <div className="aspect-video w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
                           <iframe
-                            src={mapFromAddress}
+                            src={mapIframeSrc}
                             title="地圖"
                             className="h-full min-h-[220px] w-full border-0"
                             allowFullScreen
@@ -587,11 +588,6 @@ export default function CourseDetailPage() {
                             referrerPolicy="no-referrer-when-downgrade"
                           />
                         </div>
-                      ) : legacyMapHtml ? (
-                        <div
-                          className="overflow-hidden rounded-xl border border-gray-200"
-                          dangerouslySetInnerHTML={{ __html: stripGoogleFontsFromHtml(legacyMapHtml) }}
-                        />
                       ) : null}
                     </section>
                   ) : null}

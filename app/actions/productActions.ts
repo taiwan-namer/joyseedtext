@@ -15,6 +15,7 @@ import {
   normalizeCourseSlugInput,
   slugifyCourseTitle,
 } from "@/lib/courseSlug";
+import { googleMapsIframeHtmlFromAddress } from "@/lib/googleMapsEmbed";
 
 /** 首頁課程列表等快取：與 model 對齊之集中 revalidate（joyseed 目前以 path 為主） */
 export async function revalidateHomepageCoursesListCache(): Promise<void> {
@@ -624,7 +625,10 @@ export async function createCourseFull(formData: FormData): Promise<
     const city_district = (formData.get("city_district") as string)?.trim() || null;
     const activity_address = (formData.get("activity_address") as string)?.trim() || null;
     const map_embed_html_raw = (formData.get("map_embed_html") as string)?.trim() ?? "";
-    const map_embed_html = map_embed_html_raw || null;
+    let map_embed_html: string | null = map_embed_html_raw || null;
+    if (!map_embed_html && activity_address) {
+      map_embed_html = googleMapsIframeHtmlFromAddress(activity_address);
+    }
     const nearby_transport = (formData.get("nearby_transport") as string)?.trim() || null;
     const inventory_merchant_id = (formData.get("inventory_merchant_id") as string)?.trim() || null;
     const inventory_class_id_raw = (formData.get("inventory_class_id") as string)?.trim() || null;
@@ -1320,7 +1324,10 @@ export async function updateCourseFull(
     const city_district = (formData.get("city_district") as string)?.trim() || null;
     const activity_address = (formData.get("activity_address") as string)?.trim() || null;
     const map_embed_html_raw = (formData.get("map_embed_html") as string)?.trim() ?? "";
-    const map_embed_html = map_embed_html_raw || null;
+    let map_embed_html: string | null = map_embed_html_raw || null;
+    if (!map_embed_html && activity_address) {
+      map_embed_html = googleMapsIframeHtmlFromAddress(activity_address);
+    }
     const nearby_transport = (formData.get("nearby_transport") as string)?.trim() || null;
     const inventory_merchant_id = (formData.get("inventory_merchant_id") as string)?.trim() || null;
     const inventory_class_id_raw = (formData.get("inventory_class_id") as string)?.trim() || null;

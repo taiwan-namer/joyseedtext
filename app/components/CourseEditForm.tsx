@@ -10,6 +10,7 @@ import {
   type MerchantSummaryRow,
 } from "@/app/actions/productActions";
 import { suggestCourseSlugFromTitle } from "@/app/actions/courseSlugSuggest";
+import { uploadCourseEditorImage } from "@/app/actions/courseEditorImageActions";
 import { Loader2, ChevronRight, ChevronLeft, ChevronRight as ChevronRightArrow, X, Plus } from "lucide-react";
 
 /** 與 DB 總站課程 merchant_id 一致（build 時寫入）；用於總站專屬 UI（自動產碼等） */
@@ -36,6 +37,7 @@ import {
 } from "@/lib/sidebarAgeOption";
 import { getDistrictsForCity } from "@/lib/taiwanDistricts";
 import { slugifyCourseTitle } from "@/lib/courseSlug";
+import { googleMapsIframeHtmlFromAddress } from "@/lib/googleMapsEmbed";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i + 9); // 9～21
@@ -213,7 +215,9 @@ function DateTimeModal({
             </div>
           </div>
           <div>
-            <h3 className="mb-2 text-sm font-medium text-gray-700">選擇時間（9:00～21:00，分為 00 / 10 / 20 / 30 / 40 / 50）</h3>
+            <p className="mb-2 text-sm text-gray-700 leading-relaxed">
+              注意：如同一天需新增多個課程需選完時間後點選下方新增便可在同一天新增課程
+            </p>
             <div
               className="flex items-stretch justify-center gap-0 rounded-xl border border-gray-200 bg-gray-50/50 p-3 overflow-visible"
               style={{ minHeight: WHEEL_ITEM_HEIGHT * 3 }}
@@ -335,6 +339,9 @@ export default function CourseEditForm({
   const [slugInput, setSlugInput] = useState(() => initialData?.slug ?? slugifyCourseTitle(initialData?.title ?? ""));
   const slugManuallyEditedRef = useRef(false);
   const slugSuggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapEmbedAutoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** true＝使用者曾編輯過「地圖嵌入 HTML」，地址變更不再自動覆寫（清空該欄後恢復） */
+  const mapEmbedUserEditedRef = useRef(false);
   const [merchants, setMerchants] = useState<MerchantSummaryRow[]>([]);
   const [selectedCreateMerchantId, setSelectedCreateMerchantId] = useState(siteHqMerchantId);
   const districtOptions = useMemo(() => getDistrictsForCity(cityRegion), [cityRegion]);
@@ -352,6 +359,8 @@ export default function CourseEditForm({
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const editorRef = useRef<HTMLDivElement>(null);
   const postContentHiddenRef = useRef<HTMLInputElement>(null);
+  const editorImageInputRef = useRef<HTMLInputElement>(null);
+  const [editorImageUploading, setEditorImageUploading] = useState(false);
   const imageSlotsRef = useRef(imageSlots);
   imageSlotsRef.current = imageSlots;
 
@@ -380,8 +389,25 @@ export default function CourseEditForm({
   useEffect(() => {
     setActivityAddress(initialData?.activity_address ?? "");
     setNearbyTransport(initialData?.nearby_transport ?? "");
-    setMapEmbedHtml(initialData?.map_embed_html ?? "");
+    const dbMap = (initialData?.map_embed_html ?? "").trim();
+    const addr = (initialData?.activity_address ?? "").trim();
+    if (dbMap) {
+      setMapEmbedHtml(initialData?.map_embed_html ?? "");
+      mapEmbedUserEditedRef.current = true;
+    } else if (addr) {
+      setMapEmbedHtml(googleMapsIframeHtmlFromAddress(addr) ?? "");
+      mapEmbedUserEditedRef.current = false;
+    } else {
+      setMapEmbedHtml("");
+      mapEmbedUserEditedRef.current = false;
+    }
   }, [initialData?.activity_address, initialData?.nearby_transport, initialData?.map_embed_html]);
+
+  useEffect(() => {
+    return () => {
+      if (mapEmbedAutoTimerRef.current != null) clearTimeout(mapEmbedAutoTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setSlugInput(initialData?.slug ?? slugifyCourseTitle(initialData?.title ?? ""));
@@ -594,6 +620,36 @@ export default function CourseEditForm({
     if (postContentHiddenRef.current) postContentHiddenRef.current.value = el.innerHTML;
   };
 
+  const handleEditorImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setEditorImageUploading(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("editor_image", file);
+      const result = await uploadCourseEditorImage(fd);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      const el = editorRef.current;
+      if (!el) return;
+      const img = document.createElement("img");
+      img.src = result.url;
+      img.alt = "";
+      img.style.maxWidth = "100%";
+      img.style.height = "auto";
+      img.style.display = "block";
+      img.style.margin = "0.5rem 0";
+      document.execCommand("insertHTML", false, img.outerHTML);
+      if (postContentHiddenRef.current) postContentHiddenRef.current.value = el.innerHTML;
+    } finally {
+      setEditorImageUploading(false);
+    }
+  };
+
   const applyFormat = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value ?? undefined);
     editorRef.current?.focus();
@@ -716,17 +772,33 @@ export default function CourseEditForm({
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={editorImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="hidden"
+                      disabled={isPending || editorImageUploading}
+                      onChange={handleEditorImageFile}
+                    />
+                    <button
+                      type="button"
+                      className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                      onClick={() => editorImageInputRef.current?.click()}
+                      disabled={isPending || editorImageUploading}
+                    >
+                      {editorImageUploading ? "上傳中…" : "上傳圖片"}
+                    </button>
                     {[1, 2, 3, 4, 5].map((n) => (
-                      <button key={n} type="button" className="rounded bg-gray-100 px-2 py-1 text-sm hover:bg-gray-200" onClick={() => insertImage(n)} disabled={isPending}>插入圖片{n}</button>
+                      <button key={n} type="button" className="rounded bg-gray-100 px-2 py-1 text-sm hover:bg-gray-200" onClick={() => insertImage(n)} disabled={isPending || editorImageUploading}>插入圖片{n}</button>
                     ))}
-                    <span className="text-xs text-gray-500 self-center">圖片1＝主圖，圖片2～5＝圖1～圖4</span>
+                    <span className="text-xs text-gray-500 self-center">上傳圖片可插入自訂圖；圖片1＝主圖，圖片2～5＝圖1～圖4</span>
                   </div>
                 </div>
                 <div
                   ref={editorRef}
                   contentEditable={!isPending}
                   className="min-h-[200px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-                  data-placeholder="輸入內文，點「插入圖片1」～「插入圖片5」可插入對應圖片（主圖、圖1～圖4），前台 READ MORE 會顯示實際圖片。"
+                  data-placeholder="輸入內文；「上傳圖片」可插入自訂圖，或點「插入圖片1」～「插入圖片5」對應主圖與圖1～圖4，前台 READ MORE 會顯示實際圖片。"
                 />
                 <input ref={postContentHiddenRef} type="hidden" name="post_content" />
               </div>
@@ -834,27 +906,47 @@ export default function CourseEditForm({
                     <input
                       type="text"
                       value={activityAddress}
-                      onChange={(e) => setActivityAddress(e.target.value)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setActivityAddress(v);
+                        if (mapEmbedAutoTimerRef.current != null) clearTimeout(mapEmbedAutoTimerRef.current);
+                        mapEmbedAutoTimerRef.current = setTimeout(() => {
+                          mapEmbedAutoTimerRef.current = null;
+                          if (mapEmbedUserEditedRef.current) return;
+                          const t = v.trim();
+                          setMapEmbedHtml(t ? googleMapsIframeHtmlFromAddress(t) ?? "" : "");
+                        }, 450);
+                      }}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
                       placeholder="例如：台北市士林區士商路150號"
                       disabled={isPending}
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      前台會依此地址自動嵌入 Google 地圖；若無地址但有下方「地圖嵌入 HTML」，仍會顯示地圖。
+                      僅填地址即可：下方「地圖嵌入 HTML」會自動帶入 Google 地圖 iframe，前台優先顯示；亦可自行改貼官方嵌入碼。
                     </p>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">地圖嵌入 HTML（選填）</label>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">地圖嵌入 HTML（選填，可自動產生）</label>
                     <textarea
                       value={mapEmbedHtml}
-                      onChange={(e) => setMapEmbedHtml(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val.trim()) {
+                          mapEmbedUserEditedRef.current = false;
+                          const a = activityAddress.trim();
+                          setMapEmbedHtml(a ? googleMapsIframeHtmlFromAddress(a) ?? "" : "");
+                        } else {
+                          mapEmbedUserEditedRef.current = true;
+                          setMapEmbedHtml(val);
+                        }
+                      }}
                       rows={5}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
-                      placeholder="貼上 Google Maps 等 iframe 完整 HTML（需含 https）"
+                      placeholder="留空時會依「活動詳細地址」自動產生；或貼上 Google Maps iframe（需含 https）"
                       disabled={isPending}
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      與總站共用同一欄位；從總站複製課程時請在此確認或貼上 iframe，避免儲存時被清空。
+                      與總站共用欄位；儲存時若此欄為空且有地址，後台仍會寫入自動產生的嵌入碼。
                     </p>
                   </div>
                   <div>
@@ -885,7 +977,7 @@ export default function CourseEditForm({
                   </button>
                 </div>
                 <p className="mb-3 text-xs text-gray-500">
-                  與全站 FAQ（後台「常見問題」）不同；此處僅屬本課程，資料存於資料庫 <code className="rounded bg-gray-100 px-1">course_faq_items</code>，總站與分站共用同一欄位。
+                  與全站 FAQ（後台「常見問題」）不同；此處僅屬本課程。
                 </p>
                 <div className="space-y-3">
                   {courseFaqItems.map((item, i) => (
@@ -943,7 +1035,6 @@ export default function CourseEditForm({
               <div className="md:sticky md:top-24 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">適齡區間（歲）</label>
-                  <p className="mb-2 text-xs text-gray-500">左小右大，例如 2 與 4 會存成「2-4歲」並寫入資料庫選項欄位。</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="number"
@@ -1058,10 +1149,6 @@ export default function CourseEditForm({
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    選項僅來自總站 <code className="rounded bg-gray-100 px-1">store_settings.global_categories</code>
-                    （與前台課程列表主題篩選相同）；總站增刪主題後，此處會跟著變更。若本課程為舊分類且已自總站移除，仍會暫時顯示在選單末供你改選。
-                  </p>
                 </div>
                 {showHqCourseAdminUi ? (
                   <div className="mb-4">
@@ -1204,8 +1291,7 @@ export default function CourseEditForm({
                   </>
                 ) : null}
                 <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
-                  <h3 className="mb-1 text-sm font-semibold text-gray-800">選擇時間（課程可預約場次）</h3>
-                  <p className="mb-3 text-xs text-gray-500">以下僅顯示此課程已設定的日期與時間，顧客前台報名時也只會看到這些選項。</p>
+                  <h3 className="mb-3 text-sm font-semibold text-gray-800">選擇時間（課程可預約場次）</h3>
                   <button
                     type="button"
                     onClick={() => setDateTimeModalOpen(true)}
@@ -1247,7 +1333,6 @@ export default function CourseEditForm({
                     <p className="mt-2 text-xs text-gray-500">已設定 {scheduledSlots.length} 個場次</p>
                   )}
                 </div>
-                <p className="mb-4 text-xs text-gray-500">人數名額請在上方「選擇時間」新增場次時設定，每個場次可設不同名額。</p>
                 <div className="space-y-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
