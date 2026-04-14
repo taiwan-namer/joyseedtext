@@ -10,18 +10,25 @@ import { uploadOneToR2, uploadOneToR2WithPrefix } from "@/app/actions/productAct
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import {
   type CarouselItem,
+  type FeaturedCategory,
   type FrontendSettings,
   type LayoutBlock,
   DEFAULT_MEMBER_ICON_URLS,
   DEFAULT_CAROUSEL,
+  DEFAULT_FEATURED_CATEGORIES,
   DEFAULT_HERO_TITLE,
   DEFAULT_NAV,
   DEFAULT_LAYOUT_ORDER,
+  DEFAULT_ABOUT_PAGE_URL,
   LAYOUT_SECTION_LABELS,
   getDefaultLayoutBlocks,
+  normalizeAboutPageUrl,
   parseHeroFloatingIcons,
+  parsePageBackgroundExtensionColor,
+  persistFrontendSettingsBase,
   serializeLayoutBlockForPersist,
 } from "@/app/lib/frontendSettingsShared";
+import { parseAgreementDocumentsFromRaw, parseAgreementLabelsFromRaw } from "@/lib/agreementDocuments";
 
 function persistLayoutBlocks(blocks: LayoutBlock[]): Record<string, unknown>[] {
   return blocks.map((b) => serializeLayoutBlockForPersist(b));
@@ -32,130 +39,45 @@ function envTrim(key: string): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-/**
- * 取得本分站前台設定（首頁大圖、輪播、`layout_blocks` 畫布等）。
- * 查詢 `store_settings.merchant_id === NEXT_PUBLIC_CLIENT_ID`，非總站 `"model"`。
- */
-export async function getFrontendSettings(): Promise<FrontendSettings> {
-  unstable_noStore();
-  try {
-    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
-    const { createServerSupabase } = await import("@/lib/supabase/server");
-    const supabase = createServerSupabase();
-    const { data, error } = await supabase
-      .from("store_settings")
-      .select("frontend_settings")
-      .eq("merchant_id", merchantId || "")
-      .maybeSingle();
-    if (error || !data?.frontend_settings) {
-      return {
-        heroImageUrl: null,
-        heroTitle: DEFAULT_HERO_TITLE,
-        carouselItems: DEFAULT_CAROUSEL,
-        navAboutLabel: DEFAULT_NAV.about,
-        navCoursesLabel: DEFAULT_NAV.courses,
-        navBookingLabel: DEFAULT_NAV.booking,
-        navFaqLabel: DEFAULT_NAV.faq,
-        memberIconGallery: DEFAULT_MEMBER_ICON_URLS,
-        memberIconSelectedIndex: 0,
-        aboutContent: null,
-        seoTitle: null,
-        seoKeywords: null,
-        seoDescription: null,
-        seoFaviconUrl: null,
-        linePayApi: null,
-        thirdPartyApi: null,
-        atmBankName: null,
-        atmBankCode: null,
-        atmBankAccount: null,
-        paymentNewebpayEnabled: false,
-        paymentEcpayEnabled: false,
-        paymentLinepayEnabled: false,
-        paymentAtmEnabled: false,
-        layoutOrder: DEFAULT_LAYOUT_ORDER,
-        fullWidthImageUrl: null,
-        layoutBlocks: getDefaultLayoutBlocks(),
-      };
-    }
-    const raw = data.frontend_settings as Record<string, unknown>;
-    const items = Array.isArray(raw.carouselItems)
-      ? (raw.carouselItems as unknown[]).map((x: unknown, i: number) => {
-          const o = x as Record<string, unknown>;
-          return {
-            id: typeof o.id === "string" ? o.id : `w${i + 1}`,
-            title: typeof o.title === "string" ? o.title : "",
-            subtitle: typeof o.subtitle === "string" ? o.subtitle : "",
-            imageUrl: o.imageUrl != null ? String(o.imageUrl) : null,
-            visible: o.visible === false ? false : true,
-          };
-        })
-      : DEFAULT_CAROUSEL;
-    const gallery = Array.isArray(raw.memberIconGallery) && (raw.memberIconGallery as unknown[]).length > 0
-      ? (raw.memberIconGallery as unknown[]).filter((u): u is string => typeof u === "string")
-      : DEFAULT_MEMBER_ICON_URLS;
-    const selectedIndex = typeof raw.memberIconSelectedIndex === "number"
-      ? Math.max(0, Math.min(raw.memberIconSelectedIndex, gallery.length - 1))
-      : 0;
-    return {
-      heroImageUrl: raw.heroImageUrl != null ? String(raw.heroImageUrl) : null,
-      heroTitle: raw.heroTitle != null ? String(raw.heroTitle) : DEFAULT_HERO_TITLE,
-      carouselItems: items.length > 0 ? items : DEFAULT_CAROUSEL,
-      navAboutLabel: typeof raw.navAboutLabel === "string" && raw.navAboutLabel.trim() ? raw.navAboutLabel.trim() : DEFAULT_NAV.about,
-      navCoursesLabel: typeof raw.navCoursesLabel === "string" && raw.navCoursesLabel.trim() ? raw.navCoursesLabel.trim() : DEFAULT_NAV.courses,
-      navBookingLabel: typeof raw.navBookingLabel === "string" && raw.navBookingLabel.trim() ? raw.navBookingLabel.trim() : DEFAULT_NAV.booking,
-      navFaqLabel: typeof raw.navFaqLabel === "string" && raw.navFaqLabel.trim() ? raw.navFaqLabel.trim() : DEFAULT_NAV.faq,
-      memberIconGallery: gallery,
-      memberIconSelectedIndex: gallery.length > 0 ? selectedIndex : 0,
-      aboutContent: typeof raw.aboutContent === "string" ? raw.aboutContent : null,
-      seoTitle: typeof raw.seoTitle === "string" ? raw.seoTitle : null,
-      seoKeywords: typeof raw.seoKeywords === "string" ? raw.seoKeywords : null,
-      seoDescription: typeof raw.seoDescription === "string" ? raw.seoDescription : null,
-      seoFaviconUrl: typeof raw.seoFaviconUrl === "string" ? raw.seoFaviconUrl : null,
-      linePayApi: typeof raw.linePayApi === "string" ? raw.linePayApi : null,
-      thirdPartyApi: typeof raw.thirdPartyApi === "string" ? raw.thirdPartyApi : null,
-      atmBankName: typeof raw.atmBankName === "string" ? raw.atmBankName : null,
-      atmBankAccount: typeof raw.atmBankAccount === "string" ? raw.atmBankAccount : null,
-      atmBankCode: raw.atmBankCode != null ? String(raw.atmBankCode) : null,
-      paymentNewebpayEnabled: raw.paymentNewebpayEnabled === true,
-      paymentEcpayEnabled: raw.paymentEcpayEnabled === true,
-      paymentLinepayEnabled: raw.paymentLinepayEnabled === true,
-      paymentAtmEnabled: raw.paymentAtmEnabled === true,
-      layoutOrder: Array.isArray(raw.layout_order) && (raw.layout_order as unknown[]).length > 0
-        ? (raw.layout_order as unknown[]).filter((x): x is string => typeof x === "string")
-        : DEFAULT_LAYOUT_ORDER,
-      fullWidthImageUrl: typeof raw.fullWidthImageUrl === "string" ? raw.fullWidthImageUrl : null,
-      layoutBlocks: applyLegacyHeroFloatingIconsToBlocks(parseLayoutBlocks(raw.layout_blocks), raw),
-    };
-  } catch {
-    return {
-      heroImageUrl: null,
-      heroTitle: DEFAULT_HERO_TITLE,
-      carouselItems: DEFAULT_CAROUSEL,
-      navAboutLabel: DEFAULT_NAV.about,
-      navCoursesLabel: DEFAULT_NAV.courses,
-      navBookingLabel: DEFAULT_NAV.booking,
-      navFaqLabel: DEFAULT_NAV.faq,
-      memberIconGallery: DEFAULT_MEMBER_ICON_URLS,
-      memberIconSelectedIndex: 0,
-      aboutContent: null,
-      seoTitle: null,
-      seoKeywords: null,
-      seoDescription: null,
-      seoFaviconUrl: null,
-      linePayApi: null,
-      thirdPartyApi: null,
-      atmBankName: null,
-      atmBankAccount: null,
-      atmBankCode: null,
-      paymentNewebpayEnabled: false,
-      paymentEcpayEnabled: false,
-      paymentLinepayEnabled: false,
-      paymentAtmEnabled: false,
-      layoutOrder: DEFAULT_LAYOUT_ORDER,
-      fullWidthImageUrl: null,
-      layoutBlocks: getDefaultLayoutBlocks(),
-    };
+function normalizeUploadedAssetUrl(url: string | null | undefined, uploadKeyHint: string): string | null {
+  const u = typeof url === "string" ? url.trim() : "";
+  if (!u) return null;
+  if (!u.toLowerCase().includes(uploadKeyHint.toLowerCase())) return null;
+  return u;
+}
+
+function normalizeHomeCarouselMidStripUrl(url: string | null | undefined): string | null {
+  return (
+    normalizeUploadedAssetUrl(url, "home_carousel_mid_strip") ??
+    normalizeUploadedAssetUrl(url, "home_carousel_section_bg") ??
+    normalizeUploadedAssetUrl(url, "home_mid_section_bg")
+  );
+}
+
+function parseFeaturedCategories(raw: unknown): FeaturedCategory[] {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_FEATURED_CATEGORIES;
+  const list: FeaturedCategory[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const o = (raw[i] as Record<string, unknown>) ?? {};
+    if (typeof o.id !== "string" || typeof o.name !== "string") continue;
+    const link = typeof o.link === "string" ? o.link : `/courses?category=${encodeURIComponent(String(o.name))}`;
+    const enabled = o.enabled === false ? false : true;
+    const order = typeof o.order === "number" ? o.order : i;
+    list.push({
+      id: o.id,
+      name: o.name,
+      link,
+      imageUrl: normalizeUploadedAssetUrl(o.imageUrl != null ? String(o.imageUrl) : null, "category_image"),
+      hoverImageUrl: normalizeUploadedAssetUrl(
+        o.hoverImageUrl != null ? String(o.hoverImageUrl) : null,
+        "category_hover_image"
+      ),
+      enabled,
+      order,
+    });
   }
+  list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return list.length > 0 ? list : DEFAULT_FEATURED_CATEGORIES;
 }
 
 function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
@@ -186,7 +108,6 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
   return blocks;
 }
 
-/** 舊版頂層 heroFloatingIcons：若 hero 區塊尚無 floatingIcons，讀取時併入 */
 function applyLegacyHeroFloatingIconsToBlocks(
   blocks: LayoutBlock[],
   raw: Record<string, unknown>
@@ -200,6 +121,268 @@ function applyLegacyHeroFloatingIconsToBlocks(
   });
 }
 
+function defaultFrontendSettingsWhenMissing(): FrontendSettings {
+  return {
+    heroImageUrl: null,
+    heroBackgroundUrl: null,
+    heroBackgroundMobileUrl: null,
+    heroTitle: DEFAULT_HERO_TITLE,
+    carouselItems: DEFAULT_CAROUSEL,
+    navAboutLabel: DEFAULT_NAV.about,
+    aboutPageUrl: DEFAULT_ABOUT_PAGE_URL,
+    navCoursesLabel: DEFAULT_NAV.courses,
+    navBookingLabel: DEFAULT_NAV.booking,
+    navFaqLabel: DEFAULT_NAV.faq,
+    memberIconGallery: DEFAULT_MEMBER_ICON_URLS,
+    memberIconSelectedIndex: 0,
+    aboutContent: null,
+    agreementContent: null,
+    agreementDocumentsBySlug: {},
+    agreementDocumentLabelsBySlug: {},
+    precautionsFixedHtml: null,
+    seoTitle: null,
+    seoKeywords: null,
+    seoDescription: null,
+    seoFaviconUrl: null,
+    linePayApi: null,
+    thirdPartyApi: null,
+    atmBankName: null,
+    atmBankCode: null,
+    atmBankAccount: null,
+    paymentNewebpayEnabled: false,
+    paymentEcpayEnabled: false,
+    paymentLinepayEnabled: false,
+    paymentAtmEnabled: false,
+    layoutOrder: DEFAULT_LAYOUT_ORDER,
+    fullWidthImageUrl: null,
+    layoutBlocks: getDefaultLayoutBlocks(),
+    featuredCategories: DEFAULT_FEATURED_CATEGORIES,
+    featuredSectionIconUrl: null,
+    homeHotCoursesIconUrl: null,
+    homeNewCoursesIconUrl: null,
+    logoUrl: null,
+    headerBackgroundUrl: null,
+    headerBackgroundMobileUrl: null,
+    pageBackgroundUrl: null,
+    pageBackgroundMobileUrl: null,
+    pageBackgroundExtensionColor: null,
+    showProductMenu: false,
+    footerAreaA: null,
+    footerAreaB: null,
+    footerAreaC: null,
+    footerAreaD: null,
+    footerBackgroundUrl: null,
+    footerBackgroundMobileUrl: null,
+    homeFeaturedTopBackgroundUrl: null,
+    homeFeaturedTopBackgroundMobileUrl: null,
+    homeFeaturedGridBackgroundUrl: null,
+    homeMidBannerImageUrl: null,
+    homeMidBannerLinkUrl: null,
+    homeMidBannerSectionBackgroundUrl: null,
+    homeCoursesBlockBackgroundUrl: null,
+    homeCoursesBlockBackgroundMobileUrl: null,
+    homeCarouselSectionBackgroundUrl: null,
+    homeCarouselMidStripBackgroundUrl: null,
+    entryPopupEnabled: false,
+    entryPopupImageUrl: null,
+    entryPopupLinkUrl: null,
+  };
+}
+
+async function readFrontendSettingsUncached(): Promise<FrontendSettings> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from("store_settings")
+      .select("frontend_settings")
+      .eq("merchant_id", merchantId || "")
+      .maybeSingle();
+    if (error || !data?.frontend_settings) {
+      return defaultFrontendSettingsWhenMissing();
+    }
+    const raw = data.frontend_settings as Record<string, unknown>;
+    const items = Array.isArray(raw.carouselItems)
+      ? (raw.carouselItems as unknown[]).map((x: unknown, i: number) => {
+          const o = x as Record<string, unknown>;
+          return {
+            id: typeof o.id === "string" ? o.id : `w${i + 1}`,
+            title: typeof o.title === "string" ? o.title : "",
+            subtitle: typeof o.subtitle === "string" ? o.subtitle : "",
+            imageUrl: o.imageUrl != null ? String(o.imageUrl) : null,
+            visible: o.visible === false ? false : true,
+            linkUrl: o.linkUrl != null ? String(o.linkUrl) : null,
+            buttonText: o.buttonText != null ? String(o.buttonText) : null,
+          };
+        })
+      : DEFAULT_CAROUSEL;
+    const gallery = Array.isArray(raw.memberIconGallery) && (raw.memberIconGallery as unknown[]).length > 0
+      ? (raw.memberIconGallery as unknown[]).filter((u): u is string => typeof u === "string")
+      : DEFAULT_MEMBER_ICON_URLS;
+    const selectedIndex = typeof raw.memberIconSelectedIndex === "number"
+      ? Math.max(0, Math.min(raw.memberIconSelectedIndex, gallery.length - 1))
+      : 0;
+    return {
+      heroImageUrl: normalizeUploadedAssetUrl(
+        raw.heroImageUrl != null ? String(raw.heroImageUrl) : null,
+        "hero_image"
+      ),
+      heroBackgroundUrl: normalizeUploadedAssetUrl(
+        raw.heroBackgroundUrl != null ? String(raw.heroBackgroundUrl) : null,
+        "hero_background"
+      ),
+      heroBackgroundMobileUrl: normalizeUploadedAssetUrl(
+        raw.heroBackgroundMobileUrl != null ? String(raw.heroBackgroundMobileUrl) : null,
+        "hero_background_mobile"
+      ),
+      heroTitle: raw.heroTitle != null ? String(raw.heroTitle) : DEFAULT_HERO_TITLE,
+      carouselItems: items.length > 0 ? items : DEFAULT_CAROUSEL,
+      navAboutLabel: typeof raw.navAboutLabel === "string" && raw.navAboutLabel.trim() ? raw.navAboutLabel.trim() : DEFAULT_NAV.about,
+      aboutPageUrl: normalizeAboutPageUrl(raw.aboutPageUrl),
+      navCoursesLabel: typeof raw.navCoursesLabel === "string" && raw.navCoursesLabel.trim() ? raw.navCoursesLabel.trim() : DEFAULT_NAV.courses,
+      navBookingLabel: typeof raw.navBookingLabel === "string" && raw.navBookingLabel.trim() ? raw.navBookingLabel.trim() : DEFAULT_NAV.booking,
+      navFaqLabel: typeof raw.navFaqLabel === "string" && raw.navFaqLabel.trim() ? raw.navFaqLabel.trim() : DEFAULT_NAV.faq,
+      memberIconGallery: gallery,
+      memberIconSelectedIndex: gallery.length > 0 ? selectedIndex : 0,
+      aboutContent: typeof raw.aboutContent === "string" ? raw.aboutContent : null,
+      agreementContent: typeof raw.agreementContent === "string" ? raw.agreementContent : null,
+      agreementDocumentsBySlug: parseAgreementDocumentsFromRaw(raw),
+      agreementDocumentLabelsBySlug: parseAgreementLabelsFromRaw(raw),
+      precautionsFixedHtml: (() => {
+        const camel = raw.precautionsFixedHtml;
+        const snake = raw.precautions_fixed_html;
+        if (typeof camel === "string") return camel;
+        if (typeof snake === "string") return snake;
+        return null;
+      })(),
+      seoTitle: typeof raw.seoTitle === "string" ? raw.seoTitle : null,
+      seoKeywords: typeof raw.seoKeywords === "string" ? raw.seoKeywords : null,
+      seoDescription: typeof raw.seoDescription === "string" ? raw.seoDescription : null,
+      seoFaviconUrl: typeof raw.seoFaviconUrl === "string" ? raw.seoFaviconUrl : null,
+      linePayApi: typeof raw.linePayApi === "string" ? raw.linePayApi : null,
+      thirdPartyApi: typeof raw.thirdPartyApi === "string" ? raw.thirdPartyApi : null,
+      atmBankName: typeof raw.atmBankName === "string" ? raw.atmBankName : null,
+      atmBankAccount: typeof raw.atmBankAccount === "string" ? raw.atmBankAccount : null,
+      atmBankCode: raw.atmBankCode != null ? String(raw.atmBankCode) : null,
+      paymentNewebpayEnabled: raw.paymentNewebpayEnabled === true,
+      paymentEcpayEnabled: raw.paymentEcpayEnabled === true,
+      paymentLinepayEnabled: raw.paymentLinepayEnabled === true,
+      paymentAtmEnabled: raw.paymentAtmEnabled === true,
+      layoutOrder: Array.isArray(raw.layout_order) && (raw.layout_order as unknown[]).length > 0
+        ? (raw.layout_order as unknown[]).filter((x): x is string => typeof x === "string")
+        : DEFAULT_LAYOUT_ORDER,
+      fullWidthImageUrl: typeof raw.fullWidthImageUrl === "string" ? raw.fullWidthImageUrl : null,
+      layoutBlocks: applyLegacyHeroFloatingIconsToBlocks(parseLayoutBlocks(raw.layout_blocks), raw),
+      featuredCategories: parseFeaturedCategories(raw.featured_categories),
+      featuredSectionIconUrl: normalizeUploadedAssetUrl(
+        typeof raw.featuredSectionIconUrl === "string" ? raw.featuredSectionIconUrl : null,
+        "featured_icon"
+      ),
+      homeHotCoursesIconUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeHotCoursesIconUrl === "string" ? raw.homeHotCoursesIconUrl : null,
+        "home_hot_courses_icon"
+      ),
+      homeNewCoursesIconUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeNewCoursesIconUrl === "string" ? raw.homeNewCoursesIconUrl : null,
+        "home_new_courses_icon"
+      ),
+      logoUrl: normalizeUploadedAssetUrl(typeof raw.logoUrl === "string" ? raw.logoUrl : null, "logo"),
+      headerBackgroundUrl: typeof raw.headerBackgroundUrl === "string" ? raw.headerBackgroundUrl : null,
+      headerBackgroundMobileUrl:
+        typeof raw.headerBackgroundMobileUrl === "string" && raw.headerBackgroundMobileUrl.trim()
+          ? raw.headerBackgroundMobileUrl.trim()
+          : null,
+      pageBackgroundUrl: normalizeUploadedAssetUrl(
+        typeof raw.pageBackgroundUrl === "string" ? raw.pageBackgroundUrl : null,
+        "page_background"
+      ),
+      pageBackgroundMobileUrl: normalizeUploadedAssetUrl(
+        typeof raw.pageBackgroundMobileUrl === "string" ? raw.pageBackgroundMobileUrl : null,
+        "page_background_mobile"
+      ),
+      pageBackgroundExtensionColor: (() => {
+        const camel = raw.pageBackgroundExtensionColor;
+        const snake = raw.page_background_extension_color;
+        const s = typeof camel === "string" ? camel : typeof snake === "string" ? snake : null;
+        return parsePageBackgroundExtensionColor(s);
+      })(),
+      showProductMenu: raw.showProductMenu === true,
+      footerAreaA: typeof raw.footerAreaA === "string" ? raw.footerAreaA : null,
+      footerAreaB: typeof raw.footerAreaB === "string" ? raw.footerAreaB : null,
+      footerAreaC: typeof raw.footerAreaC === "string" ? raw.footerAreaC : null,
+      footerAreaD: typeof raw.footerAreaD === "string" ? raw.footerAreaD : null,
+      footerBackgroundUrl: normalizeUploadedAssetUrl(
+        typeof raw.footerBackgroundUrl === "string" ? raw.footerBackgroundUrl : null,
+        "footer_background"
+      ),
+      footerBackgroundMobileUrl: normalizeUploadedAssetUrl(
+        typeof raw.footerBackgroundMobileUrl === "string" ? raw.footerBackgroundMobileUrl : null,
+        "footer_background_mobile"
+      ),
+      homeFeaturedTopBackgroundUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeFeaturedTopBackgroundUrl === "string" ? raw.homeFeaturedTopBackgroundUrl : null,
+        "home_featured_top_bg"
+      ),
+      homeFeaturedTopBackgroundMobileUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeFeaturedTopBackgroundMobileUrl === "string" ? raw.homeFeaturedTopBackgroundMobileUrl : null,
+        "home_featured_top_bg_mobile"
+      ),
+      homeFeaturedGridBackgroundUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeFeaturedGridBackgroundUrl === "string" ? raw.homeFeaturedGridBackgroundUrl : null,
+        "home_featured_grid_bg"
+      ),
+      homeMidBannerImageUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeMidBannerImageUrl === "string" ? raw.homeMidBannerImageUrl : null,
+        "home_mid_banner"
+      ),
+      homeMidBannerLinkUrl:
+        typeof raw.homeMidBannerLinkUrl === "string" && raw.homeMidBannerLinkUrl.trim()
+          ? String(raw.homeMidBannerLinkUrl).trim()
+          : null,
+      homeMidBannerSectionBackgroundUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeMidBannerSectionBackgroundUrl === "string" ? raw.homeMidBannerSectionBackgroundUrl : null,
+        "home_mid_section_bg"
+      ),
+      homeCoursesBlockBackgroundUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeCoursesBlockBackgroundUrl === "string" ? raw.homeCoursesBlockBackgroundUrl : null,
+        "home_courses_block_bg"
+      ),
+      homeCoursesBlockBackgroundMobileUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeCoursesBlockBackgroundMobileUrl === "string" ? raw.homeCoursesBlockBackgroundMobileUrl : null,
+        "home_courses_block_bg_mobile"
+      ),
+      homeCarouselSectionBackgroundUrl: normalizeUploadedAssetUrl(
+        typeof raw.homeCarouselSectionBackgroundUrl === "string" ? raw.homeCarouselSectionBackgroundUrl : null,
+        "home_carousel_section_bg"
+      ),
+      homeCarouselMidStripBackgroundUrl: normalizeHomeCarouselMidStripUrl(
+        typeof raw.homeCarouselMidStripBackgroundUrl === "string" ? raw.homeCarouselMidStripBackgroundUrl : null
+      ),
+      entryPopupEnabled: raw.entryPopupEnabled === true,
+      entryPopupImageUrl:
+        typeof raw.entryPopupImageUrl === "string" && raw.entryPopupImageUrl.trim()
+          ? raw.entryPopupImageUrl.trim()
+          : null,
+      entryPopupLinkUrl:
+        typeof raw.entryPopupLinkUrl === "string" && raw.entryPopupLinkUrl.trim()
+          ? raw.entryPopupLinkUrl.trim()
+          : null,
+    };
+  } catch {
+    return defaultFrontendSettingsWhenMissing();
+  }
+}
+
+/**
+ * 取得本分站前台設定（首頁大圖、輪播、`layout_blocks` 畫布等）。
+ * 查詢 `store_settings.merchant_id === NEXT_PUBLIC_CLIENT_ID`，非總站 `"model"`。
+ */
+export async function getFrontendSettings(): Promise<FrontendSettings> {
+  unstable_noStore();
+  return readFrontendSettingsUncached();
+}
+
 /** 更新畫布區塊（後台「首頁版面」儲存用）；會一併寫入 layout_order 以相容舊版 */
 export async function updateLayoutBlocks(blocks: LayoutBlock[]): Promise<
   { success: true; message?: string } | { success: false; error: string }
@@ -211,34 +394,12 @@ export async function updateLayoutBlocks(blocks: LayoutBlock[]): Promise<
     const existing = await getFrontendSettings();
     const sorted = [...blocks].sort((a, b) => a.order - b.order);
     const layout_order = sorted.map((b) => b.id);
+    const merged: FrontendSettings = { ...existing, layoutBlocks: sorted };
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const frontendSettings: Record<string, unknown> = {
-      heroImageUrl: existing.heroImageUrl,
-      heroTitle: existing.heroTitle,
-      carouselItems: existing.carouselItems,
-      navAboutLabel: existing.navAboutLabel,
-      navCoursesLabel: existing.navCoursesLabel,
-      navBookingLabel: existing.navBookingLabel,
-      navFaqLabel: existing.navFaqLabel,
-      memberIconGallery: existing.memberIconGallery,
-      memberIconSelectedIndex: existing.memberIconSelectedIndex,
-      aboutContent: existing.aboutContent ?? null,
-      seoTitle: existing.seoTitle ?? null,
-      seoKeywords: existing.seoKeywords ?? null,
-      seoDescription: existing.seoDescription ?? null,
-      seoFaviconUrl: existing.seoFaviconUrl ?? null,
-      linePayApi: existing.linePayApi ?? null,
-      thirdPartyApi: existing.thirdPartyApi ?? null,
-      atmBankName: existing.atmBankName ?? null,
-      atmBankAccount: existing.atmBankAccount ?? null,
-      atmBankCode: existing.atmBankCode ?? null,
-      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
-      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
-      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
-      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      ...persistFrontendSettingsBase(merged),
       layout_order,
-      fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
       layout_blocks: persistLayoutBlocks(sorted),
     };
     const { error } = await supabase
@@ -302,45 +463,24 @@ export async function updateLayoutOrder(order: string[]): Promise<
     if (uniqueOrder.length === 0) return { success: false, error: "至少需保留一個區塊" };
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
+    const layoutBlocksOrdered = uniqueOrder.map((id, i) => {
+      const b = existing.layoutBlocks.find((x) => x.id === id);
+      return b
+        ? { ...b, order: i }
+        : {
+            id,
+            order: i,
+            heightPx: null,
+            backgroundImageUrl: null,
+            enabled: true,
+            title: LAYOUT_SECTION_LABELS[id] ?? null,
+          };
+    });
+    const merged: FrontendSettings = { ...existing, layoutOrder: uniqueOrder, layoutBlocks: layoutBlocksOrdered };
     const frontendSettings: Record<string, unknown> = {
-      heroImageUrl: existing.heroImageUrl,
-      heroTitle: existing.heroTitle,
-      carouselItems: existing.carouselItems,
-      navAboutLabel: existing.navAboutLabel,
-      navCoursesLabel: existing.navCoursesLabel,
-      navBookingLabel: existing.navBookingLabel,
-      navFaqLabel: existing.navFaqLabel,
-      memberIconGallery: existing.memberIconGallery,
-      memberIconSelectedIndex: existing.memberIconSelectedIndex,
-      aboutContent: existing.aboutContent ?? null,
-      seoTitle: existing.seoTitle ?? null,
-      seoKeywords: existing.seoKeywords ?? null,
-      seoDescription: existing.seoDescription ?? null,
-      seoFaviconUrl: existing.seoFaviconUrl ?? null,
-      linePayApi: existing.linePayApi ?? null,
-      thirdPartyApi: existing.thirdPartyApi ?? null,
-      atmBankName: existing.atmBankName ?? null,
-      atmBankAccount: existing.atmBankAccount ?? null,
-      atmBankCode: existing.atmBankCode ?? null,
-      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
-      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
-      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
-      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
+      ...persistFrontendSettingsBase(merged),
       layout_order: uniqueOrder,
-      fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-      layout_blocks: uniqueOrder.map((id, i) => {
-        const b = existing.layoutBlocks.find((x) => x.id === id);
-        return b
-          ? serializeLayoutBlockForPersist({ ...b, order: i })
-          : serializeLayoutBlockForPersist({
-              id,
-              order: i,
-              heightPx: null,
-              backgroundImageUrl: null,
-              enabled: true,
-              title: LAYOUT_SECTION_LABELS[id] ?? null,
-            });
-      }),
+      layout_blocks: layoutBlocksOrdered.map((b) => serializeLayoutBlockForPersist(b)),
     };
     const { error } = await supabase
       .from("store_settings")
@@ -370,35 +510,12 @@ export async function updateFullWidthImageUrl(url: string | null): Promise<
     if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     const existing = await getFrontendSettings();
     const value = typeof url === "string" && url.trim() ? url.trim() : null;
+    const merged: FrontendSettings = { ...existing, fullWidthImageUrl: value };
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const frontendSettings: Record<string, unknown> = {
-      heroImageUrl: existing.heroImageUrl,
-      heroTitle: existing.heroTitle,
-      carouselItems: existing.carouselItems,
-      navAboutLabel: existing.navAboutLabel,
-      navCoursesLabel: existing.navCoursesLabel,
-      navBookingLabel: existing.navBookingLabel,
-      navFaqLabel: existing.navFaqLabel,
-      memberIconGallery: existing.memberIconGallery,
-      memberIconSelectedIndex: existing.memberIconSelectedIndex,
-      aboutContent: existing.aboutContent ?? null,
-      seoTitle: existing.seoTitle ?? null,
-      seoKeywords: existing.seoKeywords ?? null,
-      seoDescription: existing.seoDescription ?? null,
-      seoFaviconUrl: existing.seoFaviconUrl ?? null,
-      linePayApi: existing.linePayApi ?? null,
-      thirdPartyApi: existing.thirdPartyApi ?? null,
-      atmBankName: existing.atmBankName ?? null,
-      atmBankAccount: existing.atmBankAccount ?? null,
-      atmBankCode: existing.atmBankCode ?? null,
-      paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
-      paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
-      paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
-      paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
-      layout_order: existing.layoutOrder,
+      ...persistFrontendSettingsBase(merged),
       fullWidthImageUrl: value,
-      layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
     };
     const { error } = await supabase
       .from("store_settings")

@@ -22,9 +22,17 @@ type Props = {
   horizontalRowGroups1Based?: readonly (readonly number[])[];
   /** 依編號垂直微調（px），與前台 HeroFloatingIconsLayer 一致 */
   verticalNudgePxBySlot1Based?: Readonly<Record<number, number>>;
+  /**
+   * 與 HeroFloatingIconsLayer 並用；後台畫布曾用全透明 img 僅留拖曳區，但若底層 Layer 未合成（z-index／縮放）會導致「上傳後畫布上看不到圖」。
+   * 現改為與非 overlay 相同顯示圖片，與 Layer 重疊時視覺仍為單一圖。
+   */
   overlayMode?: boolean;
   /** desktop：寫入 leftPct/topPct；mobile：寫入 leftPctMobile/topPctMobile（與桌機分開） */
   coordinateMode?: "desktop" | "mobile";
+  /** 與側欄「編號」連動高亮 */
+  selectedIconId?: string | null;
+  /** 點選裝飾圖時（含拖曳前）通知父層，供側欄捲動至對應編號 */
+  onIconPointerDown?: (id: string) => void;
 };
 
 const FLOATING_CANVAS_BASE_WIDTH_PX = 1280;
@@ -33,7 +41,7 @@ function clampPct(n: number): number {
   return Math.min(100, Math.max(0, n));
 }
 
-/** 後台畫布：區塊內可拖曳之裝飾圖（百分比座標，中心錨點） */
+/** 後台畫布：Hero 區內可拖曳之裝飾圖（百分比座標，中心錨點） */
 export default function HeroFloatingIconsEditor({
   icons,
   onChange,
@@ -42,6 +50,8 @@ export default function HeroFloatingIconsEditor({
   verticalNudgePxBySlot1Based,
   overlayMode = false,
   coordinateMode = "desktop",
+  selectedIconId = null,
+  onIconPointerDown,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -61,6 +71,7 @@ export default function HeroFloatingIconsEditor({
     return () => ro.disconnect();
   }, []);
 
+  /** 刪除／上傳替換列表時避免仍拖著已不存在的 id */
   useEffect(() => {
     if (draggingId == null) return;
     if (!icons.some((i) => i.id === draggingId)) setDraggingId(null);
@@ -137,6 +148,7 @@ export default function HeroFloatingIconsEditor({
   const onPointerDownIcon = (e: React.PointerEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
+    onIconPointerDown?.(id);
     setDraggingId(id);
   };
 
@@ -175,6 +187,10 @@ export default function HeroFloatingIconsEditor({
         const wPx = eff.widthPx;
         const displayW = wPx * iconScale;
         const displayH = floatingIconDisplayHeight({ ...icon, widthPx: wPx, heightPx: eff.heightPx }) * iconScale;
+        /**
+         * 與 HeroFloatingIconsLayer 同一外層：width + maxWidth + height:auto + 內層 img（object-contain）。
+         * 勿用固定 height: displayH 的方塊，否則實際圖片可視區與透明拖曳區中心會錯位（常變成要點右側才抓得到）。
+         */
         const outerStyle: CSSProperties = {
           left: `${leftPct}%`,
           top: `${topPct}%`,
@@ -189,11 +205,14 @@ export default function HeroFloatingIconsEditor({
             key={icon.id}
             type="button"
             data-floating-slot={slot1Based > 0 ? slot1Based : undefined}
-            className="pointer-events-auto absolute box-border touch-none select-none cursor-grab rounded-none border-0 bg-transparent p-0 shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-amber-400/45 focus-visible:ring-offset-0 active:cursor-grabbing"
+            className={`pointer-events-auto absolute box-border touch-none select-none cursor-grab rounded-md border-0 bg-transparent p-0 shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-amber-400/45 focus-visible:ring-offset-0 active:cursor-grabbing ${
+              selectedIconId === icon.id ? "ring-2 ring-amber-500 ring-offset-1" : ""
+            }`}
             style={outerStyle}
             onPointerDown={(e) => onPointerDownIcon(e, icon.id)}
             aria-label={`拖曳調整${slotLabel}裝飾圖位置`}
           >
+            {/* overlay 與否皆顯示圖，避免後台畫布僅見透明拖曳區 */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={icon.imageUrl}

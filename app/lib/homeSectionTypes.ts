@@ -9,4 +9,7 @@ export type Activity = {
   ageTags: string[];
   category?: string;
   description?: string;
+  badgeNew?: boolean;
+  badgeHot?: boolean;
+  badgeFeatured?: boolean;
 };

@@ -10,7 +10,7 @@ type Props = {
   onResizeHeight: (heightPx: number | null) => void;
   children: React.ReactNode;
   blockLabel: string;
-  /** 子元件已自行鋪背景時勿在外層重複鋪圖 */
+  /** 頁尾區塊若由子元件自行鋪背景（與前台 HomePageFooter 一致），勿在外層重複鋪圖 */
   skipBackgroundImage?: boolean;
 };
 
@@ -76,7 +76,7 @@ export default function BlockWrapper({
 
   return (
     <div
-      className="relative rounded-lg overflow-hidden"
+      className="relative"
       style={blockStyle}
       data-block-id={block.id}
     >
@@ -95,13 +95,13 @@ export default function BlockWrapper({
             onSelect();
           }
         }}
-        className={`relative z-0 transition-shadow ${isSelected ? "ring-2 ring-amber-500 ring-inset shadow-lg" : "hover:ring-2 hover:ring-amber-300 hover:ring-inset"}`}
+        className={`relative transition-shadow ${isSelected ? "ring-2 ring-amber-500 ring-inset shadow-lg" : "hover:ring-2 hover:ring-amber-300 hover:ring-inset"}`}
       >
         {children}
       </div>
       {/* 選中時顯示區塊名稱與目前高度（畫布上即時顯示） */}
       {isSelected && (
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
+        <div className="pointer-events-none absolute top-2 left-2 z-10 flex items-center gap-2">
           <span className="rounded bg-amber-500/90 px-2 py-1 text-xs font-medium text-white shadow">
             {blockLabel}
           </span>

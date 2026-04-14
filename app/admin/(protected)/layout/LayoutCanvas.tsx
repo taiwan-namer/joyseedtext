@@ -1,26 +1,24 @@
 "use client";
 
-import type { ReactNode } from "react";
-import Link from "next/link";
-import {
-  HeroSection,
-  HeroCarouselSection,
-  CarouselSection,
-  FullWidthImageSection,
-  CoursesSection,
-  AboutSection,
-  FAQSection,
-  ContactSection,
-  FooterSection,
-} from "@/app/components/home";
+import { useLayoutEffect, useRef, useState } from "react";
+import HomePageFooter from "@/app/components/home/HomePageFooter";
+import Header from "@/app/components/Header";
+import HomePageClient from "@/app/HomePageClient";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import BlockWrapper from "./BlockWrapper";
-import HeroFloatingIconsEditor from "./HeroFloatingIconsEditor";
+import HeroFloatingIconsEditor from "@/app/admin/(protected)/layout/HeroFloatingIconsEditor";
 import HeroFloatingIconsLayer from "@/app/components/home/HeroFloatingIconsLayer";
-import type { HeroFloatingIcon, LayoutBlock } from "@/app/lib/frontendSettingsShared";
+import type {
+  HeroFloatingIcon,
+  LayoutBlock,
+  FeaturedCategory,
+  FrontendSettings,
+} from "@/app/lib/frontendSettingsShared";
 import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
-import type { Activity } from "@/app/lib/homeSectionTypes";
 import { LAYOUT_SECTION_LABELS } from "@/app/lib/frontendSettingsShared";
+import CanvasPageBackground from "./CanvasPageBackground";
+import type { Activity } from "@/app/lib/homeSectionTypes";
+import type { HomePageActivity } from "@/lib/homePageActivity";
 
 const DEFAULT_CAROUSEL = [
   { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
@@ -28,12 +26,27 @@ const DEFAULT_CAROUSEL = [
   { id: "w3", title: "限時優惠", subtitle: "報名享早鳥價", imageUrl: null, visible: true },
 ];
 
+function footerSurfaceStyleFromBlock(block: LayoutBlock): React.CSSProperties {
+  return {
+    ...(block.heightPx != null && block.heightPx > 0 ? { minHeight: block.heightPx } : {}),
+    ...(block.backgroundImageUrl
+      ? {
+          backgroundImage: `url(${block.backgroundImageUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }
+      : {}),
+  };
+}
+
 type LayoutCanvasProps = {
   blocks: LayoutBlock[];
   selectedBlockId: string | null;
   onSelectBlock: (id: string) => void;
   onBlockResizeHeight: (blockId: string, heightPx: number | null) => void;
-  onBlockFloatingIconsChange: (blockId: string, next: HeroFloatingIcon[]) => void;
+  designWidthPx: number;
+  /** 預覽縮放 1–100（例如 50 表示視覺縮為一半，方便一覽整頁） */
+  zoomPercent: number;
   heroImageUrl: string | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;
@@ -43,7 +56,35 @@ type LayoutCanvasProps = {
   navFaqLabel: string;
   activities: Activity[];
   fullWidthImageUrl: string | null;
+  logoUrl: string | null;
+  headerBackgroundUrl: string | null;
+  headerBackgroundMobileUrl: string | null;
+  showProductMenu: boolean;
+  pageBackgroundUrl: string | null;
+  pageBackgroundMobileUrl: string | null;
+  pageBackgroundExtensionColor: string | null;
+  footerBackgroundUrl: string | null;
+  footerBackgroundMobileUrl: string | null;
+  featuredCategories: FeaturedCategory[];
+  featuredSectionIconUrl: string | null;
+  heroBackgroundUrl: string | null;
+  heroBackgroundMobileUrl: string | null;
+  heroTitle: string | null;
+  homeCarouselMidStripBackgroundUrl: string | null;
+  homeCarouselSectionBackgroundUrl: string | null;
+  homeMidBannerSectionBackgroundUrl: string | null;
+  homeMidBannerImageUrl: string | null;
+  homeMidBannerLinkUrl: string | null;
+  homeCoursesBlockBackgroundUrl: string | null;
+  homeCoursesBlockBackgroundMobileUrl: string | null;
+  homeNewCoursesIconUrl: string | null;
+  /** 頁尾「關於童趣島」連結（與後台關於頁設定一致） */
+  aboutPageUrl: string;
+  onBlockFloatingIconsChange: (blockId: string, next: HeroFloatingIcon[]) => void;
+  /** 桌機／手機畫布：裝飾圖座標分開儲存 */
   floatingIconsCoordinateMode?: "desktop" | "mobile";
+  selectedFloatingIconId?: string | null;
+  onSelectFloatingIcon?: (blockId: string, iconId: string) => void;
 };
 
 export default function LayoutCanvas({
@@ -51,7 +92,8 @@ export default function LayoutCanvas({
   selectedBlockId,
   onSelectBlock,
   onBlockResizeHeight,
-  onBlockFloatingIconsChange,
+  designWidthPx,
+  zoomPercent,
   heroImageUrl,
   carouselItems,
   aboutContent,
@@ -61,160 +103,294 @@ export default function LayoutCanvas({
   navFaqLabel,
   activities,
   fullWidthImageUrl,
+  logoUrl,
+  headerBackgroundUrl,
+  headerBackgroundMobileUrl,
+  showProductMenu,
+  pageBackgroundUrl,
+  pageBackgroundMobileUrl,
+  pageBackgroundExtensionColor,
+  footerBackgroundUrl,
+  footerBackgroundMobileUrl,
+  featuredCategories,
+  featuredSectionIconUrl,
+  heroBackgroundUrl,
+  heroBackgroundMobileUrl,
+  heroTitle,
+  homeCarouselMidStripBackgroundUrl,
+  homeCarouselSectionBackgroundUrl,
+  homeMidBannerSectionBackgroundUrl,
+  homeMidBannerImageUrl,
+  homeMidBannerLinkUrl,
+  homeCoursesBlockBackgroundUrl,
+  homeCoursesBlockBackgroundMobileUrl,
+  homeNewCoursesIconUrl,
+  aboutPageUrl,
+  onBlockFloatingIconsChange,
   floatingIconsCoordinateMode = "desktop",
+  selectedFloatingIconId = null,
+  onSelectFloatingIcon,
 }: LayoutCanvasProps) {
-  const {
-    siteName,
-    primaryColor,
-    aboutSectionBackgroundColor,
-    contactEmail,
-    contactPhone,
-    contactAddress,
-    socialFbUrl,
-    socialIgUrl,
-    socialLineUrl,
-  } = useStoreSettings();
-  const mapEmbedUrl = contactAddress?.trim()
-    ? `https://www.google.com/maps?q=${encodeURIComponent(contactAddress.trim())}&output=embed`
-    : "";
+  const coordMode = floatingIconsCoordinateMode;
+  const { siteName } = useStoreSettings();
   const carouselList = (carouselItems.length > 0 ? carouselItems : DEFAULT_CAROUSEL).filter(
     (item) => item.visible !== false
   );
 
-  const renderSection = (block: LayoutBlock) => {
-    const isSelected = selectedBlockId === block.id;
-    const label = block.title?.trim() || LAYOUT_SECTION_LABELS[block.id] || block.id;
+  const headerBlock = blocks.find((b) => b.id === "header");
+  const footerBlock = blocks.find((b) => b.id === "footer");
 
-    const wrapWithFloats = (inner: ReactNode) => {
-      const icons = block.floatingIcons ?? [];
-      const showFloat = icons.length > 0;
-      if (!showFloat) return inner;
-      return (
-        <div className="relative w-full">
-          {inner}
-          <div className="pointer-events-none absolute inset-0 z-[30]">
-            <HeroFloatingIconsLayer coordinateViewport={floatingIconsCoordinateMode} icons={icons} />
-            {isSelected ? (
-              <HeroFloatingIconsEditor
-                overlayMode
-                coordinateMode={floatingIconsCoordinateMode}
-                icons={icons}
-                onChange={(next) => onBlockFloatingIconsChange(block.id, next)}
-              />
-            ) : null}
-          </div>
-        </div>
-      );
-    };
+  const scale = Math.min(100, Math.max(25, zoomPercent)) / 100;
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [innerHeight, setInnerHeight] = useState(0);
 
-    const content = (() => {
-      switch (block.id) {
-        case "header":
-          return (
-            <header className="bg-white border-b border-gray-100 shadow-sm">
-              <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between gap-2">
-                <h1 className="text-xl font-bold text-amber-600 shrink-0">{siteName}</h1>
-                <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0 overflow-x-auto scrollbar-hide text-sm text-gray-600">
-                  <span className="whitespace-nowrap">{navAboutLabel || "關於我們"}</span>
-                  <Link href="/courses" className="whitespace-nowrap hover:text-amber-600">
-                    {navCoursesLabel || "課程介紹"}
-                  </Link>
-                  <Link href="/course/booking" className="whitespace-nowrap hover:text-amber-600">
-                    {navBookingLabel || "課程預約"}
-                  </Link>
-                  <span className="whitespace-nowrap">{navFaqLabel || "常見問題"}</span>
-                  <span className="whitespace-nowrap text-gray-400">登入</span>
-                </div>
-              </div>
-            </header>
-          );
-        case "hero":
-          return wrapWithFloats(<HeroSection heroImageUrl={heroImageUrl} />);
-        case "hero_carousel":
-          return wrapWithFloats(<HeroCarouselSection carouselList={carouselList} />);
-        case "featured_categories":
-          return (
-            <section className="py-10 px-4 bg-gray-50 text-center text-gray-600">
-              <p className="text-sm text-gray-500">精選課程分館（前台完整版將與總站一致）</p>
-            </section>
-          );
-        case "carousel":
-        case "carousel_2":
-          return <CarouselSection carouselList={carouselList} />;
-        case "full_width_image":
-          return <FullWidthImageSection imageUrl={fullWidthImageUrl} />;
-        case "courses":
-          return <CoursesSection activities={activities} variant="carousel" />;
-        case "courses_grid":
-          return <CoursesSection activities={activities} variant="grid" />;
-        case "courses_list":
-          return <CoursesSection activities={activities} variant="list" />;
-        case "new_courses":
-          return (
-            <section className="py-10 px-4 bg-white text-center">
-              <p className="text-sm text-gray-500">新上架課程（與熱門課程同資料來源；樣式可於前台擴充）</p>
-              <CoursesSection activities={activities} variant="carousel" />
-            </section>
-          );
-        case "popular_experiences":
-          return (
-            <section className="py-10 px-4 bg-gray-50 text-center">
-              <p className="text-sm text-gray-500">熱門體驗（與熱門課程同資料來源；樣式可於前台擴充）</p>
-              <CoursesSection activities={activities} variant="grid" />
-            </section>
-          );
-        case "about":
-          return (
-            <AboutSection
-              aboutContent={aboutContent}
-              navAboutLabel={navAboutLabel}
-              aboutSectionBackgroundColor={aboutSectionBackgroundColor}
-            />
-          );
-        case "faq":
-          return <FAQSection />;
-        case "contact":
-          return (
-            <ContactSection
-              siteName={siteName}
-              primaryColor={primaryColor}
-              contactPhone={contactPhone}
-              contactEmail={contactEmail}
-              contactAddress={contactAddress}
-              socialFbUrl={socialFbUrl}
-              socialIgUrl={socialIgUrl}
-              socialLineUrl={socialLineUrl}
-              mapEmbedUrl={mapEmbedUrl}
-            />
-          );
-        case "footer":
-          return <FooterSection siteName={siteName} />;
-        default:
-          return (
-            <section className="p-6 text-center text-gray-500">
-              <span>區塊：{label}</span>
-            </section>
-          );
-      }
-    })();
+  useLayoutEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const measure = () => setInnerHeight(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [
+    blocks,
+    scale,
+    heroImageUrl,
+    heroBackgroundUrl,
+    heroBackgroundMobileUrl,
+    carouselList.length,
+    aboutContent,
+    activities.length,
+    featuredCategories.length,
+    homeMidBannerImageUrl,
+    homeCarouselMidStripBackgroundUrl,
+  ]);
 
-    return (
-      <BlockWrapper
-        key={block.id}
-        block={block}
-        isSelected={isSelected}
-        onSelect={() => onSelectBlock(block.id)}
-        onResizeHeight={(heightPx) => onBlockResizeHeight(block.id, heightPx)}
-        blockLabel={label}
-      >
-        {content}
-      </BlockWrapper>
-    );
+  const previewActivities: HomePageActivity[] = activities.map((a) => ({
+    id: a.id,
+    title: a.title,
+    price: a.price,
+    stock: a.stock,
+    imageUrl: a.imageUrl ?? null,
+    detailHref: a.detailHref,
+    ageTags: a.ageTags ?? [],
+    category: a.category,
+    description: a.description,
+    badgeNew: a.badgeNew,
+    badgeHot: a.badgeHot,
+    badgeFeatured: a.badgeFeatured,
+  }));
+
+  const previewFrontendSettings: FrontendSettings = {
+    heroImageUrl,
+    heroBackgroundUrl,
+    heroBackgroundMobileUrl,
+    heroTitle,
+    carouselItems: carouselList,
+    navAboutLabel,
+    aboutPageUrl,
+    navCoursesLabel,
+    navBookingLabel,
+    navFaqLabel,
+    memberIconGallery: [],
+    memberIconSelectedIndex: 0,
+    aboutContent,
+    agreementContent: null,
+    agreementDocumentsBySlug: {},
+    agreementDocumentLabelsBySlug: {},
+    precautionsFixedHtml: null,
+    seoTitle: null,
+    seoKeywords: null,
+    seoDescription: null,
+    seoFaviconUrl: null,
+    linePayApi: null,
+    thirdPartyApi: null,
+    atmBankName: null,
+    atmBankCode: null,
+    atmBankAccount: null,
+    paymentNewebpayEnabled: false,
+    paymentEcpayEnabled: false,
+    paymentLinepayEnabled: false,
+    paymentAtmEnabled: false,
+    layoutOrder: blocks.map((b) => b.id),
+    fullWidthImageUrl,
+    layoutBlocks: blocks,
+    featuredCategories,
+    featuredSectionIconUrl: featuredSectionIconUrl ?? null,
+    homeHotCoursesIconUrl: null,
+    homeNewCoursesIconUrl: homeNewCoursesIconUrl ?? null,
+    logoUrl,
+    headerBackgroundUrl: headerBackgroundUrl ?? null,
+    headerBackgroundMobileUrl: headerBackgroundMobileUrl ?? null,
+    pageBackgroundUrl: pageBackgroundUrl ?? null,
+    pageBackgroundMobileUrl: pageBackgroundMobileUrl ?? null,
+    pageBackgroundExtensionColor: pageBackgroundExtensionColor ?? null,
+    showProductMenu,
+    footerAreaA: null,
+    footerAreaB: null,
+    footerAreaC: null,
+    footerAreaD: null,
+    footerBackgroundUrl: footerBackgroundUrl ?? null,
+    footerBackgroundMobileUrl: footerBackgroundMobileUrl ?? null,
+    homeFeaturedTopBackgroundUrl: null,
+    homeFeaturedGridBackgroundUrl: null,
+    homeMidBannerImageUrl: homeMidBannerImageUrl ?? null,
+    homeMidBannerLinkUrl: homeMidBannerLinkUrl ?? null,
+    homeMidBannerSectionBackgroundUrl: homeMidBannerSectionBackgroundUrl ?? null,
+    homeCoursesBlockBackgroundUrl: homeCoursesBlockBackgroundUrl ?? null,
+    homeCoursesBlockBackgroundMobileUrl: homeCoursesBlockBackgroundMobileUrl ?? null,
+    homeCarouselSectionBackgroundUrl: homeCarouselSectionBackgroundUrl ?? null,
+    homeCarouselMidStripBackgroundUrl: homeCarouselMidStripBackgroundUrl ?? null,
+    entryPopupEnabled: false,
+    entryPopupImageUrl: null,
+    entryPopupLinkUrl: null,
   };
 
+  const scaledH = innerHeight > 0 ? Math.ceil(innerHeight * scale) : Math.ceil(480 * scale);
+
+  const headerEl = (
+    <Header
+      siteName={siteName}
+      logoUrl={logoUrl}
+      headerBackgroundUrl={headerBackgroundUrl}
+      headerBackgroundMobileUrl={headerBackgroundMobileUrl}
+      showProductMenu={showProductMenu}
+      navAboutLabel={navAboutLabel}
+      navCoursesLabel={navCoursesLabel}
+      navBookingLabel={navBookingLabel}
+      navFaqLabel={navFaqLabel}
+    />
+  );
+
+  const footerSurfaceStyle = footerBlock ? footerSurfaceStyleFromBlock(footerBlock) : {};
+  const footerEl = (
+    <HomePageFooter
+      footerBackgroundUrl={footerBackgroundUrl?.trim() ? footerBackgroundUrl : null}
+      footerBackgroundMobileUrl={footerBackgroundMobileUrl?.trim() ? footerBackgroundMobileUrl : null}
+      footerSurfaceStyle={footerSurfaceStyle}
+      aboutPageUrl={aboutPageUrl}
+    />
+  );
+
+  /** 與 HomePageClient 內區塊相同：頁首／頁尾需掛 Layer +（編輯模式）Editor，否則後台無法預覽／拖曳裝飾圖 */
+  const headerWithFloats =
+    headerBlock != null ? (
+      <div className="relative w-full">
+        {headerEl}
+        {(headerBlock.floatingIcons?.length ?? 0) > 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-[110] flex justify-center">
+            <div className="relative h-full w-full max-w-[1200px] px-4 lg:px-8">
+              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={headerBlock.floatingIcons} />
+              {selectedBlockId === "header" ? (
+                <HeroFloatingIconsEditor
+                  overlayMode
+                  coordinateMode={coordMode}
+                  icons={headerBlock.floatingIcons ?? []}
+                  onChange={(next) => onBlockFloatingIconsChange("header", next)}
+                  selectedIconId={selectedFloatingIconId}
+                  onIconPointerDown={(id) => onSelectFloatingIcon?.("header", id)}
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    ) : (
+      headerEl
+    );
+
+  const footerWithFloats =
+    footerBlock != null ? (
+      <div className="relative w-full">
+        {footerEl}
+        {(footerBlock.floatingIcons?.length ?? 0) > 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-[30] flex justify-center">
+            <div className="relative h-full w-full max-w-7xl px-3 sm:px-4">
+              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={footerBlock.floatingIcons} />
+              {selectedBlockId === "footer" ? (
+                <HeroFloatingIconsEditor
+                  overlayMode
+                  coordinateMode={coordMode}
+                  icons={footerBlock.floatingIcons ?? []}
+                  onChange={(next) => onBlockFloatingIconsChange("footer", next)}
+                  selectedIconId={selectedFloatingIconId}
+                  onIconPointerDown={(id) => onSelectFloatingIcon?.("footer", id)}
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    ) : (
+      footerEl
+    );
+
   return (
-    <div className="w-full space-y-0 bg-gray-50 rounded-b-lg">
-      {blocks.filter((b) => b.enabled !== false).map((block) => renderSection(block))}
+    <div
+      className="mx-auto overflow-visible"
+      style={{
+        width: designWidthPx * scale,
+        height: scaledH,
+        minHeight: scaledH,
+      }}
+    >
+      <div
+        ref={innerRef}
+        className="w-full space-y-0 rounded-b-lg"
+        style={{
+          width: designWidthPx,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
+        <CanvasPageBackground
+          pageBackgroundUrl={pageBackgroundUrl}
+          pageBackgroundMobileUrl={pageBackgroundMobileUrl}
+          pageBackgroundExtensionColor={pageBackgroundExtensionColor}
+        >
+          {headerBlock ? (
+            <BlockWrapper
+              block={headerBlock}
+              isSelected={selectedBlockId === "header"}
+              onSelect={() => onSelectBlock("header")}
+              onResizeHeight={(heightPx) => onBlockResizeHeight("header", heightPx)}
+              blockLabel={LAYOUT_SECTION_LABELS.header}
+              skipBackgroundImage={false}
+            >
+              {headerWithFloats}
+            </BlockWrapper>
+          ) : (
+            headerWithFloats
+          )}
+          <HomePageClient
+            initialFrontendSettings={previewFrontendSettings}
+            initialActivities={previewActivities}
+            adminLayoutCanvas={{
+              selectedBlockId,
+              onSelectBlock,
+              onBlockResizeHeight,
+              onBlockFloatingIconsChange,
+              floatingIconsCoordinateMode: coordMode,
+              selectedFloatingIconId,
+              onSelectFloatingIcon,
+            }}
+          />
+          {footerBlock ? (
+            <BlockWrapper
+              block={footerBlock}
+              isSelected={selectedBlockId === "footer"}
+              onSelect={() => onSelectBlock("footer")}
+              onResizeHeight={(heightPx) => onBlockResizeHeight("footer", heightPx)}
+              blockLabel={LAYOUT_SECTION_LABELS.footer}
+              skipBackgroundImage
+            >
+              {footerWithFloats}
+            </BlockWrapper>
+          ) : (
+            footerWithFloats
+          )}
+        </CanvasPageBackground>
+      </div>
     </div>
   );
 }

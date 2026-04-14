@@ -158,6 +158,14 @@ export default function WonderVoyageHomePage() {
                   />
                 ))}
               </div>
+              {(() => {
+                const icons = getBlock("carousel")?.floatingIcons;
+                return (icons?.length ?? 0) > 0 ? (
+                  <div className="pointer-events-none absolute inset-0 z-[25]">
+                    <HeroFloatingIconsLayer icons={icons} />
+                  </div>
+                ) : null;
+              })()}
             </div>
           </section>
         )}
