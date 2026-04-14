@@ -14,6 +14,10 @@ import { Loader2, ChevronRight, ChevronLeft, ChevronRight as ChevronRightArrow, 
 
 /** 與 DB 總站課程 merchant_id 一致（build 時寫入）；用於總站專屬 UI（自動產碼等） */
 const siteHqMerchantId = process.env.NEXT_PUBLIC_CLIENT_ID?.trim() ?? "";
+/** true＝顯示總站進階欄位；未設／false＝分站精簡（本店 ID、代稱自動、隱藏代銷／列表／庫存等） */
+const showHqCourseAdminUi =
+  process.env.NEXT_PUBLIC_HQ_COURSE_ADMIN_UI === "true" ||
+  process.env.NEXT_PUBLIC_HQ_COURSE_ADMIN_UI === "1";
 import {
   活動場域類型選項,
   課程時段長度選項,
@@ -385,6 +389,15 @@ export default function CourseEditForm({
   }, [initialData?.id]);
 
   useEffect(() => {
+    if (!showHqCourseAdminUi) {
+      setMerchants(
+        siteHqMerchantId
+          ? [{ merchant_id: siteHqMerchantId, site_name: "本店" }]
+          : [{ merchant_id: "default", site_name: "本店" }]
+      );
+      setSelectedCreateMerchantId(siteHqMerchantId);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const r = await getAllMerchantsForAdmin();
@@ -402,7 +415,7 @@ export default function CourseEditForm({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showHqCourseAdminUi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -538,7 +551,7 @@ export default function CourseEditForm({
     formData.set("map_embed_html", mapEmbedHtml.trim());
     formData.set("course_slug", slugInput.trim());
     if (!isEdit) {
-      formData.set("merchant_id", selectedCreateMerchantId);
+      formData.set("merchant_id", showHqCourseAdminUi ? selectedCreateMerchantId : siteHqMerchantId);
     }
     startTransition(async () => {
       const result = isEdit
@@ -590,6 +603,15 @@ export default function CourseEditForm({
     <div className="min-h-screen bg-gray-100">
       <div className="mx-auto max-w-5xl px-4 py-6">
         <form id="course-edit-form" onSubmit={handleSubmit} className="space-y-6">
+          {!showHqCourseAdminUi && courseId && initialData ? (
+            <>
+              <input type="hidden" name="store_category" value={initialData.store_category ?? ""} />
+              <input type="hidden" name="inventory_merchant_id" value={initialData.inventory_merchant_id ?? ""} />
+              <input type="hidden" name="inventory_class_id" value={initialData.inventory_class_id ?? ""} />
+              <input type="hidden" name="hq_listing_merchant_id" value={initialData.hq_listing_merchant_id ?? ""} />
+              <input type="hidden" name="hq_listing_class_id" value={initialData.hq_listing_class_id ?? ""} />
+            </>
+          ) : null}
           {error && (
             <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
           )}
@@ -978,17 +1000,17 @@ export default function CourseEditForm({
                     defaultValue={initialData?.title ?? ""}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (slugManuallyEditedRef.current) return;
+                      if (showHqCourseAdminUi && slugManuallyEditedRef.current) return;
                       setSlugInput(slugifyCourseTitle(v));
                       if (slugSuggestTimerRef.current != null) {
                         clearTimeout(slugSuggestTimerRef.current);
                       }
-                      slugSuggestTimerRef.current = setTimeout(() => {
+                        slugSuggestTimerRef.current = setTimeout(() => {
                         slugSuggestTimerRef.current = null;
-                        if (slugManuallyEditedRef.current) return;
+                        if (showHqCourseAdminUi && slugManuallyEditedRef.current) return;
                         void suggestCourseSlugFromTitle(v)
                           .then((s) => {
-                            if (!slugManuallyEditedRef.current) setSlugInput(s);
+                            if (!showHqCourseAdminUi || !slugManuallyEditedRef.current) setSlugInput(s);
                           })
                           .catch(() => {
                             /* 維持本地 slugify */
@@ -997,29 +1019,31 @@ export default function CourseEditForm({
                     }}
                   />
                 </div>
-                <div className="mb-4">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">網址代稱（英文）</label>
-                  <input
-                    type="text"
-                    value={slugInput}
-                    onChange={(e) => {
-                      slugManuallyEditedRef.current = true;
-                      setSlugInput(e.target.value);
-                    }}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
-                    placeholder="kids-baking-class"
-                    disabled={isPending}
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-label="網址代稱"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    前台網址為 <code className="rounded bg-gray-100 px-1">/course/代稱</code>
-                    ；小寫英數與連字號，勿與 booking、page 等保留字或 UUID 格式相同。變更標題時會自動建議代稱（後台已設定{" "}
-                    <code className="rounded bg-gray-100 px-1">GOOGLE_TRANSLATION_API_KEY</code>{" "}
-                    時，中文標題會先經 Google 翻譯再產生英文代稱）。若已手動編輯代稱則不再覆寫。
-                  </p>
-                </div>
+                {showHqCourseAdminUi ? (
+                  <div className="mb-4">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">網址代稱（英文）</label>
+                    <input
+                      type="text"
+                      value={slugInput}
+                      onChange={(e) => {
+                        slugManuallyEditedRef.current = true;
+                        setSlugInput(e.target.value);
+                      }}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
+                      placeholder="kids-baking-class"
+                      disabled={isPending}
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-label="網址代稱"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      前台網址為 <code className="rounded bg-gray-100 px-1">/course/代稱</code>
+                      ；小寫英數與連字號，勿與 booking、page 等保留字或 UUID 格式相同。變更標題時會自動建議代稱（後台已設定{" "}
+                      <code className="rounded bg-gray-100 px-1">GOOGLE_TRANSLATION_API_KEY</code>{" "}
+                      時，中文標題會先經 Google 翻譯再產生英文代稱）。若已手動編輯代稱則不再覆寫。
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">總站主題分類</label>
                   <select
@@ -1039,11 +1063,20 @@ export default function CourseEditForm({
                     （與前台課程列表主題篩選相同）；總站增刪主題後，此處會跟著變更。若本課程為舊分類且已自總站移除，仍會暫時顯示在選單末供你改選。
                   </p>
                 </div>
-                <div className="mb-4">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">分站自訂分類</label>
-                  <input name="store_category" type="text" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder="例如：蒙特梭利" disabled={isPending} defaultValue={initialData?.store_category ?? ""} />
-                </div>
-                {!courseId && merchants.length > 1 && (
+                {showHqCourseAdminUi ? (
+                  <div className="mb-4">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">分站自訂分類</label>
+                    <input
+                      name="store_category"
+                      type="text"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                      placeholder="例如：蒙特梭利"
+                      disabled={isPending}
+                      defaultValue={initialData?.store_category ?? ""}
+                    />
+                  </div>
+                ) : null}
+                {showHqCourseAdminUi && !courseId && merchants.length > 1 ? (
                   <div className="mb-4">
                     <label className="mb-2 block text-sm font-medium text-gray-700">所屬商家</label>
                     <select
@@ -1061,8 +1094,8 @@ export default function CourseEditForm({
                     </select>
                     <p className="mt-1 text-xs text-gray-500">新增課程寫入的 merchant_id；總站代銷列表課請選總站商家。</p>
                   </div>
-                )}
-                {!courseId && selectedCreateMerchantId === siteHqMerchantId && siteHqMerchantId !== "" && (
+                ) : null}
+                {showHqCourseAdminUi && !courseId && selectedCreateMerchantId === siteHqMerchantId && siteHqMerchantId !== "" ? (
                   <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
                     <label className="flex cursor-pointer items-start gap-2">
                       <input
@@ -1078,7 +1111,7 @@ export default function CourseEditForm({
                       </span>
                     </label>
                   </div>
-                )}
+                ) : null}
                 <div className="mb-4 space-y-2">
                   <label className="mb-2 block text-sm font-medium text-gray-700">上課地區</label>
                   <select
@@ -1110,62 +1143,66 @@ export default function CourseEditForm({
                     ))}
                   </select>
                 </div>
-                <div className="mb-4 rounded-lg border border-dashed border-sky-300 bg-sky-50/50 p-3">
-                  <label className="mb-1 block text-sm font-medium text-gray-800">總站列表對應（老師填）</label>
-                  <p className="mb-2 text-xs text-gray-600">
-                    總部先在總站建好「列表課」後，可給您<strong>配對碼</strong>（建議）或「總站商家 ID + 列表課 UUID」兩格。填寫並<strong>儲存課程</strong>後，系統會自動把該列表課綁到<strong>本門課</strong>的名額與訂單。
-                    有填配對碼時，下方兩格<strong>不會寫入資料庫</strong>（可留空）；僅在未填配對碼時才使用手動兩格。
-                  </p>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">配對碼（listing_bind_token）</label>
-                  <input
-                    name="hq_listing_bind_token"
-                    type="text"
-                    className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
-                    placeholder="總站提供的配對碼（可單獨填此欄完成綁定）"
-                    disabled={isPending}
-                    autoComplete="off"
-                  />
-                  <p className="mb-2 text-xs text-gray-500">或改用手動兩格（需一起填或一起留空）：</p>
-                  <input
-                    name="hq_listing_merchant_id"
-                    type="text"
-                    className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
-                    placeholder="總站商家 ID（總站的 NEXT_PUBLIC_CLIENT_ID）"
-                    disabled={isPending}
-                    defaultValue={initialData?.hq_listing_merchant_id ?? ""}
-                  />
-                  <input
-                    name="hq_listing_class_id"
-                    type="text"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
-                    placeholder="總站列表課 UUID（總站該筆 classes.id）"
-                    disabled={isPending}
-                    defaultValue={initialData?.hq_listing_class_id ?? ""}
-                  />
-                </div>
-                <div className="mb-4 rounded-lg border border-dashed border-amber-200 bg-amber-50/40 p-3">
-                  <label className="mb-1 block text-sm font-medium text-gray-800">庫存綁定（僅總站列表課）</label>
-                  <p className="mb-2 text-xs text-gray-600">
-                    <strong>總站後台</strong>編輯「列表課」時若老師尚未用上方自動綁定，可在此手動填老師的 <code className="rounded bg-white px-1">NEXT_PUBLIC_CLIENT_ID</code> 與老師課程 UUID。
-                    一般<strong>老師分站只需填上方藍框</strong>即可。
-                  </p>
-                  <input
-                    name="inventory_merchant_id"
-                    type="text"
-                    className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
-                    placeholder="庫存商家 ID（老師）"
-                    disabled={isPending}
-                    defaultValue={initialData?.inventory_merchant_id ?? ""}
-                  />
-                  <input
-                    name="inventory_class_id"
-                    type="text"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
-                    placeholder="庫存課程 UUID（老師端 classes.id）"
-                    disabled={isPending}
-                    defaultValue={initialData?.inventory_class_id ?? ""}
-                  />
-                </div>
+                {showHqCourseAdminUi ? (
+                  <>
+                    <div className="mb-4 rounded-lg border border-dashed border-sky-300 bg-sky-50/50 p-3">
+                      <label className="mb-1 block text-sm font-medium text-gray-800">總站列表對應（老師填）</label>
+                      <p className="mb-2 text-xs text-gray-600">
+                        總部先在總站建好「列表課」後，可給您<strong>配對碼</strong>（建議）或「總站商家 ID + 列表課 UUID」兩格。填寫並<strong>儲存課程</strong>後，系統會自動把該列表課綁到<strong>本門課</strong>的名額與訂單。
+                        有填配對碼時，下方兩格<strong>不會寫入資料庫</strong>（可留空）；僅在未填配對碼時才使用手動兩格。
+                      </p>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">配對碼（listing_bind_token）</label>
+                      <input
+                        name="hq_listing_bind_token"
+                        type="text"
+                        className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
+                        placeholder="總站提供的配對碼（可單獨填此欄完成綁定）"
+                        disabled={isPending}
+                        autoComplete="off"
+                      />
+                      <p className="mb-2 text-xs text-gray-500">或改用手動兩格（需一起填或一起留空）：</p>
+                      <input
+                        name="hq_listing_merchant_id"
+                        type="text"
+                        className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                        placeholder="總站商家 ID（總站的 NEXT_PUBLIC_CLIENT_ID）"
+                        disabled={isPending}
+                        defaultValue={initialData?.hq_listing_merchant_id ?? ""}
+                      />
+                      <input
+                        name="hq_listing_class_id"
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
+                        placeholder="總站列表課 UUID（總站該筆 classes.id）"
+                        disabled={isPending}
+                        defaultValue={initialData?.hq_listing_class_id ?? ""}
+                      />
+                    </div>
+                    <div className="mb-4 rounded-lg border border-dashed border-amber-200 bg-amber-50/40 p-3">
+                      <label className="mb-1 block text-sm font-medium text-gray-800">庫存綁定（僅總站列表課）</label>
+                      <p className="mb-2 text-xs text-gray-600">
+                        <strong>總站後台</strong>編輯「列表課」時若老師尚未用上方自動綁定，可在此手動填老師的 <code className="rounded bg-white px-1">NEXT_PUBLIC_CLIENT_ID</code> 與老師課程 UUID。
+                        一般<strong>老師分站只需填上方藍框</strong>即可。
+                      </p>
+                      <input
+                        name="inventory_merchant_id"
+                        type="text"
+                        className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                        placeholder="庫存商家 ID（老師）"
+                        disabled={isPending}
+                        defaultValue={initialData?.inventory_merchant_id ?? ""}
+                      />
+                      <input
+                        name="inventory_class_id"
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 font-mono"
+                        placeholder="庫存課程 UUID（老師端 classes.id）"
+                        disabled={isPending}
+                        defaultValue={initialData?.inventory_class_id ?? ""}
+                      />
+                    </div>
+                  </>
+                ) : null}
                 <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
                   <h3 className="mb-1 text-sm font-semibold text-gray-800">選擇時間（課程可預約場次）</h3>
                   <p className="mb-3 text-xs text-gray-500">以下僅顯示此課程已設定的日期與時間，顧客前台報名時也只會看到這些選項。</p>
