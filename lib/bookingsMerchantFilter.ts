@@ -14,8 +14,9 @@ export function bookingsVisibleToMerchantOrFilter(merchantId: string): string {
 }
 
 /**
- * 若設定：後台訂單／匯出／待付款篩選**僅**顯示 `class_creator_merchant_id` 等於此值的訂單（開課商家 id），
- * 不再用 `BOOKINGS_ADMIN_VISIBLE_MERCHANT_IDS` 整包撈 MODEL 下所有訂單。
+ * 歷史用途：曾僅依 `class_creator_merchant_id` 篩後台訂單；已改為**一律**併入
+ * `merchant_id`／`sold_via_merchant_id`／庫存對應（見 `buildAdminBookingsOrClause`），
+ * 否則總站代銷（庫存為老師、`sold_via` 為總站）會在分站後台被誤排除。
  */
 export function getOrderAdminClassCreatorMerchantIdFilter(): string | null {
   const v = envTrim("BOOKINGS_ORDER_ADMIN_CLASS_CREATOR_MERCHANT_ID");
@@ -27,13 +28,12 @@ export type AdminBookingsAccessFilter =
   | { mode: "merchant_scope"; orClause: string };
 
 /**
- * 後台訂單列／變更所用篩選：優先「開課商家」精準篩選，否則沿用多 merchant OR（含列表課庫存）。
+ * 後台訂單列／儀表板／匯出：與 `buildAdminBookingsOrClause` 一致（本店 merchant／sold_via、列表課庫存對應）。
+ * 不再使用「僅 class_creator」模式，避免與總站下單實際寫入之 `merchant_id` 不一致。
  */
 export async function getAdminBookingsAccessFilter(
   supabase: SupabaseClient
 ): Promise<AdminBookingsAccessFilter | null> {
-  const creator = getOrderAdminClassCreatorMerchantIdFilter();
-  if (creator) return { mode: "class_creator", merchantId: creator };
   const orClause = await buildAdminBookingsOrClause(supabase);
   if (!orClause) return null;
   return { mode: "merchant_scope", orClause };
