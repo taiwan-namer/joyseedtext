@@ -38,8 +38,8 @@ import {
 const CANVAS_MAX_WIDTH_PX = 1280;
 
 /**
- * 畫布預設與前台首頁完整體驗一致：全站頁首、橫幅、精選、輪播、課程區、關於／FAQ／聯絡、頁尾。
- * （實際前台主內容仍由 layout 掛頁首／頁尾；此處僅供預覽與編輯區塊設定。）
+ * 畫布預覽與分站首頁（`app/page.tsx`／`BranchSiteHomeView`）一致：頁首、主圖、輪播、熱門課程列、關於／FAQ／聯絡、頁尾。
+ * 側欄仍可管理其他區塊 ID（精選分館、新上架等），但該類區塊目前不在此分站首頁畫面中顯示。
  */
 const ACTIVE_HOME_BLOCK_IDS: string[] = [
   "header",

@@ -43,18 +43,9 @@ import EntryPopupAd from "./components/home/EntryPopupAd";
 import { TrainIcon } from "@/components/icons/TrainIcon";
 import BlockWrapper from "@/app/admin/(protected)/layout/BlockWrapper";
 import HeroFloatingIconsEditor from "@/app/admin/(protected)/layout/HeroFloatingIconsEditor";
+import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adminLayoutCanvasTypes";
 
-/** 後台「首頁版面」可編輯畫布：與前台同一套 HomePageClient，外加區塊框線／高度／裝飾圖拖曳 */
-export type AdminLayoutCanvasConfig = {
-  selectedBlockId: string | null;
-  onSelectBlock: (id: string) => void;
-  onBlockResizeHeight: (blockId: string, heightPx: number | null) => void;
-  onBlockFloatingIconsChange: (blockId: string, next: HeroFloatingIcon[]) => void;
-  /** 後台桌機／手機畫布：裝飾圖座標分別儲存 */
-  floatingIconsCoordinateMode?: "desktop" | "mobile";
-  selectedFloatingIconId?: string | null;
-  onSelectFloatingIcon?: (blockId: string, iconId: string) => void;
-};
+export type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adminLayoutCanvasTypes";
 
 /** 首頁 Hero 底部：課程關鍵字搜尋（導向 /courses?q=） */
 function HeroCourseSearchBar() {
