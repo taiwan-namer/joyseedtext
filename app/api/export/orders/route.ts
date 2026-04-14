@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { bookingRowDisplayAmountForBranch } from "@/lib/bookingBranchDisplayAmount";
 import { getAdminBookingsAccessFilter } from "@/lib/bookingsMerchantFilter";
 
 function escapeCsvCell(value: string): string {
@@ -60,7 +61,9 @@ export async function GET(request: NextRequest) {
     }
     let bookingsQuery = supabase
       .from("bookings")
-      .select("id, created_at, order_amount, status, parent_name, member_email, classes(title, price)");
+      .select(
+        "id, created_at, order_amount, addon_indices, metadata, status, parent_name, member_email, classes(title, price, addon_prices)"
+      );
     if (access.mode === "class_creator") {
       bookingsQuery = bookingsQuery.eq("class_creator_merchant_id", access.merchantId);
     } else {
@@ -90,15 +93,14 @@ export async function GET(request: NextRequest) {
             id: string;
             created_at: string;
             order_amount?: number | null;
+            addon_indices?: unknown;
+            metadata?: unknown;
             status: string;
             parent_name?: string | null;
             member_email: string;
-            classes?: { title?: string | null; price?: number | null } | null;
+            classes?: { title?: string | null; price?: number | null; addon_prices?: unknown } | null;
           };
-          const amount =
-            row.order_amount != null && row.order_amount >= 0
-              ? row.order_amount
-              : (row.classes?.price != null ? Number(row.classes.price) : 0);
+          const amount = bookingRowDisplayAmountForBranch(row);
           const courseTitle = row.classes?.title ?? "—";
           const studentName = row.parent_name ?? "—";
           const line =

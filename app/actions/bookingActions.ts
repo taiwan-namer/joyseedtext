@@ -12,6 +12,11 @@ import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { normalizeSlotTime } from "@/lib/slotTime";
 import { bookingHasExplicitSessionSlot } from "@/lib/bookingSessionSlot";
 import {
+  computeBookingDisplayClassPrice,
+  parseClassAddonPricesFromRaw,
+} from "@/lib/bookingBranchDisplayAmount";
+import { buildCheckoutMetadataFromOrder, getPeaceAddonPriceForMerchant } from "@/lib/bookingAdminAmounts";
+import {
   getAdminBookingMerchantScope,
   getAdminBookingsAccessFilter,
   getOrderAdminClassCreatorMerchantIdFilter,
@@ -30,6 +35,26 @@ function applyAdminBookingsAccess<T>(q: T, access: AdminBookingsAccessFilter): T
 function envTrim(key: string): string {
   const raw = process.env[key];
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+/** 結帳寫入 pending／RPC 的 metadata（安心包拆帳） */
+async function resolveCheckoutMetadataForBooking(
+  supabase: ReturnType<typeof createServerSupabase>,
+  merchantId: string,
+  classId: string,
+  orderAmount: number | null,
+  addonIndices: number[] | null
+): Promise<Record<string, unknown>> {
+  const { data: cls } = await supabase
+    .from("classes")
+    .select("addon_prices")
+    .eq("id", classId)
+    .eq("merchant_id", merchantId)
+    .maybeSingle();
+  const raw = cls ? (cls as { addon_prices?: unknown }).addon_prices : null;
+  const addonPrices = parseClassAddonPricesFromRaw(raw);
+  const storePeace = await getPeaceAddonPriceForMerchant(supabase, merchantId);
+  return buildCheckoutMetadataFromOrder(orderAmount, addonIndices, addonPrices, storePeace);
 }
 
 /**
@@ -138,6 +163,8 @@ async function createPendingPayment(
     addonIndices: number[] | null;
     orderAmount: number | null;
     paymentMethod: "linepay" | "ecpay" | "newebpay";
+    /** 結帳拆帳（安心包等），寫入 pending 後由 create_booking_from_pending 帶入 bookings.metadata */
+    metadata?: Record<string, unknown> | null;
   }
 ): Promise<{ success: true; pendingId: string; gatewayKey: string | null } | { success: false; error: string }> {
   const { paymentMethod } = params;
@@ -174,6 +201,7 @@ async function createPendingPayment(
       order_amount: params.orderAmount,
       payment_method: paymentMethod,
       gateway_key: gatewayKey?.trim() ?? null,
+      metadata: params.metadata ?? null,
     })
     .select("id")
     .single();
@@ -254,6 +282,16 @@ export async function createBooking(
         ? Math.round(totalAmount)
         : null;
 
+    const addonIndicesForMeta =
+      Array.isArray(addonIndices) && addonIndices.length > 0 ? addonIndices : null;
+    const checkoutMeta = await resolveCheckoutMetadataForBooking(
+      supabase,
+      merchantId,
+      classId,
+      orderAmount,
+      addonIndicesForMeta
+    );
+
     const appUrl = paymentSiteBaseUrl();
 
     if (pm === "linepay" || pm === "ecpay" || pm === "newebpay") {
@@ -268,9 +306,10 @@ export async function createBooking(
         allergyNote: (allergyOrSpecialNote ?? "").trim() || null,
         kidName: (kidName ?? "").trim() || null,
         kidAge: (kidAge ?? "").trim() || null,
-        addonIndices: Array.isArray(addonIndices) && addonIndices.length > 0 ? addonIndices : null,
+        addonIndices: addonIndicesForMeta,
         orderAmount,
         paymentMethod: pm,
+        metadata: checkoutMeta,
       });
       if (!pending.success) return { success: false, error: pending.error };
 
@@ -359,9 +398,10 @@ export async function createBooking(
       p_allergy_note: (allergyOrSpecialNote ?? "").trim() || null,
       p_kid_name: (kidName ?? "").trim() || null,
       p_kid_age: (kidAge ?? "").trim() || null,
-      p_addon_indices: Array.isArray(addonIndices) && addonIndices.length > 0 ? addonIndices : null,
+      p_addon_indices: addonIndicesForMeta,
       p_payment_method: pm,
       p_order_amount: orderAmount,
+      p_metadata: checkoutMeta,
     });
 
     if (error) return { success: false, error: error.message };
@@ -728,7 +768,7 @@ export type BookingWithClass = {
   slot_time: string | null;
   class_title: string | null;
   class_image_url: string | null;
-  /** 訂單金額（order_amount 或 classes.price） */
+  /** 顯示用金額（order_amount 或 classes.price）；分站可設 BOOKINGS_BRANCH_EXCLUDE_ADDON_NAMES_FROM_AMOUNT 自總額扣除指定加購名稱（如安心包） */
   class_price: number | null;
   /** 所選加購索引，用於顯示加購明細 */
   addon_indices: number[] | null;
@@ -799,6 +839,7 @@ export async function getMyBookings(): Promise<
         slot_time,
         order_amount,
         addon_indices,
+        metadata,
         refund_status,
         classes ( title, image_url, price, addon_prices )
       `),
@@ -822,7 +863,6 @@ export async function getMyBookings(): Promise<
           ? String(slotTimeRaw).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5)
           : null;
       const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
-      const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
       const addonRaw = classes?.addon_prices;
       let classAddonPrices: { name: string; price: number }[] | null = null;
       if (Array.isArray(addonRaw)) {
@@ -843,6 +883,18 @@ export async function getMyBookings(): Promise<
           // ignore
         }
       }
+      const addonIndicesParsed = parseAddonIndicesFromDb(r.addon_indices);
+      const classPrice =
+        orderAmount != null
+          ? computeBookingDisplayClassPrice(
+              orderAmount,
+              r.metadata,
+              addonIndicesParsed,
+              classAddonPrices
+            )
+          : classes?.price != null
+            ? Number(classes.price)
+            : null;
 
       return {
         id: String(r.id),
@@ -858,7 +910,7 @@ export async function getMyBookings(): Promise<
         class_title: classes?.title ?? null,
         class_image_url: classes?.image_url ?? null,
         class_price: classPrice,
-        addon_indices: parseAddonIndicesFromDb(r.addon_indices),
+        addon_indices: addonIndicesParsed,
         class_addon_prices: classAddonPrices,
         refund_status: r.refund_status != null ? String(r.refund_status) : null,
       };
@@ -945,6 +997,7 @@ export async function getAdminBookings(): Promise<
         slot_time,
         order_amount,
         addon_indices,
+        metadata,
         ecpay_trade_no,
         ecpay_payment_type,
         refund_status,
@@ -971,7 +1024,6 @@ export async function getAdminBookings(): Promise<
           ? String(slotTimeRaw).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5)
           : null;
       const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
-      const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
       const addonRaw = classes?.addon_prices;
       let classAddonPrices: { name: string; price: number }[] | null = null;
       if (Array.isArray(addonRaw)) {
@@ -992,6 +1044,18 @@ export async function getAdminBookings(): Promise<
           // ignore
         }
       }
+      const addonIndicesParsed = parseAddonIndicesFromDb(r.addon_indices);
+      const classPrice =
+        orderAmount != null
+          ? computeBookingDisplayClassPrice(
+              orderAmount,
+              r.metadata,
+              addonIndicesParsed,
+              classAddonPrices
+            )
+          : classes?.price != null
+            ? Number(classes.price)
+            : null;
 
       return {
         id: String(r.id),
@@ -1007,7 +1071,7 @@ export async function getAdminBookings(): Promise<
         class_title: classes?.title ?? null,
         class_image_url: classes?.image_url ?? null,
         class_price: classPrice,
-        addon_indices: parseAddonIndicesFromDb(r.addon_indices),
+        addon_indices: addonIndicesParsed,
         class_addon_prices: classAddonPrices,
         ecpay_trade_no: r.ecpay_trade_no != null ? String(r.ecpay_trade_no) : null,
         ecpay_payment_type: r.ecpay_payment_type != null ? String(r.ecpay_payment_type) : null,
@@ -1328,6 +1392,7 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
         slot_time,
         order_amount,
         addon_indices,
+        metadata,
         merchant_id,
         sold_via_merchant_id,
         class_creator_merchant_id,
@@ -1353,7 +1418,6 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
           ? String(slotTimeRaw).replace(/.*(\d{2}:\d{2}).*/, "$1").slice(0, 5)
           : null;
       const orderAmount = r.order_amount != null && r.order_amount !== "" ? Number(r.order_amount) : null;
-      const classPrice = orderAmount ?? (classes?.price != null ? Number(classes.price) : null);
       const addonRaw = classes?.addon_prices;
       let classAddonPrices: { name: string; price: number }[] | null = null;
       if (Array.isArray(addonRaw)) {
@@ -1374,6 +1438,18 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
           // ignore
         }
       }
+      const addonIndicesParsed = parseAddonIndicesFromDb(r.addon_indices);
+      const classPrice =
+        orderAmount != null
+          ? computeBookingDisplayClassPrice(
+              orderAmount,
+              r.metadata,
+              addonIndicesParsed,
+              classAddonPrices
+            )
+          : classes?.price != null
+            ? Number(classes.price)
+            : null;
       return {
         id: String(r.id),
         member_email: String(r.member_email),
@@ -1388,7 +1464,7 @@ export async function getBookingsByMemberEmailForAdmin(memberEmail: string): Pro
         class_title: classes?.title ?? null,
         class_image_url: classes?.image_url ?? null,
         class_price: classPrice,
-        addon_indices: parseAddonIndicesFromDb(r.addon_indices),
+        addon_indices: addonIndicesParsed,
         class_addon_prices: classAddonPrices,
         merchant_id: r.merchant_id != null ? String(r.merchant_id).trim() : "",
         sold_via_merchant_id:

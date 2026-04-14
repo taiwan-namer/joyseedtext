@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { bookingRowDisplayAmountForBranch } from "@/lib/bookingBranchDisplayAmount";
 import {
   applyAdminBookingsAccessToQuery,
   getAdminBookingsAccessFilter,
@@ -42,7 +43,9 @@ export async function GET(request: NextRequest) {
     if (!access) {
       return NextResponse.json({ error: "未設定店家" }, { status: 500 });
     }
-    const query = supabase.from("bookings").select("class_id, order_amount, classes(id, title, price)");
+    const query = supabase
+      .from("bookings")
+      .select("class_id, order_amount, addon_indices, metadata, classes(id, title, price, addon_prices)");
     const scoped = applyAdminBookingsAccessToQuery(query, access);
     const { data: rows, error } = await scoped
       .in("status", ["paid", "completed"])
@@ -61,14 +64,13 @@ export async function GET(request: NextRequest) {
       const row = r as {
         class_id: string;
         order_amount?: number | null;
-        classes?: { id?: string; title?: string | null; price?: number | null } | null;
+        addon_indices?: unknown;
+        metadata?: unknown;
+        classes?: { id?: string; title?: string | null; price?: number | null; addon_prices?: unknown } | null;
       };
       const classId = row.class_id;
       const title = row.classes?.title ?? "—";
-      const amount =
-        row.order_amount != null && row.order_amount >= 0
-          ? row.order_amount
-          : (row.classes?.price != null ? Number(row.classes.price) : 0);
+      const amount = bookingRowDisplayAmountForBranch(row);
 
       const cur = byClass.get(classId);
       if (cur) {

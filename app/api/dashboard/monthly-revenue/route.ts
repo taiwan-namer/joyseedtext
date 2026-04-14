@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { bookingRowDisplayAmountForBranch } from "@/lib/bookingBranchDisplayAmount";
 import {
   applyAdminBookingsAccessToQuery,
   getAdminBookingsAccessFilter,
@@ -25,7 +26,9 @@ export async function GET() {
     if (!access) {
       return NextResponse.json({ error: "未設定店家" }, { status: 500 });
     }
-    const query = supabase.from("bookings").select("created_at, order_amount, classes(price)");
+    const query = supabase
+      .from("bookings")
+      .select("created_at, order_amount, addon_indices, metadata, classes(price, addon_prices)");
     const scoped = applyAdminBookingsAccessToQuery(query, access);
     const { data: rows, error } = await scoped
       .in("status", ["paid", "completed"])
@@ -44,12 +47,15 @@ export async function GET() {
     }
 
     for (const r of rows ?? []) {
-      const row = r as { created_at: string; order_amount?: number | null; classes?: { price?: number | null } | null };
+      const row = r as {
+        created_at: string;
+        order_amount?: number | null;
+        addon_indices?: unknown;
+        metadata?: unknown;
+        classes?: { price?: number | null; addon_prices?: unknown } | null;
+      };
       const month = row.created_at.slice(0, 7);
-      const amount =
-        row.order_amount != null && row.order_amount >= 0
-          ? row.order_amount
-          : (row.classes?.price != null ? Number(row.classes.price) : 0);
+      const amount = bookingRowDisplayAmountForBranch(row);
       if (month in byMonth) {
         byMonth[month] += amount;
       }
