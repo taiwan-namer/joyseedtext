@@ -305,11 +305,12 @@ function DateTimeModal({
 // 客戶須知區塊：注意事項支援顯示全部/收合
 function CustomerNoticeSection({ notice }: { notice: CustomerNotice }) {
   const [notesExpanded, setNotesExpanded] = useState(false);
-  const notesLines = notice.注意事項.split("\n");
-  const hasLongNotes = notesLines.length > 2 || notice.注意事項.length > 120;
+  const notesText = String(notice.注意事項 ?? "");
+  const notesLines = notesText.split("\n");
+  const hasLongNotes = notesLines.length > 2 || notesText.length > 120;
   const notesPreview = hasLongNotes
     ? notesLines.slice(0, 2).join("\n") + (notesLines.length > 2 ? "…" : "")
-    : notice.注意事項;
+    : notesText;
 
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-6 mt-8">
@@ -350,7 +351,7 @@ function CustomerNoticeSection({ notice }: { notice: CustomerNotice }) {
         <div className="clear-left pt-2">
           <dt className="text-gray-500 mb-1">注意事項</dt>
           <dd className="text-gray-700 leading-relaxed whitespace-pre-line">
-            {hasLongNotes && !notesExpanded ? notesPreview : notice.注意事項}
+            {hasLongNotes && !notesExpanded ? notesPreview : notesText}
           </dd>
           {hasLongNotes && (
             <button
@@ -394,12 +395,17 @@ export default function CourseDetailPage() {
     let cancelled = false;
     (async () => {
       // merchant 隔離在 Server Action 內以環境變數強制，勿在 Client 讀 NEXT_PUBLIC_* 傳入（建置／執行時易為 undefined 而誤撈全庫）
-      const fromDb = await getCourseById(slug);
-      if (cancelled) return;
-      if (fromDb) {
-        setCourse(fromDb);
-        return;
+      try {
+        const fromDb = await getCourseById(slug);
+        if (cancelled) return;
+        if (fromDb) {
+          setCourse(fromDb);
+          return;
+        }
+      } catch {
+        /* 伺服端 map／序列化拋錯時改走靜態或 notFound，避免未處理 rejection 白屏 */
       }
+      if (cancelled) return;
       const fromStatic = getCourseBySlug(slug);
       if (fromStatic) setCourse(fromStatic);
       else notFound();
@@ -636,7 +642,13 @@ export default function CourseDetailPage() {
             <div className="md:sticky md:top-24 rounded-xl border border-gray-100 bg-gray-50/80 p-6 shadow-sm">
               {/* 選項標籤：後台右欄 0-3歲、3-6歲、可大人陪同 等 */}
               <div className="flex flex-wrap gap-2 mb-4">
-                {(course.sidebarOptionLabels ?? course.ageTags).map((tag) => (
+                {(
+                  (Array.isArray(course.sidebarOptionLabels)
+                    ? course.sidebarOptionLabels
+                    : undefined) ??
+                  (Array.isArray(course.ageTags) ? course.ageTags : undefined) ??
+                  []
+                ).map((tag) => (
                   <span
                     key={tag}
                     className="inline-block px-3 py-1 text-sm text-gray-600 bg-gray-200 rounded-full"

@@ -17,7 +17,8 @@ export function sidebarOptionToDisplayLabels(options: string[] | null | undefine
   const arr = options ?? [];
   const out: string[] = [];
   for (const v of arr) {
-    const m = /^__range:(\d+):(\d+)$/.exec(v);
+    const s = typeof v === "string" ? v : v == null ? "" : String(v);
+    const m = /^__range:(\d+):(\d+)$/.exec(s);
     if (m) {
       const a = parseInt(m[1], 10);
       const b = parseInt(m[2], 10);
@@ -26,10 +27,10 @@ export function sidebarOptionToDisplayLabels(options: string[] | null | undefine
       out.push(`${lo}-${hi}歲`);
       continue;
     }
-    if (LEGACY_SIDEBAR_LABELS[v]) {
-      out.push(LEGACY_SIDEBAR_LABELS[v]);
-    } else if (v && !v.startsWith("__")) {
-      out.push(v);
+    if (LEGACY_SIDEBAR_LABELS[s]) {
+      out.push(LEGACY_SIDEBAR_LABELS[s]);
+    } else if (s && !s.startsWith("__")) {
+      out.push(s);
     }
   }
   return out;
