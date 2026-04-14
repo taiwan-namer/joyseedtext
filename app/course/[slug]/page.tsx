@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ChevronRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight as ChevronRightArrow, X } from "lucide-react";
 import { getCourseBySlug } from "../course-data";
 import { getCourseById } from "@/app/actions/productActions";
@@ -15,6 +15,8 @@ import { HeaderMember } from "@/app/components/HeaderMember";
 import type { CustomerNotice } from "../course-data";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../course-data";
+import { useCourseSlugParam } from "../useCourseSlugParam";
+import { withCourseFetchTimeout } from "@/lib/courseClientFetch";
 
 // 取得某年某月日曆格（含前面空白格），週以日為首
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -383,9 +385,8 @@ function CustomerNoticeSection({ notice }: { notice: CustomerNotice }) {
 type CourseForDisplay = CourseForPublic | CourseDetail;
 
 export default function CourseDetailPage() {
-  const params = useParams();
   const router = useRouter();
-  const slug = typeof params.slug === "string" ? params.slug : params.slug?.[0];
+  const slug = useCourseSlugParam();
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay | null>(null);
   /** 已嘗試載入但 DB／靜態皆無此課程（勿在 useEffect 呼叫 notFound，會觸發客戶端例外） */
@@ -404,7 +405,7 @@ export default function CourseDetailPage() {
     (async () => {
       // merchant 隔離在 Server Action 內以環境變數強制，勿在 Client 讀 NEXT_PUBLIC_* 傳入（建置／執行時易為 undefined 而誤撈全庫）
       try {
-        const fromDb = await getCourseById(slug);
+        const fromDb = await withCourseFetchTimeout(getCourseById(slug));
         if (cancelled) return;
         if (fromDb) {
           setCourse(fromDb);

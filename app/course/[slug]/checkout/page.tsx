@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
-import { useParams, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { CreditCard, Building, Smartphone, Loader2 } from "lucide-react";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import LoginModal from "@/app/components/LoginModal";
@@ -16,6 +16,8 @@ import { ensureMemberForBooking } from "@/app/actions/memberActions";
 import { getPaymentSettings } from "@/app/actions/frontendSettingsActions";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../../course-data";
+import { useCourseSlugParam } from "../../useCourseSlugParam";
+import { withCourseFetchTimeout } from "@/lib/courseClientFetch";
 
 type CourseForDisplay = CourseForPublic | CourseDetail;
 
@@ -40,10 +42,9 @@ type PendingCheckoutData = {
 };
 
 export default function CheckoutPage() {
-  const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const slug = typeof params.slug === "string" ? params.slug : params.slug?.[0];
+  const slug = useCourseSlugParam();
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay | null>(null);
   const [courseMissing, setCourseMissing] = useState(false);
@@ -82,7 +83,7 @@ export default function CheckoutPage() {
     setCourseMissing(false);
     (async () => {
       try {
-        const fromDb = await getCourseById(slug);
+        const fromDb = await withCourseFetchTimeout(getCourseById(slug));
         if (cancelled) return;
         if (fromDb) {
           setCourse(fromDb);

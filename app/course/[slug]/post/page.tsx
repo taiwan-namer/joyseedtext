@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { getCourseBySlug } from "../../course-data";
 import { getCourseById } from "@/app/actions/productActions";
@@ -10,6 +9,8 @@ import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../../course-data";
+import { useCourseSlugParam } from "../../useCourseSlugParam";
+import { withCourseFetchTimeout } from "@/lib/courseClientFetch";
 
 type CourseForDisplay = CourseForPublic | CourseDetail;
 
@@ -44,8 +45,7 @@ function replaceImagePlaceholders(
 
 // 部落格全文頁：主圖 + 內文段落（靜態）或 post_content HTML（DB），參考 Rose's Blog 文章版型
 export default function CoursePostPage() {
-  const params = useParams();
-  const slug = typeof params.slug === "string" ? params.slug : params.slug?.[0];
+  const slug = useCourseSlugParam();
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay | null>(null);
   const [courseMissing, setCourseMissing] = useState(false);
@@ -57,7 +57,7 @@ export default function CoursePostPage() {
     setCourseMissing(false);
     (async () => {
       try {
-        const fromDb = await getCourseById(slug);
+        const fromDb = await withCourseFetchTimeout(getCourseById(slug));
         if (cancelled) return;
         if (fromDb) {
           setCourse(fromDb);
