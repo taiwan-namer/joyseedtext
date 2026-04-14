@@ -9,6 +9,7 @@ import {
   type CourseForEdit,
   type MerchantSummaryRow,
 } from "@/app/actions/productActions";
+import { suggestCourseSlugFromTitle } from "@/app/actions/courseSlugSuggest";
 import { Loader2, ChevronRight, ChevronLeft, ChevronRight as ChevronRightArrow, X, Plus } from "lucide-react";
 
 /** 與 DB 總站課程 merchant_id 一致（build 時寫入）；用於總站專屬 UI（自動產碼等） */
@@ -329,6 +330,7 @@ export default function CourseEditForm({
   const [mapEmbedHtml, setMapEmbedHtml] = useState(() => initialData?.map_embed_html ?? "");
   const [slugInput, setSlugInput] = useState(() => initialData?.slug ?? slugifyCourseTitle(initialData?.title ?? ""));
   const slugManuallyEditedRef = useRef(false);
+  const slugSuggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [merchants, setMerchants] = useState<MerchantSummaryRow[]>([]);
   const [selectedCreateMerchantId, setSelectedCreateMerchantId] = useState(siteHqMerchantId);
   const districtOptions = useMemo(() => getDistrictsForCity(cityRegion), [cityRegion]);
@@ -456,6 +458,14 @@ export default function CourseEditForm({
       imageSlotsRef.current.forEach((s) => {
         if (s.preview && s.preview.startsWith("blob:")) URL.revokeObjectURL(s.preview);
       });
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (slugSuggestTimerRef.current != null) {
+        clearTimeout(slugSuggestTimerRef.current);
+      }
     };
   }, []);
 
@@ -967,9 +977,23 @@ export default function CourseEditForm({
                     disabled={isPending}
                     defaultValue={initialData?.title ?? ""}
                     onChange={(e) => {
-                      if (!slugManuallyEditedRef.current) {
-                        setSlugInput(slugifyCourseTitle(e.target.value));
+                      const v = e.target.value;
+                      if (slugManuallyEditedRef.current) return;
+                      setSlugInput(slugifyCourseTitle(v));
+                      if (slugSuggestTimerRef.current != null) {
+                        clearTimeout(slugSuggestTimerRef.current);
                       }
+                      slugSuggestTimerRef.current = setTimeout(() => {
+                        slugSuggestTimerRef.current = null;
+                        if (slugManuallyEditedRef.current) return;
+                        void suggestCourseSlugFromTitle(v)
+                          .then((s) => {
+                            if (!slugManuallyEditedRef.current) setSlugInput(s);
+                          })
+                          .catch(() => {
+                            /* 維持本地 slugify */
+                          });
+                      }, 450);
                     }}
                   />
                 </div>
@@ -991,7 +1015,9 @@ export default function CourseEditForm({
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     前台網址為 <code className="rounded bg-gray-100 px-1">/course/代稱</code>
-                    ；小寫英數與連字號，勿與 booking、page 等保留字或 UUID 格式相同。變更標題時會自動建議代稱，若已手動編輯則不再覆寫。
+                    ；小寫英數與連字號，勿與 booking、page 等保留字或 UUID 格式相同。變更標題時會自動建議代稱（後台已設定{" "}
+                    <code className="rounded bg-gray-100 px-1">GOOGLE_TRANSLATION_API_KEY</code>{" "}
+                    時，中文標題會先經 Google 翻譯再產生英文代稱）。若已手動編輯代稱則不再覆寫。
                   </p>
                 </div>
                 <div className="mb-4">
