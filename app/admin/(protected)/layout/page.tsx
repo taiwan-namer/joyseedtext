@@ -63,7 +63,7 @@ const BRANCH_HOME_CANVAS_BLOCK_IDS: string[] = [
   "hero",
   "featured_categories",
   "carousel",
-  "courses",
+  "courses_grid",
   "about",
   "faq",
   "contact",
@@ -76,7 +76,6 @@ const ACTIVE_HOME_BLOCK_IDS: string[] = [...BRANCH_HOME_CANVAS_BLOCK_IDS];
 const OPTIONAL_LAYOUT_BLOCK_IDS: string[] = [
   "carousel_2",
   "full_width_image",
-  "courses_grid",
   "courses_list",
 ];
 
@@ -1619,13 +1618,7 @@ export default function AdminLayoutPage() {
                   </div>
                 ) : null}
                 {availableOptionalBlocks.length > 0 ? (
-                  <div>
-                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                      進階（總站版型）
-                    </h3>
-                    <p className="text-[10px] text-gray-500 mb-1.5 leading-snug">
-                      僅畫布預覽（訪客首頁不顯示）。點選後可調背景／高度／裝飾圖；內容請至前台設定或總站版型。
-                    </p>
+                  <div className="mt-3 pt-3 border-t border-gray-200/80">
                     <ul className="space-y-1.5">
                       {availableOptionalBlocks.map((id) => (
                         <li key={id}>

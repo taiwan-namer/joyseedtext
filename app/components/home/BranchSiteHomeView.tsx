@@ -7,7 +7,6 @@ import FAQ from "@/app/components/FAQ";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import HomeFeaturedCoursesOnePlusSix from "@/app/components/home/HomeFeaturedCoursesOnePlusSix";
 import HomeCoursesGridListBlock from "@/app/components/home/HomeCoursesGridListBlock";
-import HomeMarketplaceCoursesSection from "@/app/components/home/HomeMarketplaceCoursesSection";
 import HeroFloatingIconsLayer from "@/app/components/home/HeroFloatingIconsLayer";
 import { getCoursesForHomepage } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity } from "@/app/lib/mapCourseToHomeActivity";
@@ -28,6 +27,7 @@ const BRANCH_LAYOUT_ID_LIST = [
   "hero_carousel",
   "carousel",
   "featured_categories",
+  /** 舊版面 id，仍須可渲染（與 courses_grid 相同內容） */
   "courses",
   "courses_grid",
   "courses_list",
@@ -439,14 +439,6 @@ export default function BranchSiteHomeView({
       </section>
     ) : null;
 
-  const coursesInner = (
-    <HomeMarketplaceCoursesSection
-      blockStyle={admin ? {} : getBlockStyle("courses")}
-      activities={homeActivities}
-      loading={homeCoursesLoading}
-      error={homeCoursesError}
-    />
-  );
   const featuredCoursesInner = (
     <HomeFeaturedCoursesOnePlusSix blockStyle={admin ? {} : getBlockStyle("featured_categories")} />
   );
@@ -641,22 +633,25 @@ export default function BranchSiteHomeView({
     );
   };
 
-  const renderCoursesGridOrListSection = (blockId: "courses_grid" | "courses_list"): React.ReactNode => {
+  const renderCoursesGridOrListSection = (
+    blockId: "courses" | "courses_grid" | "courses_list"
+  ): React.ReactNode => {
+    const variant = blockId === "courses_list" ? "list" : "grid";
     const inner = (
       <section className="relative w-full py-6 pb-8 bg-page" style={admin ? {} : getBlockStyle(blockId)}>
         {admin ? (
           <div className="max-w-7xl mx-auto px-4 mb-2">
             <p className="text-[11px] font-medium text-amber-900/90 bg-amber-100/60 border border-amber-200/80 rounded-lg px-2 py-1 inline-block">
-              {blockId === "courses_list"
-                ? "列表：橫向圖＋文字（與總站首頁此版型一致）"
-                : "網格：多欄卡片（與總站首頁此版型一致）"}
+              {variant === "list"
+                ? "列表：橫向精簡卡（左圖右文、窄畫布亦穩定）"
+                : "網格：多欄卡片"}
             </p>
           </div>
         ) : null}
         <div className="max-w-7xl mx-auto px-4">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">熱門課程</h2>
           <HomeCoursesGridListBlock
-            variant={blockId === "courses_list" ? "list" : "grid"}
+            variant={variant}
             activities={homeActivities}
             loading={homeCoursesLoading}
             error={homeCoursesError}
@@ -730,7 +725,7 @@ export default function BranchSiteHomeView({
         if (carouselList.length === 0) return null;
         return wrap("carousel", carouselInner);
       case "courses":
-        return wrap("courses", coursesInner);
+        return renderCoursesGridOrListSection("courses");
       case "featured_categories":
         return wrap("featured_categories", featuredCoursesInner);
       case "about":

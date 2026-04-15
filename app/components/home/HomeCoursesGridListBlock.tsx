@@ -14,13 +14,15 @@ type Props = {
   showPreviewHint?: boolean;
 };
 
+function pickAgePreview(tags: string[] | undefined): string[] {
+  const t = (tags ?? []).map((x) => String(x).trim()).filter(Boolean);
+  return t.slice(0, 3);
+}
+
 function EmptyLayoutMock({ variant }: { variant: "grid" | "list" }) {
   if (variant === "grid") {
     return (
-      <div
-        className="grid grid-cols-2 sm:grid-cols-3 gap-3 opacity-70"
-        aria-hidden
-      >
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 opacity-70" aria-hidden>
         {[0, 1, 2].map((i) => (
           <div
             key={i}
@@ -36,18 +38,22 @@ function EmptyLayoutMock({ variant }: { variant: "grid" | "list" }) {
     );
   }
   return (
-    <div className="space-y-3 opacity-70" aria-hidden>
-      {[0, 1].map((i) => (
+    <div className="space-y-2.5 opacity-70" aria-hidden>
+      {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="flex flex-row gap-4 p-3 rounded-xl border-2 border-dashed border-amber-300/90 bg-amber-50/40"
+          className="flex flex-row items-center gap-3 rounded-2xl border-2 border-dashed border-amber-300/90 bg-amber-50/40 p-3"
         >
-          <div className="w-24 sm:w-32 shrink-0 aspect-square rounded-lg bg-amber-100/80 border border-amber-200/60" />
-          <div className="flex-1 flex flex-col gap-2 justify-center min-w-0">
-            <div className="h-3 rounded bg-amber-200/70 w-2/3" />
-            <div className="h-2.5 rounded bg-amber-100/80 w-1/3" />
-            <div className="h-8 rounded-md bg-amber-200/50 w-24 ml-auto" />
+          <div className="h-[72px] w-[72px] shrink-0 rounded-xl bg-amber-100/80 border border-amber-200/60" />
+          <div className="flex-1 min-w-0 flex flex-col gap-2 py-0.5">
+            <div className="h-3 rounded bg-amber-200/70 w-4/5 max-w-[200px]" />
+            <div className="h-2 rounded bg-amber-100/80 w-1/3 max-w-[100px]" />
+            <div className="flex gap-1.5">
+              <div className="h-5 w-12 rounded-full bg-amber-100/80" />
+              <div className="h-5 w-14 rounded-full bg-amber-100/80" />
+            </div>
           </div>
+          <div className="h-9 w-20 shrink-0 rounded-full bg-amber-200/50" />
         </div>
       ))}
     </div>
@@ -55,7 +61,7 @@ function EmptyLayoutMock({ variant }: { variant: "grid" | "list" }) {
 }
 
 /**
- * 熱門課程「網格」與「列表」版型：與總站首頁積木對應；無資料時可顯示線框示意。
+ * 熱門課程「網格」與「列表」版型；列表為固定縮圖寬，避免窄畫布時圖片撐滿變形。
  */
 export default function HomeCoursesGridListBlock({
   variant,
@@ -68,22 +74,36 @@ export default function HomeCoursesGridListBlock({
 
   if (loading) {
     return (
-      <div className={isList ? "space-y-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"}>
-        {Array.from({ length: isList ? 2 : 4 }).map((_, i) => (
+      <div className={isList ? "space-y-3" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"}>
+        {Array.from({ length: isList ? 3 : 4 }).map((_, i) => (
           <div
             key={i}
-            className={`bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm animate-pulse ${
-              isList ? "flex flex-row sm:flex-row gap-4 p-4" : "flex flex-col"
-            }`}
+            className={
+              isList
+                ? "flex flex-row items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm animate-pulse"
+                : "bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm flex flex-col animate-pulse"
+            }
           >
-            <div
-              className={`bg-gray-200 ${isList ? "w-full sm:w-40 shrink-0 aspect-square" : "aspect-square"}`}
-            />
-            <div className="p-3 space-y-2 flex-1">
-              <div className="h-4 bg-gray-200 rounded w-2/3" />
-              <div className="h-3 bg-gray-200 rounded w-1/3" />
-              <div className="h-8 bg-gray-200 rounded-lg w-full mt-2" />
-            </div>
+            {isList ? (
+              <>
+                <div className="h-[72px] w-[72px] shrink-0 rounded-xl bg-gray-200" />
+                <div className="flex-1 space-y-2 py-1">
+                  <div className="h-4 bg-gray-200 rounded w-3/4" />
+                  <div className="h-3 bg-gray-200 rounded w-1/4" />
+                  <div className="h-3 bg-gray-100 rounded w-1/2" />
+                </div>
+                <div className="h-9 w-24 shrink-0 rounded-full bg-gray-200" />
+              </>
+            ) : (
+              <>
+                <div className="aspect-square bg-gray-200" />
+                <div className="p-3 space-y-2 flex-1">
+                  <div className="h-4 bg-gray-200 rounded w-2/3" />
+                  <div className="h-3 bg-gray-200 rounded w-1/3" />
+                  <div className="h-8 bg-gray-200 rounded-lg w-full mt-2" />
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -102,8 +122,8 @@ export default function HomeCoursesGridListBlock({
         {showPreviewHint ? (
           <p className="text-xs text-amber-900/90 bg-amber-50 border border-amber-200/80 rounded-lg px-3 py-2">
             {isList
-              ? "列表版型示意：橫向圖＋文字；有上架課程後會自動帶入。"
-              : "網格版型示意：多欄卡片；有上架課程後會自動帶入。"}
+              ? "列表版型：左方固定縮圖、右側標題與報名；有上架課程後會自動帶入。"
+              : "網格版型：多欄卡片；有上架課程後會自動帶入。"}
           </p>
         ) : null}
         <EmptyLayoutMock variant={variant} />
@@ -112,46 +132,104 @@ export default function HomeCoursesGridListBlock({
     );
   }
 
+  if (isList) {
+    return (
+      <ul className="space-y-3 list-none p-0 m-0">
+        {activities.map((activity) => {
+          const isSoldOut = activity.stock === 0;
+          const agePreview = pickAgePreview(activity.ageTags);
+          return (
+            <li key={activity.id}>
+              <article className="group flex flex-row items-stretch gap-3 rounded-2xl border border-gray-100/90 bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-amber-100">
+                <div className="relative h-[72px] w-[72px] sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                  {activity.imageUrl ? (
+                    <NextImage
+                      src={activity.imageUrl}
+                      alt=""
+                      fill
+                      sizes="80px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <LucideImage className="w-9 h-9 text-gray-400" strokeWidth={1.5} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 py-0.5">
+                  <h3 className="text-sm font-semibold leading-snug text-gray-900 line-clamp-2 sm:pr-2">
+                    {activity.title}
+                  </h3>
+                  {agePreview.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {agePreview.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex max-w-full truncate rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-900/90 ring-1 ring-amber-200/60"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="text-sm font-semibold text-amber-600 tabular-nums">
+                    NT$ {activity.price.toLocaleString()} 起
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-stretch justify-center self-center pl-1">
+                  <Link
+                    href={activity.detailHref}
+                    className={`inline-flex min-h-[2.25rem] min-w-[4.5rem] items-center justify-center rounded-full px-4 text-xs font-semibold transition-colors sm:text-sm ${
+                      isSoldOut
+                        ? "cursor-not-allowed bg-gray-100 text-gray-400 pointer-events-none"
+                        : "bg-amber-500 text-white hover:bg-amber-600"
+                    }`}
+                  >
+                    {isSoldOut ? "額滿" : "報名"}
+                  </Link>
+                </div>
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
   return (
-    <div className={isList ? "space-y-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {activities.map((activity) => {
         const isSoldOut = activity.stock === 0;
         return (
           <article
             key={activity.id}
-            className={`bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow ${
-              isList ? "flex flex-row sm:flex-row gap-4 p-4" : "flex flex-col"
-            }`}
+            className="flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md"
           >
-            <div
-              className={`relative bg-gray-200 flex items-center justify-center overflow-hidden ${
-                isList ? "w-full sm:w-40 shrink-0 aspect-square" : "aspect-square"
-              }`}
-            >
+            <div className="relative aspect-square bg-gray-200">
               {activity.imageUrl ? (
                 <NextImage
                   src={activity.imageUrl}
                   alt=""
                   fill
-                  sizes={
-                    isList ? "(max-width:640px) 100vw, 160px" : "(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
-                  }
+                  sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
                   className="object-cover"
                 />
               ) : (
-                <LucideImage className="w-14 h-14 text-gray-400 relative z-[1]" strokeWidth={1.5} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <LucideImage className="w-14 h-14 text-gray-400" strokeWidth={1.5} />
+                </div>
               )}
             </div>
-            <div className="p-3 flex-1 flex flex-col min-h-0">
-              <h3 className="font-medium text-gray-800 line-clamp-2 mb-2 text-sm">{activity.title}</h3>
-              <p className="text-amber-600 font-semibold text-sm mb-2">
+            <div className="flex min-h-0 flex-1 flex-col p-3">
+              <h3 className="mb-2 line-clamp-2 text-sm font-medium text-gray-800">{activity.title}</h3>
+              <p className="mb-2 text-sm font-semibold text-amber-600 tabular-nums">
                 NT$ {activity.price.toLocaleString()} 起
               </p>
               <Link
                 href={activity.detailHref}
-                className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
+                className={`mt-auto block w-full rounded-lg py-2.5 text-center text-sm font-medium transition-colors ${
                   isSoldOut
-                    ? "bg-gray-200 text-gray-500 cursor-not-allowed pointer-events-none"
+                    ? "cursor-not-allowed bg-gray-200 text-gray-500 pointer-events-none"
                     : "bg-amber-500 text-white hover:bg-amber-600"
                 }`}
               >

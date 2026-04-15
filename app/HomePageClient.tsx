@@ -1633,34 +1633,80 @@ export default function WonderVoyageHomePage({
           <section className="w-full pt-[200px] py-6 pb-8 relative bg-page" style={getBlockStyle(block.id)}>
             <div className="max-w-7xl mx-auto px-4">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">熱門課程</h2>
-              <div className={block.id === "courses_list" ? "space-y-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"}>
+              <div className={block.id === "courses_list" ? "space-y-3" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"}>
                 {activities.length === 0 ? (
                   <div className="py-12 text-center text-gray-500 text-sm">尚無課程</div>
                 ) : (
                   activities.map((activity) => {
                     const isSoldOut = activity.stock === 0;
+                    if (block.id === "courses_list") {
+                      return (
+                        <article
+                          key={activity.id}
+                          className="flex flex-row items-stretch gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm"
+                        >
+                          <div className="relative h-[72px] w-[72px] sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-xl bg-gray-200">
+                            {isValidImageUrl(activity.imageUrl) ? (
+                              <Image
+                                src={activity.imageUrl}
+                                alt=""
+                                fill
+                                sizes="80px"
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <ImageIcon className="w-9 h-9 text-gray-400" strokeWidth={1.5} />
+                              </div>
+                            )}
+                            <CourseCoverBadgesCompact
+                              isFull={isSoldOut}
+                              badgeNew={!!activity.badgeNew}
+                              badgeHot={!!activity.badgeHot}
+                              badgeFeatured={!!activity.badgeFeatured}
+                              primaryAgeTag={pickPrimaryAgeTag(activity.ageTags)}
+                            />
+                          </div>
+                          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+                            <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">{activity.title}</h3>
+                            <p className="text-brand text-sm font-semibold tabular-nums">
+                              NT$ {activity.price.toLocaleString()} 起
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center">
+                            <Link
+                              href={activity.detailHref}
+                              prefetch={true}
+                              className={`inline-flex min-h-[2.25rem] items-center justify-center rounded-full px-4 text-xs font-semibold sm:text-sm ${
+                                isSoldOut
+                                  ? "cursor-not-allowed bg-gray-100 text-gray-400 pointer-events-none"
+                                  : "bg-brand text-white hover:bg-brand-hover"
+                              }`}
+                            >
+                              {isSoldOut ? "額滿" : "報名"}
+                            </Link>
+                          </div>
+                        </article>
+                      );
+                    }
                     return (
                       <article
                         key={activity.id}
-                        className={`bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col ${block.id === "courses_list" ? "flex-row sm:flex-row gap-4 p-4" : ""}`}
+                        className="flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md"
                       >
-                        <div
-                          className={`aspect-square relative bg-gray-200 flex items-center justify-center overflow-hidden ${block.id === "courses_list" ? "w-full sm:w-40 shrink-0" : ""}`}
-                        >
+                        <div className="relative aspect-square bg-gray-200">
                           {isValidImageUrl(activity.imageUrl) ? (
                             <Image
                               src={activity.imageUrl}
                               alt=""
                               fill
-                              sizes={
-                                block.id === "courses_list"
-                                  ? "(max-width:640px) 100vw, 160px"
-                                  : "(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
-                              }
+                              sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 25vw"
                               className="object-cover"
                             />
                           ) : (
-                            <ImageIcon className="w-14 h-14 text-gray-400" strokeWidth={1.5} />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <ImageIcon className="w-14 h-14 text-gray-400" strokeWidth={1.5} />
+                            </div>
                           )}
                           <CourseCoverBadgesCompact
                             isFull={isSoldOut}
@@ -1670,13 +1716,15 @@ export default function WonderVoyageHomePage({
                             primaryAgeTag={pickPrimaryAgeTag(activity.ageTags)}
                           />
                         </div>
-                        <div className="p-3 flex-1 flex flex-col min-h-0">
-                          <h3 className="font-medium text-gray-800 line-clamp-2 mb-2 text-sm">{activity.title}</h3>
-                          <p className="text-brand font-semibold text-sm mb-2">NT$ {activity.price.toLocaleString()} 起</p>
+                        <div className="flex min-h-0 flex-1 flex-col p-3">
+                          <h3 className="mb-2 line-clamp-2 text-sm font-medium text-gray-800">{activity.title}</h3>
+                          <p className="mb-2 text-sm font-semibold text-brand tabular-nums">
+                            NT$ {activity.price.toLocaleString()} 起
+                          </p>
                           <Link
                             href={activity.detailHref}
                             prefetch={true}
-                            className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
+                            className={`mt-auto block w-full rounded-lg py-2.5 text-center text-sm font-medium transition-colors ${
                               isSoldOut ? "bg-gray-200 text-gray-500 cursor-not-allowed pointer-events-none" : "bg-brand text-white hover:bg-brand-hover"
                             }`}
                           >
