@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { getStoreSettings } from "./actions/storeSettingsActions";
 import { getSeoSettings } from "./actions/frontendSettingsActions";
 import { StoreSettingsProvider } from "./providers/StoreSettingsProvider";
 import ChatWidget from "./components/chat/ChatWidget";
+import { getMainSiteCanonicalOrigin } from "@/lib/mainSiteCanonical";
 import { isIndexingAllowed } from "@/lib/siteIndexing";
 
 const DEFAULT_TITLE = "童趣島 WonderVoyage | 兒童才藝活動報名";
@@ -16,7 +18,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const keywords = seo.seoKeywords && seo.seoKeywords.trim() ? seo.seoKeywords.trim() : undefined;
   const faviconUrl = seo.seoFaviconUrl && seo.seoFaviconUrl.trim() ? seo.seoFaviconUrl.trim() : undefined;
   const indexing = isIndexingAllowed();
+  const headerList = headers();
+  const pathname = headerList.get("x-pathname")?.trim() || "/";
+  const canonicalPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+
   return {
+    metadataBase: getMainSiteCanonicalOrigin(),
+    alternates: {
+      canonical: canonicalPath,
+    },
     title,
     description,
     keywords: keywords ? keywords.split(",").map((k) => k.trim()).filter(Boolean) : undefined,

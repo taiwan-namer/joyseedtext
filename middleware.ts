@@ -4,20 +4,29 @@ import { isIndexingAllowed } from "@/lib/siteIndexing";
 
 const ADMIN_SESSION_COOKIE = "admin_session";
 
-function withNoIndexHeader(response: NextResponse): NextResponse {
-  if (!isIndexingAllowed()) {
+/** 與 lib/siteIndexing 相容：未允許索引或 Vercel 預設網域時一律 noindex。 */
+function applyRobotsTag(response: NextResponse, request: NextRequest): NextResponse {
+  const hostname = request.nextUrl.hostname;
+  const isVercelDefaultHost = hostname.includes(".vercel.app");
+  if (!isIndexingAllowed() || isVercelDefaultHost) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
   }
   return response;
 }
 
+function nextWithPathname(request: NextRequest, pathname: string): NextResponse {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  return applyRobotsTag(NextResponse.next({ request: { headers: requestHeaders } }), request);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (!pathname.startsWith("/admin")) {
-    return withNoIndexHeader(NextResponse.next());
+    return nextWithPathname(request, pathname);
   }
   if (pathname === "/admin/logout") {
-    return NextResponse.next();
+    return nextWithPathname(request, pathname);
   }
   if (pathname === "/admin/login") {
     const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
@@ -25,12 +34,10 @@ export function middleware(request: NextRequest) {
     if (token && sessionKey && token === sessionKey) {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
-    return NextResponse.next();
+    return nextWithPathname(request, pathname);
   }
   // 其餘 /admin 由 app/admin/(protected)/layout.tsx 在 Node 環境驗證；傳 pathname 供 redirect 帶 next
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-pathname", pathname);
-  return withNoIndexHeader(NextResponse.next({ request: { headers: requestHeaders } }));
+  return nextWithPathname(request, pathname);
 }
 
 export const config = {
