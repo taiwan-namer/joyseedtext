@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronDown, Loader2, Users } from "lucide-react";
+import { ChevronLeft, ChevronDown, Loader2, Users, ChevronRight } from "lucide-react";
 import {
   getRollcallDatesWithCounts,
-  getRollcallSessionsByDate,
+  getRollcallSessionsInMonth,
   getBookingsForSession,
   type RollcallSession,
   type BookingWithMember,
   type SessionBookingsResult,
-  type RollcallDateWithCounts,
 } from "@/app/actions/bookingActions";
 import { updateSessionCapacity } from "@/app/actions/productActions";
 
@@ -34,13 +33,27 @@ const todayStr = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-/** 日期選單預設：距離今天最近的有課日期，若無則選第一天 */
-function pickDefaultDate(items: RollcallDateWithCounts[]): string | null {
-  if (items.length === 0) return null;
-  const today = todayStr();
-  const future = items.filter((d) => d.date >= today).sort((a, b) => a.date.localeCompare(b.date));
-  if (future.length > 0) return future[0].date;
-  return items[items.length - 1].date;
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+function monthBounds(year: number, month: number) {
+  const lastDay = new Date(year, month, 0).getDate();
+  const startStr = `${year}-${pad2(month)}-01`;
+  const endStr = `${year}-${pad2(month)}-${pad2(lastDay)}`;
+  return { startStr, endStr, lastDay };
+}
+
+/** 由週日開始的月曆格（含前後空白格） */
+function buildCalendarCells(year: number, month: number): ({ day: number; dateStr: string } | null)[] {
+  const first = new Date(year, month - 1, 1);
+  const { lastDay } = monthBounds(year, month);
+  const startPad = first.getDay();
+  const cells: ({ day: number; dateStr: string } | null)[] = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let d = 1; d <= lastDay; d++) {
+    cells.push({ day: d, dateStr: `${year}-${pad2(month)}-${pad2(d)}` });
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
 }
 
 function formatDateLabel(dateStr: string) {
@@ -183,14 +196,12 @@ function SessionAccordion({
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 shrink-0 text-sm text-gray-600" onClick={(e) => e.stopPropagation()}>
-          <span>已報名：<strong className="text-gray-900">{session.enrolledCount}</strong></span>
+          <span>
+            已報名：<strong className="text-gray-900">{session.enrolledCount}</strong>
+          </span>
           <span className="text-gray-400">/</span>
           <span>總名額：</span>
-          <CapacityCell
-            capacity={capacity}
-            isUpdating={updatingCapacity}
-            onUpdate={handleCapacityUpdate}
-          />
+          <CapacityCell capacity={capacity} isUpdating={updatingCapacity} onUpdate={handleCapacityUpdate} />
         </div>
       </button>
 
@@ -255,56 +266,87 @@ function SessionAccordion({
 }
 
 export default function AdminEnrollmentPage() {
-  const [dateItems, setDateItems] = useState<RollcallDateWithCounts[]>([]);
+  const now = new Date();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
+  const [monthData, setMonthData] = useState<Record<string, RollcallSession[]>>({});
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<RollcallSession[]>([]);
-  const [datesLoading, setDatesLoading] = useState(true);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [calendarLoading, setCalendarLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mobileDateMenuOpen, setMobileDateMenuOpen] = useState(false);
 
-  useEffect(() => {
-    setDatesLoading(true);
+  const refreshMonth = useCallback(async () => {
+    setCalendarLoading(true);
     setError(null);
-    getRollcallDatesWithCounts()
-      .then((res) => {
-        if (res.success) {
-          setDateItems(res.data);
-          setSelectedDate((prev) => {
-            if (prev && res.data.some((d) => d.date === prev)) return prev;
-            return pickDefaultDate(res.data);
-          });
-        } else {
-          setError(res.error);
-        }
-      })
-      .finally(() => setDatesLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedDate) {
-      setSessions([]);
-      return;
+    const res = await getRollcallSessionsInMonth(viewYear, viewMonth);
+    if (res.success) {
+      setMonthData(res.byDate);
+      void getRollcallDatesWithCounts();
+    } else {
+      setError(res.error);
+      setMonthData({});
     }
-    setSessionsLoading(true);
-    setError(null);
-    getRollcallSessionsByDate(selectedDate)
-      .then((res) => {
-        if (res.success) setSessions(res.data);
-        else setError(res.error);
-      })
-      .finally(() => setSessionsLoading(false));
-  }, [selectedDate]);
+    setCalendarLoading(false);
+  }, [viewYear, viewMonth]);
 
-  const dateSelectOptions = useMemo(
-    () =>
-      dateItems.map((d) => ({
-        value: d.date,
-        label: formatDateLabel(d.date),
-        enrolledCount: d.enrolledCount,
-        totalCapacity: d.totalCapacity,
-      })),
-    [dateItems]
-  );
+  useEffect(() => {
+    void refreshMonth();
+  }, [refreshMonth]);
+
+  const { startStr, endStr } = monthBounds(viewYear, viewMonth);
+
+  useEffect(() => {
+    if (calendarLoading) return;
+    const datesInMonth = Object.keys(monthData)
+      .filter((d) => d >= startStr && d <= endStr)
+      .sort();
+    setSelectedDate((prev) => {
+      if (prev && prev >= startStr && prev <= endStr) return prev;
+      const t = todayStr();
+      if (t >= startStr && t <= endStr && datesInMonth.includes(t)) return t;
+      return datesInMonth[0] ?? null;
+    });
+  }, [calendarLoading, monthData, startStr, endStr]);
+
+  const goPrevMonth = () => {
+    if (viewMonth <= 1) {
+      setViewYear((y) => y - 1);
+      setViewMonth(12);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const goNextMonth = () => {
+    if (viewMonth >= 12) {
+      setViewYear((y) => y + 1);
+      setViewMonth(1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const goToday = () => {
+    const d = new Date();
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth() + 1);
+    setSelectedDate(todayStr());
+  };
+
+  useEffect(() => {
+    setMobileDateMenuOpen(false);
+  }, [viewYear, viewMonth]);
+
+  const datesWithSessionsInMonth = useMemo(() => {
+    const { startStr: s, endStr: e } = monthBounds(viewYear, viewMonth);
+    return Object.keys(monthData)
+      .filter((d) => d >= s && d <= e)
+      .filter((d) => (monthData[d] ?? []).length > 0)
+      .sort();
+  }, [viewYear, viewMonth, monthData]);
+
+  const cells = buildCalendarCells(viewYear, viewMonth);
+  const sessionsForSelected = selectedDate ? monthData[selectedDate] ?? [] : [];
 
   return (
     <div className="space-y-6">
@@ -319,48 +361,220 @@ export default function AdminEnrollmentPage() {
       </div>
       <h1 className="text-xl font-bold text-gray-900">報名進度查詢（點名簿）</h1>
 
-      {/* 依日期查詢：動態日期選單 */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <label className="block text-sm font-medium text-gray-700 mb-2">選擇日期（查詢當天課程與報名人數）</label>
-        {datesLoading ? (
-          <div className="flex items-center gap-2 py-2">
-            <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
-            <span className="text-sm text-gray-500">載入日期中…</span>
+      <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5 shadow-sm space-y-4">
+        <p className="text-sm text-gray-600">
+          <span className="hidden md:inline">
+            點擊日曆上的日期可查看該日場次與報名明細；場次來自已上架課程之開課日期。
+          </span>
+          <span className="md:hidden">
+            展開下方選單選擇日期，可查看該日場次與報名明細；場次來自已上架課程之開課日期。
+          </span>
+        </p>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goPrevMonth}
+              className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50"
+              aria-label="上個月"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={goNextMonth}
+              className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50"
+              aria-label="下個月"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={goToday}
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
+            >
+              今天
+            </button>
           </div>
-        ) : dateSelectOptions.length === 0 ? (
-          <p className="text-sm text-gray-500">目前沒有已排課的日期，請先至商品管理新增課程並設定場次</p>
+          <h2 className="text-lg font-semibold text-gray-900 tabular-nums">
+            {viewYear} 年 {viewMonth} 月
+          </h2>
+          <div className="w-[88px] sm:w-24 shrink-0" aria-hidden />
+        </div>
+
+        {calendarLoading ? (
+          <div className="flex items-center justify-center py-20 gap-2 text-gray-500">
+            <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+            <span>載入月曆…</span>
+          </div>
         ) : (
           <>
-            <div className="hidden sm:block">
-              <select
-                value={selectedDate ?? ""}
-                onChange={(e) => setSelectedDate(e.target.value || null)}
-                className="w-full max-w-xs rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            {/* 手機：下拉式選單選日期（桌機隱藏） */}
+            <div className="relative md:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  if (datesWithSessionsInMonth.length === 0) return;
+                  setMobileDateMenuOpen((o) => !o);
+                }}
+                aria-expanded={mobileDateMenuOpen}
+                aria-haspopup="listbox"
+                disabled={datesWithSessionsInMonth.length === 0}
+                className="flex w-full items-start justify-between gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {dateSelectOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}　已報名 {opt.enrolledCount} / 總名額 {opt.totalCapacity}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="sm:hidden overflow-x-auto pb-1 -mx-1">
-              <div className="flex gap-2 min-w-max px-1">
-                {dateSelectOptions.map((opt) => (
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-gray-500">選擇日期</div>
+                  {selectedDate ? (
+                    <>
+                      <div className="mt-0.5 font-semibold text-gray-900">{formatDateLabel(selectedDate)}</div>
+                      {sessionsForSelected.length === 0 ? (
+                        <p className="mt-1 text-xs text-gray-500">此日無排課</p>
+                      ) : (
+                        <ul className="mt-2 space-y-1 text-xs text-gray-700">
+                          {sessionsForSelected.map((s) => {
+                            const left = Math.max(0, s.capacity - s.enrolledCount);
+                            return (
+                              <li key={`${s.classId}-${s.time}`}>
+                                <span className="font-mono text-amber-800">{s.time}</span>{" "}
+                                <span className="font-medium text-gray-900">{s.title || "未命名課程"}</span>
+                                <span className="text-gray-500">
+                                  {" "}
+                                  · 剩 {left} ／ 名額 {s.capacity}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm text-gray-500">
+                      {datesWithSessionsInMonth.length === 0 ? "本月尚無課程排程" : "請選擇日期"}
+                    </p>
+                  )}
+                </div>
+                <ChevronDown
+                  className={`mt-1 h-5 w-5 shrink-0 text-gray-500 transition-transform ${mobileDateMenuOpen ? "rotate-180" : ""}`}
+                  aria-hidden
+                />
+              </button>
+
+              {mobileDateMenuOpen ? (
+                <>
                   <button
-                    key={opt.value}
                     type="button"
-                    onClick={() => setSelectedDate(opt.value)}
-                    className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                      selectedDate === opt.value
-                        ? "border-amber-500 bg-amber-50 text-amber-800"
-                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
+                    className="fixed inset-0 z-40 bg-black/35 md:hidden"
+                    aria-label="關閉選單"
+                    onClick={() => setMobileDateMenuOpen(false)}
+                  />
+                  <div
+                    className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(70vh,28rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+                    role="listbox"
                   >
-                    <span>{opt.label}</span>
-                    <span className="ml-2 text-gray-500 font-normal">已報名 {opt.enrolledCount} / 總名額 {opt.totalCapacity}</span>
-                  </button>
-                ))}
+                    {datesWithSessionsInMonth.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-gray-500">本月尚無課程排程</p>
+                    ) : (
+                      datesWithSessionsInMonth.map((dateStr) => {
+                        const daySessions = monthData[dateStr] ?? [];
+                        const isSel = selectedDate === dateStr;
+                        const isToday = dateStr === todayStr();
+                        return (
+                          <button
+                            key={dateStr}
+                            type="button"
+                            role="option"
+                            aria-selected={isSel}
+                            onClick={() => {
+                              setSelectedDate(dateStr);
+                              setMobileDateMenuOpen(false);
+                            }}
+                            className={`w-full border-b border-gray-100 px-4 py-3 text-left last:border-b-0 ${
+                              isSel ? "bg-amber-50" : "bg-white hover:bg-gray-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-gray-900">{formatDateLabel(dateStr)}</span>
+                              {isToday ? (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">
+                                  今天
+                                </span>
+                              ) : null}
+                            </div>
+                            <ul className="mt-2 space-y-1.5 text-sm text-gray-700">
+                              {daySessions.map((s) => {
+                                const left = Math.max(0, s.capacity - s.enrolledCount);
+                                return (
+                                  <li key={`${s.classId}-${s.time}`}>
+                                    <span className="font-mono text-amber-800">{s.time}</span>{" "}
+                                    <span className="font-medium text-gray-900">{s.title || "未命名課程"}</span>
+                                    <span className="block text-xs text-gray-500 sm:inline sm:ml-1">
+                                      剩餘 {left} 人 · 名額 {s.capacity}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            {/* 桌機：月曆（手機隱藏） */}
+            <div className="hidden overflow-x-auto md:block -mx-1 px-1">
+              <div className="min-w-[min(100%,720px)]">
+                <div className="grid grid-cols-7 gap-px rounded-lg border border-gray-200 bg-gray-200 overflow-hidden">
+                  {["週日", "週一", "週二", "週三", "週四", "週五", "週六"].map((w) => (
+                    <div
+                      key={w}
+                      className="bg-gray-50 py-2 text-center text-xs font-medium text-gray-600"
+                    >
+                      {w}
+                    </div>
+                  ))}
+                  {cells.map((cell, idx) => {
+                    if (!cell) {
+                      return <div key={`empty-${idx}`} className="min-h-[100px] sm:min-h-[120px] bg-white" />;
+                    }
+                    const { dateStr, day } = cell;
+                    const daySessions = monthData[dateStr] ?? [];
+                    const isToday = dateStr === todayStr();
+                    const isSelected = selectedDate === dateStr;
+                    return (
+                      <button
+                        key={dateStr}
+                        type="button"
+                        onClick={() => setSelectedDate(dateStr)}
+                        className={`min-h-[100px] sm:min-h-[120px] w-full text-left p-1.5 sm:p-2 transition-colors ${
+                          isSelected ? "bg-amber-50 ring-2 ring-inset ring-amber-400" : "bg-white hover:bg-gray-50"
+                        } ${isToday && !isSelected ? "bg-orange-50/60" : ""}`}
+                      >
+                        <span
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${
+                            isToday ? "bg-amber-600 text-white" : "text-gray-900"
+                          }`}
+                        >
+                          {day}
+                        </span>
+                        <div className="mt-1 space-y-0.5 max-h-[72px] sm:max-h-[88px] overflow-y-auto text-[10px] sm:text-xs leading-snug">
+                          {daySessions.map((s) => (
+                            <div key={`${s.classId}-${s.time}`} className="text-gray-700 truncate" title={s.title ?? ""}>
+                              <span className="inline-block w-1 h-1 rounded-full bg-emerald-500 align-middle mr-0.5" />
+                              <span className="font-mono">{s.time}</span>{" "}
+                              <span className="text-gray-600">
+                                ({s.enrolledCount}/{s.capacity})
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </>
@@ -368,58 +582,29 @@ export default function AdminEnrollmentPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">
-          {error}
-        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">{error}</div>
       )}
 
-      {/* 選定日期的「已報名／總名額」與下方場次加總對應說明 */}
-      {selectedDate && !sessionsLoading && sessions.length > 0 && (() => {
-        const sumEnrolled = sessions.reduce((a, s) => a + s.enrolledCount, 0);
-        const sumCapacity = sessions.reduce((a, s) => a + s.capacity, 0);
-        const dateOpt = dateSelectOptions.find((o) => o.value === selectedDate);
-        const matches = dateOpt && dateOpt.enrolledCount === sumEnrolled && dateOpt.totalCapacity === sumCapacity;
-        return (
-          <p className="text-sm text-gray-500 -mt-1 mb-1">
-            本日共 <strong className="text-gray-700">{sessions.length}</strong> 個場次，已報名 <strong className="text-gray-700">{sumEnrolled}</strong> / 總名額 <strong className="text-gray-700">{sumCapacity}</strong>
-            {dateOpt && (
-              matches
-                ? "（與上方日期選單一致）"
-                : "（與上方選單不同請回報）"
-            )}
-          </p>
-        );
-      })()}
-
-      {/* 當日課程與報名進度 Accordion */}
-      <div className="space-y-3">
-        {sessionsLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
-          </div>
-        ) : selectedDate && sessions.length === 0 ? (
-          <div className="rounded-xl border border-gray-200 bg-white py-12 text-center text-gray-500 text-sm">
-            此日期尚無排課
-          </div>
-        ) : (
-          sessions.map((session) => (
-            <SessionAccordion
-              key={`${session.classId}-${session.slotDate}-${session.time}`}
-              session={session}
-              onCapacityUpdated={() => {
-                if (selectedDate) {
-                  getRollcallSessionsByDate(selectedDate).then((res) => {
-                    if (res.success) setSessions(res.data);
-                  });
-                  getRollcallDatesWithCounts().then((res) => {
-                    if (res.success) setDateItems(res.data);
-                  });
-                }
-              }}
-            />
-          ))
-        )}
-      </div>
+      {selectedDate && (
+        <div className="space-y-3">
+          <h2 className="text-base font-semibold text-gray-900">{formatDateLabel(selectedDate)}</h2>
+          {!calendarLoading && sessionsForSelected.length === 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-white py-10 text-center text-gray-500 text-sm">
+              此日無排課
+            </div>
+          ) : (
+            sessionsForSelected.map((session) => (
+              <SessionAccordion
+                key={`${session.classId}-${session.slotDate}-${session.time}`}
+                session={session}
+                onCapacityUpdated={() => {
+                  void refreshMonth();
+                }}
+              />
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

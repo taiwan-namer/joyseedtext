@@ -1728,6 +1728,92 @@ export async function getRollcallDatesWithCounts(): Promise<
   }
 }
 
+/** 與 getRollcallSessionsByDate 同一套展開邏輯；countMap 由呼叫端依 class_id 批次查 bookings 後傳入 */
+function buildRollcallSessionsForDateFromSources(
+  sources: RollcallSlotSource[],
+  dateStr: string,
+  countMap: Map<string, number>
+): RollcallSession[] {
+  const sessions: RollcallSession[] = [];
+  const seen = new Set<string>();
+
+  for (const row of sources) {
+    const classCapacity = row.capacity ?? 0;
+
+    const slots = row.scheduled_slots;
+    for (const s of slots) {
+      if (String(s?.date).slice(0, 10) !== dateStr) continue;
+      const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
+      const timeKey = time.length === 5 ? time : "00:00";
+      const cap = (s as { capacity?: number }).capacity;
+      const slotCap = typeof cap === "number" && cap >= 1 ? cap : classCapacity;
+      const key = `${row.displayClassId}|${dateStr}|${timeKey}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        sessions.push({
+          classId: row.displayClassId,
+          countClassId: row.countClassId,
+          title: row.title,
+          capacity: slotCap,
+          time: timeKey,
+          slotDate: dateStr,
+          enrolledCount: 0,
+        });
+      }
+    }
+
+    if (row.class_date && String(row.class_date).slice(0, 10) === dateStr) {
+      const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
+      const timeKey = t.length === 5 ? t : "00:00";
+      const key = `${row.displayClassId}|${dateStr}|${timeKey}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        sessions.push({
+          classId: row.displayClassId,
+          countClassId: row.countClassId,
+          title: row.title,
+          capacity: classCapacity,
+          time: timeKey,
+          slotDate: dateStr,
+          enrolledCount: 0,
+        });
+      }
+    }
+  }
+
+  for (const s of sessions) {
+    const key = `${s.countClassId}|${s.slotDate}|${s.time}`;
+    s.enrolledCount = countMap.get(key) ?? 0;
+  }
+
+  sessions.sort((a, b) => a.time.localeCompare(b.time) || (a.title ?? "").localeCompare(b.title ?? ""));
+  return sessions;
+}
+
+async function buildBookingCountMapForClassIds(
+  supabase: ReturnType<typeof createServerSupabase>,
+  countClassIds: string[]
+): Promise<Map<string, number> | { error: string }> {
+  const countMap = new Map<string, number>();
+  if (countClassIds.length === 0) return countMap;
+  const { data: countRows, error: countError } = await supabase
+    .from("bookings")
+    .select("class_id, slot_date, slot_time")
+    .in("class_id", countClassIds)
+    .in("status", ["paid", "completed"]);
+
+  if (countError) return { error: countError.message };
+
+  for (const b of countRows ?? []) {
+    const br = b as { class_id: string; slot_date?: string | null; slot_time?: string | null };
+    const d = br.slot_date ? String(br.slot_date).slice(0, 10) : "";
+    const t = br.slot_time ? String(br.slot_time).slice(0, 5) : "";
+    const key = `${br.class_id}|${d}|${t}`;
+    countMap.set(key, (countMap.get(key) ?? 0) + 1);
+  }
+  return countMap;
+}
+
 /**
  * 指定日期的所有場次（同日多時段 = 多筆，每筆獨立 class_id 對應一門課的該時段）。
  * 從 scheduled_slots 展開；若有 class_date/class_time 也納入。
@@ -1748,84 +1834,55 @@ export async function getRollcallSessionsByDate(
     const sources = await loadRollcallSlotSources(supabase, merchantId);
     if ("error" in sources) return { success: false, error: sources.error };
 
-    const sessions: RollcallSession[] = [];
-    const seen = new Set<string>();
+    const countClassIdsAll = Array.from(new Set(sources.map((s) => s.countClassId)));
+    const countMapRes = await buildBookingCountMapForClassIds(supabase, countClassIdsAll);
+    if ("error" in countMapRes) return { success: false, error: countMapRes.error };
+    const countMap = countMapRes;
 
-    for (const row of sources) {
-      const classCapacity = row.capacity ?? 0;
-
-      const slots = row.scheduled_slots;
-      for (const s of slots) {
-        if (String(s?.date).slice(0, 10) !== dateStr) continue;
-        const time = s?.time ? String(s.time).slice(0, 5) : "00:00";
-        const timeKey = time.length === 5 ? time : "00:00";
-        const cap = (s as { capacity?: number }).capacity;
-        const slotCap = typeof cap === "number" && cap >= 1 ? cap : classCapacity;
-        const key = `${row.displayClassId}|${dateStr}|${timeKey}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          sessions.push({
-            classId: row.displayClassId,
-            countClassId: row.countClassId,
-            title: row.title,
-            capacity: slotCap,
-            time: timeKey,
-            slotDate: dateStr,
-            enrolledCount: 0,
-          });
-        }
-      }
-
-      if (row.class_date && String(row.class_date).slice(0, 10) === dateStr) {
-        const t = row.class_time != null ? String(row.class_time).slice(0, 5) : "00:00";
-        const timeKey = t.length === 5 ? t : "00:00";
-        const key = `${row.displayClassId}|${dateStr}|${timeKey}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          sessions.push({
-            classId: row.displayClassId,
-            countClassId: row.countClassId,
-            title: row.title,
-            capacity: classCapacity,
-            time: timeKey,
-            slotDate: dateStr,
-            enrolledCount: 0,
-          });
-        }
-      }
-    }
-
-    const countClassIds = Array.from(new Set(sessions.map((s) => s.countClassId)));
-
-    if (sessions.length === 0) return { success: true, data: [] };
-
-    const { data: countRows, error: countError } = await supabase
-      .from("bookings")
-      .select("class_id, slot_date, slot_time")
-      .in("class_id", countClassIds)
-      .in("status", ["paid", "completed"]);
-
-    if (countError) return { success: false, error: countError.message };
-
-    const countMap = new Map<string, number>();
-    for (const b of countRows ?? []) {
-      const br = b as { class_id: string; slot_date?: string | null; slot_time?: string | null };
-      const d = br.slot_date ? String(br.slot_date).slice(0, 10) : "";
-      const t = br.slot_time ? String(br.slot_time).slice(0, 5) : "";
-      const key = `${br.class_id}|${d}|${t}`;
-      countMap.set(key, (countMap.get(key) ?? 0) + 1);
-    }
-
-    for (const s of sessions) {
-      const key = `${s.countClassId}|${s.slotDate}|${s.time}`;
-      s.enrolledCount = countMap.get(key) ?? 0;
-    }
-
-    sessions.sort((a, b) => a.time.localeCompare(b.time) || (a.title ?? "").localeCompare(b.title ?? ""));
-
+    const sessions = buildRollcallSessionsForDateFromSources(sources, dateStr, countMap);
     return { success: true, data: sessions };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "取得場次失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 指定年月的所有場次，依日期分組（供後台月曆）；邏輯與 getRollcallSessionsByDate 一致。
+ */
+export async function getRollcallSessionsInMonth(
+  year: number,
+  month: number
+): Promise<
+  | { success: true; byDate: Record<string, RollcallSession[]> }
+  | { success: false; error: string }
+> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定店家" };
+
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const lastDay = new Date(year, month, 0).getDate();
+    const supabase = createServerSupabase();
+
+    const sources = await loadRollcallSlotSources(supabase, merchantId);
+    if ("error" in sources) return { success: false, error: sources.error };
+
+    const countClassIdsAll = Array.from(new Set(sources.map((s) => s.countClassId)));
+    const countMapRes = await buildBookingCountMapForClassIds(supabase, countClassIdsAll);
+    if ("error" in countMapRes) return { success: false, error: countMapRes.error };
+    const countMap = countMapRes;
+
+    const byDate: Record<string, RollcallSession[]> = {};
+    for (let d = 1; d <= lastDay; d++) {
+      const dateStr = `${year}-${pad2(month)}-${pad2(d)}`;
+      const sessions = buildRollcallSessionsForDateFromSources(sources, dateStr, countMap);
+      if (sessions.length > 0) byDate[dateStr] = sessions;
+    }
+
+    return { success: true, byDate };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "取得月曆場次失敗";
     return { success: false, error: msg };
   }
 }
