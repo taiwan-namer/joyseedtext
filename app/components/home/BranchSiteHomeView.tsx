@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import FAQ from "@/app/components/FAQ";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import HomeMarketplaceCoursesSection from "@/app/components/home/HomeMarketplaceCoursesSection";
@@ -15,6 +15,39 @@ import type { CarouselItem, LayoutBlock } from "@/app/lib/frontendSettingsShared
 import { LAYOUT_SECTION_LABELS } from "@/app/lib/frontendSettingsShared";
 
 const CAROUSEL_INTERVAL_MS = 4000;
+
+/** 分站首頁實際會畫出的區塊（其餘如精選分館、新上架等後台可存但此版型不渲染） */
+const BRANCH_LAYOUT_IDS = new Set([
+  "header",
+  "hero",
+  "hero_carousel",
+  "carousel",
+  "courses",
+  "about",
+  "faq",
+  "contact",
+  "footer",
+]);
+
+/** 依 layout_blocks 排序與 enabled，產生前台要依序渲染的區塊 id；hero／hero_carousel 合併為一個 hero 槽 */
+function getVisibleOrderedBranchSectionIds(blocks: LayoutBlock[]): string[] {
+  const sorted = [...blocks].sort((a, b) => a.order - b.order);
+  const out: string[] = [];
+  let heroSlotPlaced = false;
+  for (const b of sorted) {
+    if (b.enabled === false) continue;
+    if (!BRANCH_LAYOUT_IDS.has(b.id)) continue;
+    if (b.id === "hero" || b.id === "hero_carousel") {
+      if (!heroSlotPlaced) {
+        out.push("hero");
+        heroSlotPlaced = true;
+      }
+      continue;
+    }
+    out.push(b.id);
+  }
+  return out;
+}
 
 function LineIcon({ className }: { className?: string }) {
   return (
@@ -106,20 +139,23 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
 
+  const orderedSectionIds = useMemo(() => getVisibleOrderedBranchSectionIds(layoutBlocks), [layoutBlocks]);
+
+  /** adminId：與 layout_blocks 內積木 id 一致（選取／拖曳用）；blockOverride：實際套用樣式與高度的 LayoutBlock */
   const wrap = (
-    blockId: string,
+    adminId: string,
     children: React.ReactNode,
-    opts?: { skipBackgroundImage?: boolean }
+    opts?: { skipBackgroundImage?: boolean; blockOverride?: LayoutBlock | null }
   ): React.ReactNode => {
-    const block = layoutBlocks.find((b) => b.id === blockId);
+    const block = opts?.blockOverride ?? layoutBlocks.find((b) => b.id === adminId);
     if (!admin || !block) return children;
     return (
       <BlockWrapper
         block={block}
-        isSelected={admin.selectedBlockId === blockId}
-        onSelect={() => admin.onSelectBlock(blockId)}
-        onResizeHeight={(heightPx) => admin.onBlockResizeHeight(blockId, heightPx)}
-        blockLabel={LAYOUT_SECTION_LABELS[blockId] ?? blockId}
+        isSelected={admin.selectedBlockId === adminId}
+        onSelect={() => admin.onSelectBlock(adminId)}
+        onResizeHeight={(heightPx) => admin.onBlockResizeHeight(adminId, heightPx)}
+        blockLabel={LAYOUT_SECTION_LABELS[adminId] ?? adminId}
         skipBackgroundImage={opts?.skipBackgroundImage}
       >
         {children}
@@ -152,6 +188,8 @@ export default function BranchSiteHomeView({
 
   const heroBlock = getBlock("hero");
   const heroCarouselBlock = getBlock("hero_carousel");
+  const heroWrapBlock = heroBlock ?? heroCarouselBlock;
+  const heroAdminId = heroBlock ? "hero" : heroCarouselBlock ? "hero_carousel" : "hero";
   const heroMergedIcons =
     heroBlock?.floatingIcons?.length ? heroBlock.floatingIcons : heroCarouselBlock?.floatingIcons;
   const heroEditBlockId =
@@ -166,7 +204,7 @@ export default function BranchSiteHomeView({
         : undefined;
 
   const heroInner = heroImageUrl ? (
-    <section className="px-0 pt-0 pb-4" style={admin ? {} : getBlockStyle("hero")}>
+    <section className="w-full px-4 sm:px-4 pt-0 pb-4 mx-auto max-w-7xl" style={admin ? {} : getBlockStyle("hero")}>
       <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -198,7 +236,7 @@ export default function BranchSiteHomeView({
   const carouselBlock = getBlock("carousel");
   const carouselInner =
     carouselList.length > 0 ? (
-      <section className="px-0 py-4" style={admin ? {} : getBlockStyle("carousel")}>
+      <section className="w-full px-4 sm:px-4 py-4 mx-auto max-w-7xl" style={admin ? {} : getBlockStyle("carousel")}>
         <div className="relative w-full aspect-[12/5] rounded-xl overflow-hidden">
           {carouselList.map((item, i) => (
             <div
@@ -420,20 +458,40 @@ export default function BranchSiteHomeView({
     </footer>
   );
 
+  const renderSectionById = (id: string): React.ReactNode => {
+    switch (id) {
+      case "header":
+        return wrap("header", headerInner, { skipBackgroundImage: true });
+      case "hero": {
+        if (!heroImageUrl) return null;
+        return wrap(heroAdminId, heroInner, { blockOverride: heroWrapBlock ?? undefined });
+      }
+      case "carousel":
+        if (carouselList.length === 0) return null;
+        return wrap("carousel", carouselInner);
+      case "courses":
+        return wrap("courses", coursesInner);
+      case "about":
+        if (!aboutInner) return null;
+        return wrap("about", aboutInner);
+      case "faq":
+        return wrap("faq", faqInner);
+      case "contact":
+        return wrap("contact", contactInner);
+      case "footer":
+        return wrap("footer", footerInner);
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-page flex flex-col">
-      {wrap("header", headerInner, { skipBackgroundImage: true })}
-
-      <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-4">
-        {heroImageUrl ? wrap("hero", heroInner) : null}
-        {carouselList.length > 0 ? wrap("carousel", carouselInner) : null}
-      </main>
-
-      {wrap("courses", coursesInner)}
-      {aboutInner ? wrap("about", aboutInner) : null}
-      {wrap("faq", faqInner)}
-      {wrap("contact", contactInner)}
-      {wrap("footer", footerInner)}
+      {orderedSectionIds.map((id) => {
+        const node = renderSectionById(id);
+        if (node == null) return null;
+        return <Fragment key={id}>{node}</Fragment>;
+      })}
     </div>
   );
 }
