@@ -16,6 +16,10 @@ import {
   slugifyCourseTitle,
 } from "@/lib/courseSlug";
 import { googleMapsIframeHtmlFromAddress } from "@/lib/googleMapsEmbed";
+import {
+  rowMatchesListPageAgeFilter,
+  rowMatchesListPageDateFilter,
+} from "@/lib/coursesListFilters";
 
 /** 首頁課程列表等快取：與 model 對齊之集中 revalidate（joyseed 目前以 path 為主） */
 export async function revalidateHomepageCoursesListCache(): Promise<void> {
@@ -998,7 +1002,7 @@ function mapRowToCourseForPublic(row: Record<string, unknown>): CourseForPublic 
   };
 }
 
-/** 課程列表頁篩選參數（對應 URL SearchParams 與 RPC） */
+/** 課程列表頁篩選參數（對應 URL SearchParams；篩選語意與舊版 RPC 一致） */
 export type ListCoursesParams = {
   page?: number;
   pageSize?: number;
@@ -1026,8 +1030,13 @@ export type CoursesListPageResult =
   | { success: true; data: CourseForPublic[]; total: number; page: number; pageSize: number }
   | { success: false; error: string };
 
+const LIST_PAGE_SELECT_COLUMNS =
+  "id, slug, title, price, sale_price, capacity, image_url, sidebar_option, marketplace_category, store_category, city_region, city_district, class_date, scheduled_slots";
+const LIST_FETCH_BATCH = 1000;
+const LIST_FETCH_MAX_ROWS = 10000;
+
 /**
- * 課程列表頁：分頁 + 篩選（RPC list_classes_for_merchant_page），強制 merchant_id 隔離。
+ * 課程列表頁：分頁 + 篩選（查表 `classes`，與舊 RPC 篩選語意一致；不依賴 `list_classes_for_merchant_page`）。
  */
 export async function getCoursesForListpage(params: ListCoursesParams = {}): Promise<CoursesListPageResult> {
   try {
@@ -1039,34 +1048,71 @@ export async function getCoursesForListpage(params: ListCoursesParams = {}): Pro
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? COURSES_LIST_PAGE_SIZE));
     const { min, max } = normalizeAgeRangeForRpc(params.minAge, params.maxAge);
     const useAge = min != null && max != null;
+    const search = params.searchQuery?.trim() || "";
+    const category = params.category?.trim() || "";
+    const startDate = params.startDate?.trim() || null;
+    const endDate = params.endDate?.trim() || null;
 
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
-    const { data, error } = await supabase.rpc("list_classes_for_merchant_page", {
-      p_merchant_id: merchantId,
-      p_page: page,
-      p_page_size: pageSize,
-      p_search: params.searchQuery?.trim() || null,
-      p_marketplace_category: params.category?.trim() || null,
-      p_start_date: params.startDate?.trim() || null,
-      p_end_date: params.endDate?.trim() || null,
-      p_min_age: useAge ? min : null,
-      p_max_age: useAge ? max : null,
-    });
 
-    if (error) {
-      return { success: false, error: error.message };
+    const accumulated: Record<string, unknown>[] = [];
+    for (let from = 0; from < LIST_FETCH_MAX_ROWS; from += LIST_FETCH_BATCH) {
+      let q = supabase
+        .from("classes")
+        .select(LIST_PAGE_SELECT_COLUMNS)
+        .eq("merchant_id", merchantId)
+        .order("id", { ascending: true });
+      if (search) {
+        q = q.ilike("title", `%${search}%`);
+      }
+      if (category) {
+        q = q.eq("marketplace_category", category);
+      }
+      const { data: batch, error } = await q.range(from, from + LIST_FETCH_BATCH - 1);
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      if (!batch?.length) break;
+      accumulated.push(...(batch as Record<string, unknown>[]));
+      if (batch.length < LIST_FETCH_BATCH) break;
     }
 
-    const payload = data as unknown;
-    if (payload == null || typeof payload !== "object") {
-      return { success: false, error: "課程列表回傳格式錯誤" };
+    if (accumulated.length >= LIST_FETCH_MAX_ROWS) {
+      return {
+        success: false,
+        error: "課程筆數超過上限，請縮小搜尋或分類條件後再試",
+      };
     }
-    const rec = payload as { total?: unknown; rows?: unknown };
-    const totalRaw = rec.total;
-    const total = typeof totalRaw === "number" ? totalRaw : Number(totalRaw ?? 0);
-    const rowsRaw = Array.isArray(rec.rows) ? rec.rows : [];
-    const list = rowsRaw.map((row) => mapRowToCourseForPublic(row as Record<string, unknown>));
+
+    let filtered = accumulated.filter((row) =>
+      rowMatchesListPageDateFilter(
+        {
+          class_date: row.class_date as string | null | undefined,
+          scheduled_slots: row.scheduled_slots,
+        },
+        startDate,
+        endDate
+      )
+    );
+    if (useAge) {
+      filtered = filtered.filter((row) =>
+        rowMatchesListPageAgeFilter(
+          {
+            sidebar_option: (row.sidebar_option as string[] | null) ?? null,
+          },
+          min,
+          max
+        )
+      );
+    }
+
+    filtered.sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? "")));
+
+    const total = filtered.length;
+    const offset = (page - 1) * pageSize;
+    const pageRows = filtered.slice(offset, offset + pageSize);
+    const list = pageRows.map((row) => mapRowToCourseForPublic(row));
 
     return {
       success: true,

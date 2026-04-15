@@ -21,7 +21,7 @@ export const MARKETPLACE_MERCHANT_ID = GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID;
 /** 首頁「熱門課程」區塊僅向 DB 索取筆數（排除 course_intro / gallery 等大欄位） */
 export const HOMEPAGE_COURSES_FETCH_LIMIT = 12;
 
-/** 課程列表頁每頁筆數（與 RPC list_classes_for_merchant_page 上限內一致） */
+/** 課程列表頁每頁筆數（與 `getCoursesForListpage` 上限內一致） */
 export const COURSES_LIST_PAGE_SIZE = 12;
 
 /** 總站主題 API 回傳：去空白、去重，保留首次出現順序 */

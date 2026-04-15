@@ -284,11 +284,6 @@ export default function CoursesListClient() {
         {error && (
           <p className="text-red-600 text-sm mb-4" role="alert">
             {error}
-            {error.includes("list_classes_for_merchant_page") || error.includes("function") ? (
-              <span className="block mt-1 text-gray-600">
-                （若為開發環境，請於 Supabase 執行 migration：list_classes_for_merchant_page）
-              </span>
-            ) : null}
           </p>
         )}
 
