@@ -72,6 +72,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     designWidthPx,
     zoomPercent,
     heroImageUrl,
+    fullWidthImageUrl,
     carouselItems,
     aboutContent,
     navAboutLabel,
@@ -107,6 +108,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     blocks,
     scale,
     heroImageUrl,
+    fullWidthImageUrl,
     carouselList.length,
     aboutContent,
     navAboutLabel,
@@ -143,6 +145,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
           <BranchSiteHomeView
             layoutBlocks={blocks}
             heroImageUrl={heroImageUrl}
+            fullWidthImageUrl={fullWidthImageUrl ?? null}
             carouselItems={carouselItems}
             aboutContent={aboutContent}
             navAboutLabel={navAboutLabel}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronUp, ChevronDown, Loader2, Save, Plus, Image as ImageIcon, GripVertical, ExternalLink, Pencil, X } from "lucide-react";
 import {
@@ -37,25 +37,34 @@ import {
 /** 後台畫布預覽上限寬度（維持桌機版預覽比例） */
 const CANVAS_MAX_WIDTH_PX = 1280;
 
-/**
- * 畫布預覽與分站首頁（`app/page.tsx`／`BranchSiteHomeView`）一致：頁首、主圖、輪播、熱門課程列、關於／FAQ／聯絡、頁尾。
- * 側欄仍可管理其他區塊 ID（精選分館、新上架等），但該類區塊目前不在此分站首頁畫面中顯示。
- */
-const ACTIVE_HOME_BLOCK_IDS: string[] = [
+/** 分站訪客首頁會顯示的區塊（與 `BranchSiteHomeView` 前台一致） */
+const BRANCH_HOME_CANVAS_BLOCK_IDS: string[] = [
   "header",
   "hero",
   "featured_categories",
   "carousel",
   "courses",
-  "new_courses",
-  "popular_experiences",
   "about",
   "faq",
   "contact",
   "footer",
 ];
 
-/** 可從側欄額外加入的區塊（不在預設完整首頁順序內） */
+/**
+ * 僅後台畫布顯示佔位（訪客首頁不顯示），可編輯高度／背景／裝飾圖；內容對應「前台設定」或總站版型。
+ */
+const ADMIN_PLACEHOLDER_CANVAS_BLOCK_IDS: string[] = [
+  "new_courses",
+  "popular_experiences",
+];
+
+/** 側欄「可加入」主清單：首頁區塊 + 上述預覽用區塊 */
+const ACTIVE_HOME_BLOCK_IDS: string[] = [
+  ...BRANCH_HOME_CANVAS_BLOCK_IDS,
+  ...ADMIN_PLACEHOLDER_CANVAS_BLOCK_IDS,
+];
+
+/** 可從側欄額外加入的區塊（總站延伸版型） */
 const OPTIONAL_LAYOUT_BLOCK_IDS: string[] = [
   "hero_carousel",
   "carousel_2",
@@ -401,6 +410,11 @@ export default function AdminLayoutPage() {
 
   const currentIds = blocks.map((b) => b.id);
   const availableToAdd = ALL_ADDABLE_BLOCK_IDS.filter((id) => !currentIds.includes(id));
+  const availableBranchHome = availableToAdd.filter((id) => BRANCH_HOME_CANVAS_BLOCK_IDS.includes(id));
+  const availableAdminPlaceholder = availableToAdd.filter((id) =>
+    ADMIN_PLACEHOLDER_CANVAS_BLOCK_IDS.includes(id)
+  );
+  const availableOptionalBlocks = availableToAdd.filter((id) => OPTIONAL_LAYOUT_BLOCK_IDS.includes(id));
 
   const addBlock = (sectionId: string) => {
     const nextOrder = blocks.length;
@@ -421,7 +435,8 @@ export default function AdminLayoutPage() {
 
   const getBlockIndex = (blockId: string) => blocks.findIndex((b) => b.id === blockId);
 
-  const computeEditorPosition = (blockId: string): { top: number; left: number } => {
+  /** 依畫布內被選區塊的視窗座標定位浮動編輯面板；`measuredPanelHeight` 有值時可避免底部被裁切 */
+  const computeEditorPosition = (blockId: string, measuredPanelHeight?: number): { top: number; left: number } => {
     const root = canvasWrapRef.current;
     const panelWidth = 320;
     const viewportPadding = 16;
@@ -435,7 +450,26 @@ export default function AdminLayoutPage() {
       left = window.innerWidth - panelWidth - viewportPadding;
     }
     left = Math.max(viewportPadding, left);
-    const top = Math.max(80, Math.min(rect.top, window.innerHeight - 120));
+
+    const margin = 12;
+    /** 面板頂部略高於區塊頂部，較容易看到與點選 */
+    const aboveBlockPx = 16;
+    const fallbackH = Math.min(460, Math.max(200, window.innerHeight - margin * 2));
+    const panelH =
+      measuredPanelHeight != null && measuredPanelHeight > 48
+        ? measuredPanelHeight
+        : rightEditorRef.current?.offsetHeight && rightEditorRef.current.offsetHeight > 48
+          ? rightEditorRef.current.offsetHeight
+          : fallbackH;
+
+    let top = rect.top - aboveBlockPx;
+    const minTop = margin;
+    const maxTop = window.innerHeight - margin - panelH;
+    if (maxTop >= minTop) {
+      top = Math.max(minTop, Math.min(top, maxTop));
+    } else {
+      top = minTop;
+    }
     return { top, left };
   };
 
@@ -463,7 +497,10 @@ export default function AdminLayoutPage() {
     }
     if (typeof window !== "undefined") {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => setEditorPos(computeEditorPosition(blockId)));
+        requestAnimationFrame(() => {
+          const ph = rightEditorRef.current?.offsetHeight;
+          setEditorPos(computeEditorPosition(blockId, ph));
+        });
       });
     }
   };
@@ -716,12 +753,47 @@ export default function AdminLayoutPage() {
     rightEditorRef.current.scrollTo({ top: 0, behavior: "auto" });
   }, [selectedBlockId]);
 
+  /** 面板內容高度變化或選區變更後，依實際高度重算位置，避免底部超出視窗 */
+  useLayoutEffect(() => {
+    if (!selectedBlockId) return;
+    const id = selectedBlockId;
+    const run = () => {
+      const ph = rightEditorRef.current?.offsetHeight;
+      setEditorPos(computeEditorPosition(id, ph));
+    };
+    run();
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [selectedBlockId, blocks, canvasZoomPct, canvasViewportMode]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!selectedBlockId) return;
-    const onResize = () => setEditorPos(computeEditorPosition(selectedBlockId));
+    const onResize = () => {
+      const ph = rightEditorRef.current?.offsetHeight;
+      setEditorPos(computeEditorPosition(selectedBlockId, ph));
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, [selectedBlockId]);
+
+  /** 畫布或整頁捲動時依區塊視窗座標更新浮動面板 */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!selectedBlockId) return;
+    const root = canvasWrapRef.current;
+    const onScroll = () => {
+      const ph = rightEditorRef.current?.offsetHeight;
+      setEditorPos(computeEditorPosition(selectedBlockId, ph));
+    };
+    root?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      root?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, [selectedBlockId]);
 
   const layoutPreviewPayload = useMemo(
@@ -839,7 +911,7 @@ export default function AdminLayoutPage() {
 
       <h1 className="text-xl font-bold text-gray-900">首頁版面</h1>
       <p className="text-sm text-gray-600 max-w-2xl">
-        畫布預覽含全站頁首、內文區背景圖與頁尾背景（與前台設定一致）。請用「桌機版／手機版」開關切換編輯畫布；同一時間只顯示一種，側欄裝飾圖寬高會與目前畫布一致（手機畫布寫入手機專用欄位）。點畫布上的裝飾圖可對應側欄編號並捲動至該列。儲存後首頁主內容區會套用。
+        左側「可加入的積木」已分組：「分站首頁會顯示」與訪客畫面一致；「僅畫布預覽」為新上架／熱門體驗等佔位，方便調高度與背景，訪客首頁不顯示。畫布預覽含頁首、內文背景與頁尾（與前台設定一致）。請用「桌機版／手機版」切換；點畫布裝飾圖可對應側欄編號。儲存後寫入資料庫。
       </p>
 
       {message && (
@@ -888,24 +960,78 @@ export default function AdminLayoutPage() {
           <div className="flex flex-col gap-4 md:fixed md:top-20 md:w-44 xl:w-56 md:max-h-[calc(100vh-6rem)] md:overflow-y-auto pr-1">
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 shrink-0">
             <h2 className="text-sm font-semibold text-gray-800 mb-3">可加入的積木</h2>
-            <ul className="space-y-1.5">
-              {availableToAdd.length === 0 ? (
-                <li className="text-xs text-gray-500">已全部加入</li>
-              ) : (
-                availableToAdd.map((id) => (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      onClick={() => addBlock(id)}
-                      className="w-full flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:border-amber-200 transition-colors"
-                    >
-                      <Plus className="h-4 w-4 shrink-0 text-amber-600" />
-                      {LAYOUT_SECTION_LABELS[id] ?? id}
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
+            {availableToAdd.length === 0 ? (
+              <p className="text-xs text-gray-500">已全部加入</p>
+            ) : (
+              <div className="space-y-3">
+                {availableBranchHome.length > 0 ? (
+                  <div>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                      分站首頁會顯示
+                    </h3>
+                    <ul className="space-y-1.5">
+                      {availableBranchHome.map((id) => (
+                        <li key={id}>
+                          <button
+                            type="button"
+                            onClick={() => addBlock(id)}
+                            className="w-full flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:border-amber-200 transition-colors"
+                          >
+                            <Plus className="h-4 w-4 shrink-0 text-amber-600" />
+                            {LAYOUT_SECTION_LABELS[id] ?? id}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {availableAdminPlaceholder.length > 0 ? (
+                  <div>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-amber-800/90 mb-1.5">
+                      僅畫布預覽（訪客首頁不顯示）
+                    </h3>
+                    <p className="text-[10px] text-gray-500 mb-1.5 leading-snug">
+                      點選後畫布會出現佔位區，可調背景／高度／裝飾圖；內容請至前台設定或總站版型。
+                    </p>
+                    <ul className="space-y-1.5">
+                      {availableAdminPlaceholder.map((id) => (
+                        <li key={id}>
+                          <button
+                            type="button"
+                            onClick={() => addBlock(id)}
+                            className="w-full flex items-center gap-2 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-left text-sm text-amber-950 hover:bg-amber-100 transition-colors"
+                          >
+                            <Plus className="h-4 w-4 shrink-0 text-amber-700" />
+                            {LAYOUT_SECTION_LABELS[id] ?? id}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {availableOptionalBlocks.length > 0 ? (
+                  <div>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                      進階（總站版型）
+                    </h3>
+                    <ul className="space-y-1.5">
+                      {availableOptionalBlocks.map((id) => (
+                        <li key={id}>
+                          <button
+                            type="button"
+                            onClick={() => addBlock(id)}
+                            className="w-full flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:border-amber-200 transition-colors"
+                          >
+                            <Plus className="h-4 w-4 shrink-0 text-amber-600" />
+                            {LAYOUT_SECTION_LABELS[id] ?? id}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex-1 min-h-0 flex flex-col">
             <h2 className="text-sm font-semibold text-gray-800 mb-3 shrink-0">目前的積木</h2>

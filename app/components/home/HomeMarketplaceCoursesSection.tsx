@@ -13,6 +13,9 @@ const ACTIVITY_CARD_WIDTH = 280;
 const ACTIVITY_GAP = 16;
 const ACTIVITY_AUTO_SCROLL_MS = 4500;
 
+/** 首頁熱門課程分籤不顯示的分類（仍可由總站 global_categories 帶入，前台略過） */
+const HOME_POPULAR_COURSES_EXCLUDED_CATEGORY_LABELS = new Set(["世界之窗"]);
+
 function courseToActivity(c: CourseForPublic): Activity {
   const price =
     c.salePrice != null && c.price != null && c.salePrice < c.price ? c.salePrice : c.price ?? 0;
@@ -62,7 +65,9 @@ export default function HomeMarketplaceCoursesSection({ blockStyle }: Props) {
           ? raw.map((v): string | null => (typeof v === "string" ? v.trim() : null)).filter((v): v is string => !!v)
           : [];
         if (!cancelled) {
-          setCategoryLabels(dedupeCategoryList(list));
+          setCategoryLabels(
+            dedupeCategoryList(list).filter((c) => !HOME_POPULAR_COURSES_EXCLUDED_CATEGORY_LABELS.has(c))
+          );
         }
       } catch {
         if (!cancelled) setCategoryLabels([]);
@@ -181,11 +186,12 @@ export default function HomeMarketplaceCoursesSection({ blockStyle }: Props) {
                   }`}
                 >
                   <div
-                    className={`w-14 h-14 rounded-xl flex items-center justify-center text-xs font-semibold leading-tight text-center px-1 ${
+                    className={`w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold leading-none ${
                       selected ? "bg-amber-100 text-amber-900" : "bg-amber-50 text-amber-800"
                     }`}
+                    aria-hidden
                   >
-                    {label.slice(0, 4)}
+                    {label.slice(0, 1)}
                   </div>
                   <span className="text-[10px] sm:text-xs text-gray-700 text-center leading-tight line-clamp-2 w-full">
                     {label}

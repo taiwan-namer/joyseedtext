@@ -5,6 +5,7 @@ import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import FAQ from "@/app/components/FAQ";
 import { HeaderMember } from "@/app/components/HeaderMember";
+import HomeFeaturedCoursesOnePlusSix from "@/app/components/home/HomeFeaturedCoursesOnePlusSix";
 import HomeMarketplaceCoursesSection from "@/app/components/home/HomeMarketplaceCoursesSection";
 import HeroFloatingIconsLayer from "@/app/components/home/HeroFloatingIconsLayer";
 import BlockWrapper from "@/app/admin/(protected)/layout/BlockWrapper";
@@ -16,28 +17,46 @@ import { LAYOUT_SECTION_LABELS } from "@/app/lib/frontendSettingsShared";
 
 const CAROUSEL_INTERVAL_MS = 4000;
 
-/** 分站首頁實際會畫出的區塊（其餘如精選分館、新上架等後台可存但此版型不渲染） */
-const BRANCH_LAYOUT_IDS = new Set([
+/** 分站首頁實際會畫出的區塊 id */
+const BRANCH_LAYOUT_ID_LIST = [
   "header",
   "hero",
   "hero_carousel",
   "carousel",
+  "featured_categories",
   "courses",
   "about",
   "faq",
   "contact",
   "footer",
-]);
+] as const;
 
-/** 依 layout_blocks 排序與 enabled，產生前台要依序渲染的區塊 id；hero／hero_carousel 合併為一個 hero 槽 */
-function getVisibleOrderedBranchSectionIds(blocks: LayoutBlock[]): string[] {
+/**
+ * 僅在後台畫布顯示佔位（前台首頁不渲染），讓點側欄可對應畫布與裝飾圖／高度／背景。
+ */
+const ADMIN_CANVAS_PLACEHOLDER_ID_LIST = ["new_courses", "popular_experiences"] as const;
+
+/** 總站首頁有、分站畫布需預覽選取的積木（訪客分站頁未必渲染） */
+const ADMIN_EXTRA_CANVAS_BLOCK_IDS = ["carousel_2", "full_width_image", "courses_grid", "courses_list"] as const;
+
+/** 依 layout_blocks 排序與 enabled，產生渲染順序；前台訪客：hero／hero_carousel 合併為一個 hero 槽；後台畫布：分開列出以便分別選取 */
+function getVisibleOrderedBranchSectionIds(blocks: LayoutBlock[], forAdminCanvas: boolean): string[] {
+  const allowedList = forAdminCanvas
+    ? [...BRANCH_LAYOUT_ID_LIST, ...ADMIN_CANVAS_PLACEHOLDER_ID_LIST, ...ADMIN_EXTRA_CANVAS_BLOCK_IDS]
+    : [...BRANCH_LAYOUT_ID_LIST];
+  const allowed = new Set<string>(allowedList);
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
   const out: string[] = [];
   let heroSlotPlaced = false;
   for (const b of sorted) {
     if (b.enabled === false) continue;
-    if (!BRANCH_LAYOUT_IDS.has(b.id)) continue;
+    if (!allowed.has(b.id)) continue;
     if (b.id === "hero" || b.id === "hero_carousel") {
+      if (forAdminCanvas) {
+        if (b.id === "hero") out.push("hero");
+        else out.push("hero_carousel");
+        continue;
+      }
       if (!heroSlotPlaced) {
         out.push("hero");
         heroSlotPlaced = true;
@@ -60,6 +79,8 @@ function LineIcon({ className }: { className?: string }) {
 export type BranchSiteHomeViewProps = {
   layoutBlocks: LayoutBlock[];
   heroImageUrl: string | null;
+  /** 後台畫布：單張大圖區塊預覽用（與前台設定同步） */
+  fullWidthImageUrl?: string | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;
   navAboutLabel: string;
@@ -73,6 +94,7 @@ export type BranchSiteHomeViewProps = {
 export default function BranchSiteHomeView({
   layoutBlocks,
   heroImageUrl,
+  fullWidthImageUrl = null,
   carouselItems,
   aboutContent,
   navAboutLabel,
@@ -139,7 +161,10 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
 
-  const orderedSectionIds = useMemo(() => getVisibleOrderedBranchSectionIds(layoutBlocks), [layoutBlocks]);
+  const orderedSectionIds = useMemo(
+    () => getVisibleOrderedBranchSectionIds(layoutBlocks, admin != null),
+    [layoutBlocks, admin]
+  );
 
   /** adminId：與 layout_blocks 內積木 id 一致（選取／拖曳用）；blockOverride：實際套用樣式與高度的 LayoutBlock */
   const wrap = (
@@ -188,10 +213,8 @@ export default function BranchSiteHomeView({
 
   const heroBlock = getBlock("hero");
   const heroCarouselBlock = getBlock("hero_carousel");
-  const heroWrapBlock = heroBlock ?? heroCarouselBlock;
-  const heroAdminId = heroBlock ? "hero" : heroCarouselBlock ? "hero_carousel" : "hero";
-  const heroMergedIcons =
-    heroBlock?.floatingIcons?.length ? heroBlock.floatingIcons : heroCarouselBlock?.floatingIcons;
+  /** 主圖區僅顯示「首頁大圖」積木的裝飾圖；若僅有 hero_carousel 則用其裝飾圖。兩者並存時主圖只顯示 hero 的裝飾圖，hero_carousel 另列一條可選區。 */
+  const iconsForMainHeroSection = heroBlock != null ? heroBlock.floatingIcons : heroCarouselBlock?.floatingIcons;
   const heroEditBlockId =
     admin?.selectedBlockId === "hero" || admin?.selectedBlockId === "hero_carousel"
       ? admin.selectedBlockId
@@ -202,20 +225,22 @@ export default function BranchSiteHomeView({
       : heroEditBlockId === "hero_carousel"
         ? heroCarouselBlock?.floatingIcons
         : undefined;
+  const showFloatingEditorOnMainHero =
+    admin &&
+    heroEditBlockId &&
+    ((heroEditBlockId === "hero" && (heroBlock?.floatingIcons?.length ?? 0) > 0) ||
+      (heroEditBlockId === "hero_carousel" && !heroBlock && (heroCarouselBlock?.floatingIcons?.length ?? 0) > 0));
 
   const heroInner = heroImageUrl ? (
-    <section className="w-full px-4 sm:px-4 pt-0 pb-4 mx-auto max-w-7xl" style={admin ? {} : getBlockStyle("hero")}>
-      <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
+    <section className="w-full pt-0 pb-4" style={admin ? {} : getBlockStyle("hero")}>
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
+        <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        <div
-          className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none"
-          aria-hidden
-        />
-        {(heroMergedIcons?.length ?? 0) > 0 ? (
+        {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
           <div className="absolute inset-0 z-[15]">
-            <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={heroMergedIcons!} />
-            {admin && heroIconsForEditor && heroIconsForEditor.length > 0 && heroEditBlockId ? (
+            <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={iconsForMainHeroSection!} />
+            {showFloatingEditorOnMainHero && heroIconsForEditor && heroIconsForEditor.length > 0 && heroEditBlockId ? (
               <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
                 <HeroFloatingIconsEditor
                   overlayMode
@@ -230,8 +255,37 @@ export default function BranchSiteHomeView({
           </div>
         ) : null}
       </div>
+      </div>
     </section>
   ) : null;
+
+  const heroCarouselStripInner =
+    admin && heroImageUrl && heroBlock && heroCarouselBlock ? (
+      <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+        <div className="relative mx-auto max-w-7xl px-4 py-4 min-h-[100px]">
+          <p className="text-xs text-center text-gray-600 relative z-0">
+            首頁大圖（輪播）裝飾圖層—與上方主圖共用同一張圖；此區編輯「首頁大圖（輪播）」積木的裝飾圖。
+          </p>
+          {(heroCarouselBlock.floatingIcons?.length ?? 0) > 0 ? (
+            <div className="pointer-events-none absolute inset-0 z-[15] mt-8">
+              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={heroCarouselBlock.floatingIcons!} />
+              {admin.selectedBlockId === "hero_carousel" ? (
+                <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+                  <HeroFloatingIconsEditor
+                    overlayMode
+                    coordinateMode={coordMode}
+                    icons={heroCarouselBlock.floatingIcons!}
+                    onChange={(next) => admin.onBlockFloatingIconsChange("hero_carousel", next)}
+                    selectedIconId={admin.selectedFloatingIconId ?? null}
+                    onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("hero_carousel", id)}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+    ) : null;
 
   const carouselBlock = getBlock("carousel");
   const carouselInner =
@@ -290,6 +344,9 @@ export default function BranchSiteHomeView({
     ) : null;
 
   const coursesInner = <HomeMarketplaceCoursesSection blockStyle={admin ? {} : getBlockStyle("courses")} />;
+  const featuredCoursesInner = (
+    <HomeFeaturedCoursesOnePlusSix blockStyle={admin ? {} : getBlockStyle("featured_categories")} />
+  );
 
   const aboutInner =
     aboutContent != null && aboutContent.trim() !== "" ? (
@@ -458,19 +515,72 @@ export default function BranchSiteHomeView({
     </footer>
   );
 
+  /** 後台畫布專用：總站版型區塊在分站首頁不渲染，此處顯示佔位以利選取與編輯背景／高度／裝飾圖 */
+  const renderAdminOnlyPlaceholder = (
+    blockId:
+      | "new_courses"
+      | "popular_experiences"
+      | "carousel_2"
+      | "courses_grid"
+      | "courses_list",
+    title: string,
+    description: string
+  ): React.ReactNode => {
+    if (!admin) return null;
+    const b = getBlock(blockId);
+    const inner = (
+      <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+        <div className="relative w-full max-w-7xl mx-auto px-4 py-8 min-h-[140px]">
+          <p className="text-sm font-semibold text-center text-amber-950">{title}</p>
+          <p className="text-xs text-gray-600 text-center mt-2 max-w-lg mx-auto leading-relaxed">{description}</p>
+          {(b?.floatingIcons?.length ?? 0) > 0 ? (
+            <div className="pointer-events-none absolute inset-0 z-[15]">
+              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
+              {admin.selectedBlockId === blockId ? (
+                <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+                  <HeroFloatingIconsEditor
+                    overlayMode
+                    coordinateMode={coordMode}
+                    icons={b!.floatingIcons!}
+                    onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
+                    selectedIconId={admin.selectedFloatingIconId ?? null}
+                    onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+    );
+    return wrap(blockId, inner);
+  };
+
   const renderSectionById = (id: string): React.ReactNode => {
     switch (id) {
       case "header":
         return wrap("header", headerInner, { skipBackgroundImage: true });
       case "hero": {
         if (!heroImageUrl) return null;
-        return wrap(heroAdminId, heroInner, { blockOverride: heroWrapBlock ?? undefined });
+        return wrap("hero", heroInner, { blockOverride: heroBlock ?? undefined });
+      }
+      case "hero_carousel": {
+        if (!admin || !heroImageUrl) return null;
+        if (heroBlock && heroCarouselBlock && heroCarouselStripInner) {
+          return wrap("hero_carousel", heroCarouselStripInner);
+        }
+        if (!heroBlock && heroCarouselBlock) {
+          return wrap("hero_carousel", heroInner, { blockOverride: heroCarouselBlock });
+        }
+        return null;
       }
       case "carousel":
         if (carouselList.length === 0) return null;
         return wrap("carousel", carouselInner);
       case "courses":
         return wrap("courses", coursesInner);
+      case "featured_categories":
+        return wrap("featured_categories", featuredCoursesInner);
       case "about":
         if (!aboutInner) return null;
         return wrap("about", aboutInner);
@@ -480,6 +590,74 @@ export default function BranchSiteHomeView({
         return wrap("contact", contactInner);
       case "footer":
         return wrap("footer", footerInner);
+      case "new_courses":
+        return renderAdminOnlyPlaceholder(
+          "new_courses",
+          "新上架課程",
+          "後台畫布預覽區。可調整高度、背景圖、裝飾圖；目前分站首頁訪客畫面不顯示此區塊。"
+        );
+      case "popular_experiences":
+        return renderAdminOnlyPlaceholder(
+          "popular_experiences",
+          "熱門體驗",
+          "後台畫布預覽區。可調整高度、背景圖、裝飾圖；目前分站首頁訪客畫面不顯示此區塊。"
+        );
+      case "carousel_2":
+        return renderAdminOnlyPlaceholder(
+          "carousel_2",
+          LAYOUT_SECTION_LABELS.carousel_2,
+          "後台畫布預覽區。可調整高度、背景圖、裝飾圖；總站首頁輪播牆 2 於前台設定；分站訪客畫面是否顯示依版型而定。"
+        );
+      case "full_width_image": {
+        if (!admin) return null;
+        const b = getBlock("full_width_image");
+        const inner = (
+          <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+            <div className="relative w-full max-w-7xl mx-auto px-4 py-8 min-h-[120px]">
+              {fullWidthImageUrl ? (
+                <div className="relative w-full max-h-[220px] rounded-lg overflow-hidden bg-gray-100 border border-amber-200/60">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={fullWidthImageUrl} alt="" className="w-full h-full max-h-[220px] object-cover" />
+                </div>
+              ) : null}
+              <p className="text-sm font-semibold text-center text-amber-950 mt-4">{LAYOUT_SECTION_LABELS.full_width_image}</p>
+              <p className="text-xs text-gray-600 text-center mt-2 max-w-lg mx-auto leading-relaxed">
+                後台畫布預覽；圖檔於「前台設定」上傳。可調整高度、背景圖、裝飾圖；分站訪客是否顯示依版型而定。
+              </p>
+              {(b?.floatingIcons?.length ?? 0) > 0 ? (
+                <div className="pointer-events-none absolute inset-0 z-[15]">
+                  <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
+                  {admin.selectedBlockId === "full_width_image" ? (
+                    <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+                      <HeroFloatingIconsEditor
+                        overlayMode
+                        coordinateMode={coordMode}
+                        icons={b!.floatingIcons!}
+                        onChange={(next) => admin.onBlockFloatingIconsChange("full_width_image", next)}
+                        selectedIconId={admin.selectedFloatingIconId ?? null}
+                        onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("full_width_image", id)}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        );
+        return wrap("full_width_image", inner);
+      }
+      case "courses_grid":
+        return renderAdminOnlyPlaceholder(
+          "courses_grid",
+          LAYOUT_SECTION_LABELS.courses_grid,
+          "後台畫布預覽區。可調整高度、背景圖、裝飾圖；課程內容於商品／課程管理；分站訪客是否顯示依版型而定。"
+        );
+      case "courses_list":
+        return renderAdminOnlyPlaceholder(
+          "courses_list",
+          LAYOUT_SECTION_LABELS.courses_list,
+          "後台畫布預覽區。可調整高度、背景圖、裝飾圖；課程內容於商品／課程管理；分站訪客是否顯示依版型而定。"
+        );
       default:
         return null;
     }
