@@ -10,4 +10,6 @@ export type AdminLayoutCanvasConfig = {
   floatingIconsCoordinateMode?: "desktop" | "mobile";
   selectedFloatingIconId?: string | null;
   onSelectFloatingIcon?: (blockId: string, iconId: string) => void;
+  /** 桌機畫布目前縮放（0.25–1）；區塊高度拖曳與顯示依此換算為前台設計 px */
+  canvasPreviewScale?: number;
 };

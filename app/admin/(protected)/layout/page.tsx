@@ -1,11 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ChangeEvent,
+} from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronUp, ChevronDown, Loader2, Save, Plus, Image as ImageIcon, GripVertical, ExternalLink, Pencil, X } from "lucide-react";
 import {
   getFrontendSettings,
   updateLayoutBlocks,
+  updateFullWidthImageUrl,
+  updateHeroImageUrl,
+  updateLogoUrl,
+  updateHeaderBackgroundUrls,
+  updateCarouselItemsPersist,
+  uploadFullWidthImage,
+  uploadHeroLayoutImage,
+  uploadLogoLayoutImage,
+  uploadHeaderBackgroundDesktop,
+  uploadHeaderBackgroundMobile,
+  uploadCarouselSlideImage,
   uploadHeroFloatingIcon,
   uploadLayoutBlockBackground,
 } from "@/app/actions/frontendSettingsActions";
@@ -47,26 +67,13 @@ const BRANCH_HOME_CANVAS_BLOCK_IDS: string[] = [
   "about",
   "faq",
   "contact",
-  "footer",
 ];
 
-/**
- * 僅後台畫布顯示佔位（訪客首頁不顯示），可編輯高度／背景／裝飾圖；內容對應「前台設定」或總站版型。
- */
-const ADMIN_PLACEHOLDER_CANVAS_BLOCK_IDS: string[] = [
-  "new_courses",
-  "popular_experiences",
-];
-
-/** 側欄「可加入」主清單：首頁區塊 + 上述預覽用區塊 */
-const ACTIVE_HOME_BLOCK_IDS: string[] = [
-  ...BRANCH_HOME_CANVAS_BLOCK_IDS,
-  ...ADMIN_PLACEHOLDER_CANVAS_BLOCK_IDS,
-];
+/** 側欄「可加入」主清單：分站首頁會顯示的區塊 */
+const ACTIVE_HOME_BLOCK_IDS: string[] = [...BRANCH_HOME_CANVAS_BLOCK_IDS];
 
 /** 可從側欄額外加入的區塊（總站延伸版型） */
 const OPTIONAL_LAYOUT_BLOCK_IDS: string[] = [
-  "hero_carousel",
   "carousel_2",
   "full_width_image",
   "courses_grid",
@@ -77,10 +84,7 @@ const ALL_ADDABLE_BLOCK_IDS = [...ACTIVE_HOME_BLOCK_IDS, ...OPTIONAL_LAYOUT_BLOC
 
 /** 依 block id 對應到「編輯內容」的後台頁面 */
 const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
-  header: { href: "/admin/frontend-settings", label: "前台設定（LOGO／頁首背景）" },
-  hero: { href: "/admin/frontend-settings", label: "前台設定（首頁大圖）" },
   featured_categories: { href: "/admin/frontend-settings", label: "前台設定" },
-  carousel: { href: "/admin/frontend-settings", label: "前台設定（輪播）" },
   courses: { href: "/admin", label: "商品管理（課程）" },
   new_courses: { href: "/admin", label: "商品管理（課程）" },
   popular_experiences: { href: "/admin", label: "商品管理（課程）" },
@@ -88,9 +92,6 @@ const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
   faq: { href: "/admin/faq", label: "常見問題" },
   contact: { href: "/admin/settings", label: "基本資料（聯絡資訊）" },
   footer: { href: "/admin/frontend-settings", label: "前台設定（頁尾內容）" },
-  hero_carousel: { href: "/admin/frontend-settings", label: "前台設定（輪播）" },
-  carousel_2: { href: "/admin/frontend-settings", label: "前台設定（輪播）" },
-  full_width_image: { href: "/admin/frontend-settings", label: "前台設定" },
   courses_grid: { href: "/admin", label: "商品管理（課程）" },
   courses_list: { href: "/admin", label: "商品管理（課程）" },
 };
@@ -135,9 +136,8 @@ function BlockFloatingIconsPanel({
     <div className="rounded-lg border border-amber-200/80 bg-white/90 p-3 space-y-3">
       <p className="text-xs text-gray-600 leading-relaxed">
         {editViewport === "mobile"
-          ? "目前編輯「手機專用」座標（leftPctMobile 等）；未填時前台手機仍沿用桌機座標。尺寸以手機畫布縮放換算；拖曳手機 iframe 內裝飾圖亦會寫入此欄。完成後請按「儲存版面」。"
-          : "尺寸欄位以「目前桌機畫布縮放後」為準（例如 50% 畫布輸入 100px，會自動換算為前台 200px）。拖曳虛線框調位置，完成後請按「儲存版面」。"}
-        下方列表與畫布虛線框左上角「編號 1、編號 2…」順序一致。
+          ? "手機專用座標；尺寸依手機畫布縮放換算。完成後請按「儲存版面」。"
+          : "尺寸依目前桌機畫布縮放換算（例：50% 時輸入 100px → 儲存為前台 200px）。完成後請按「儲存版面」。側欄「編號」與畫布區塊順序一致。"}
       </p>
       <div>
         <button
@@ -300,11 +300,19 @@ export default function AdminLayoutPage() {
   }, [canvasViewportMode]);
   const canvasScale = Math.min(100, Math.max(25, canvasZoomPct)) / 100;
   const mobileCanvasScale = Math.min(100, Math.max(25, mobileCanvasZoomPct)) / 100;
+  /** 區塊高度輸入：與目前可見畫布（桌機／手機）預覽縮放一致 */
+  const layoutHeightScale =
+    canvasViewportMode === "mobile" ? mobileCanvasScale : canvasScale;
   const previewScaleForPanel = floatingEditViewport === "mobile" ? mobileCanvasScale : canvasScale;
   const previewPxFromStored = (storedPx: number): number =>
     Math.max(1, Math.round(storedPx * previewScaleForPanel));
   const storedPxFromPreview = (previewPx: number): number =>
     Math.max(16, Math.round(previewPx / Math.max(0.01, previewScaleForPanel)));
+
+  const blockHeightPreviewPx = (stored: number | null | undefined) =>
+    stored != null && stored > 0 ? Math.round(stored * layoutHeightScale) : null;
+  const blockHeightStoredFromPreviewInput = (previewPx: number) =>
+    Math.max(1, Math.round(previewPx / Math.max(0.01, layoutHeightScale)));
 
   // 畫布用資料（與前台一致）
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
@@ -316,6 +324,29 @@ export default function AdminLayoutPage() {
   const [navBookingLabel, setNavBookingLabel] = useState("課程預約");
   const [navFaqLabel, setNavFaqLabel] = useState("常見問題");
   const [fullWidthImageUrl, setFullWidthImageUrl] = useState<string | null>(null);
+  /** 選檔後本機預覽（blob:）；儲存版面時再上傳 R2 */
+  const [fullWidthImageDraftUrl, setFullWidthImageDraftUrl] = useState<string | null>(null);
+  const [fullWidthImagePendingFile, setFullWidthImagePendingFile] = useState<File | null>(null);
+  const fullWidthImageFileRef = useRef<HTMLInputElement | null>(null);
+  /** 首頁主圖：選檔預覽，儲存時上傳 R2 */
+  const [heroImageDraftUrl, setHeroImageDraftUrl] = useState<string | null>(null);
+  const [heroImagePendingFile, setHeroImagePendingFile] = useState<File | null>(null);
+  const heroImageFileRef = useRef<HTMLInputElement | null>(null);
+  /** LOGO／頁首背景 */
+  const [logoDraftUrl, setLogoDraftUrl] = useState<string | null>(null);
+  const [logoPendingFile, setLogoPendingFile] = useState<File | null>(null);
+  const logoFileRef = useRef<HTMLInputElement | null>(null);
+  const [headerBgDeskDraftUrl, setHeaderBgDeskDraftUrl] = useState<string | null>(null);
+  const [headerBgDeskPendingFile, setHeaderBgDeskPendingFile] = useState<File | null>(null);
+  const headerBgDeskFileRef = useRef<HTMLInputElement | null>(null);
+  const [headerBgMobDraftUrl, setHeaderBgMobDraftUrl] = useState<string | null>(null);
+  const [headerBgMobPendingFile, setHeaderBgMobPendingFile] = useState<File | null>(null);
+  const headerBgMobFileRef = useRef<HTMLInputElement | null>(null);
+  /** 輪播各則圖：index → blob 預覽／待上傳檔 */
+  const [carouselSlideDraftUrls, setCarouselSlideDraftUrls] = useState<Record<number, string>>({});
+  const [carouselSlidePendingFiles, setCarouselSlidePendingFiles] = useState<Record<number, File>>({});
+  const carouselSlideIndexRef = useRef(0);
+  const carouselSlideFileRef = useRef<HTMLInputElement | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [featuredCategories, setFeaturedCategories] = useState<FeaturedCategory[]>([]);
   const [featuredSectionIconUrl, setFeaturedSectionIconUrl] = useState<string | null>(null);
@@ -411,9 +442,6 @@ export default function AdminLayoutPage() {
   const currentIds = blocks.map((b) => b.id);
   const availableToAdd = ALL_ADDABLE_BLOCK_IDS.filter((id) => !currentIds.includes(id));
   const availableBranchHome = availableToAdd.filter((id) => BRANCH_HOME_CANVAS_BLOCK_IDS.includes(id));
-  const availableAdminPlaceholder = availableToAdd.filter((id) =>
-    ADMIN_PLACEHOLDER_CANVAS_BLOCK_IDS.includes(id)
-  );
   const availableOptionalBlocks = availableToAdd.filter((id) => OPTIONAL_LAYOUT_BLOCK_IDS.includes(id));
 
   const addBlock = (sectionId: string) => {
@@ -721,9 +749,329 @@ export default function AdminLayoutPage() {
     }
   };
 
+  const displayFullWidthImageUrl = useMemo(
+    () => fullWidthImageDraftUrl ?? fullWidthImageUrl,
+    [fullWidthImageDraftUrl, fullWidthImageUrl]
+  );
+
+  const displayHeroImageUrl = useMemo(
+    () => heroImageDraftUrl ?? heroImageUrl,
+    [heroImageDraftUrl, heroImageUrl]
+  );
+
+  const displayLogoUrl = useMemo(() => logoDraftUrl ?? logoUrl, [logoDraftUrl, logoUrl]);
+
+  const displayHeaderBackgroundUrl = useMemo(
+    () => headerBgDeskDraftUrl ?? headerBackgroundUrl,
+    [headerBgDeskDraftUrl, headerBackgroundUrl]
+  );
+
+  const displayHeaderBackgroundMobileUrl = useMemo(
+    () => headerBgMobDraftUrl ?? headerBackgroundMobileUrl,
+    [headerBgMobDraftUrl, headerBackgroundMobileUrl]
+  );
+
+  const displayCarouselItems = useMemo(
+    () =>
+      carouselItems.map((item, i) => ({
+        ...item,
+        imageUrl: (carouselSlideDraftUrls[i] ?? item.imageUrl) as string | null,
+      })),
+    [carouselItems, carouselSlideDraftUrls]
+  );
+
+  const handleFullWidthImageFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "請選擇圖片檔案" });
+      return;
+    }
+    setFullWidthImageDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setFullWidthImagePendingFile(file);
+    setMessage(null);
+  };
+
+  const clearFullWidthImageDraft = () => {
+    setFullWidthImageDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setFullWidthImagePendingFile(null);
+  };
+
+  const handleHeroImageFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "請選擇圖片檔案" });
+      return;
+    }
+    setHeroImageDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setHeroImagePendingFile(file);
+    setMessage(null);
+  };
+
+  const clearHeroImageDraft = () => {
+    setHeroImageDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setHeroImagePendingFile(null);
+  };
+
+  const handleLogoFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "請選擇圖片檔案" });
+      return;
+    }
+    setLogoDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setLogoPendingFile(file);
+    setMessage(null);
+  };
+
+  const clearLogoDraft = () => {
+    setLogoDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setLogoPendingFile(null);
+  };
+
+  const handleHeaderBgDeskFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "請選擇圖片檔案" });
+      return;
+    }
+    setHeaderBgDeskDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setHeaderBgDeskPendingFile(file);
+    setMessage(null);
+  };
+
+  const clearHeaderBgDeskDraft = () => {
+    setHeaderBgDeskDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setHeaderBgDeskPendingFile(null);
+  };
+
+  const handleHeaderBgMobFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "請選擇圖片檔案" });
+      return;
+    }
+    setHeaderBgMobDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setHeaderBgMobPendingFile(file);
+    setMessage(null);
+  };
+
+  const clearHeaderBgMobDraft = () => {
+    setHeaderBgMobDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setHeaderBgMobPendingFile(null);
+  };
+
+  const handleCarouselSlideFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "請選擇圖片檔案" });
+      return;
+    }
+    const idx = carouselSlideIndexRef.current;
+    setCarouselSlideDraftUrls((prev) => {
+      const next = { ...prev };
+      const old = next[idx];
+      if (old) URL.revokeObjectURL(old);
+      next[idx] = URL.createObjectURL(file);
+      return next;
+    });
+    setCarouselSlidePendingFiles((prev) => ({ ...prev, [idx]: file }));
+    setMessage(null);
+  };
+
+  const clearCarouselSlideDraft = (index: number) => {
+    setCarouselSlideDraftUrls((prev) => {
+      const u = prev[index];
+      if (u) URL.revokeObjectURL(u);
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    setCarouselSlidePendingFiles((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+  };
+
   const handleSave = () => {
     setMessage(null);
     startTransition(async () => {
+      if (fullWidthImagePendingFile) {
+        const fd = new FormData();
+        fd.set("full_width_image", fullWidthImagePendingFile);
+        const up = await uploadFullWidthImage(fd);
+        if (!up.success) {
+          setMessage({ type: "error", text: up.error });
+          return;
+        }
+        const savedMeta = await updateFullWidthImageUrl(up.url);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setFullWidthImageUrl(up.url);
+        setFullWidthImageDraftUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setFullWidthImagePendingFile(null);
+      }
+
+      if (heroImagePendingFile) {
+        const fd = new FormData();
+        fd.set("hero_image", heroImagePendingFile);
+        const up = await uploadHeroLayoutImage(fd);
+        if (!up.success) {
+          setMessage({ type: "error", text: up.error });
+          return;
+        }
+        const savedMeta = await updateHeroImageUrl(up.url);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setHeroImageUrl(up.url);
+        setHeroImageDraftUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setHeroImagePendingFile(null);
+      }
+
+      const pendingCarouselKeys = Object.keys(carouselSlidePendingFiles);
+      if (pendingCarouselKeys.length > 0) {
+        let nextCarousel = carouselItems.map((c) => ({ ...c }));
+        for (const k of pendingCarouselKeys) {
+          const i = Number(k);
+          const file = carouselSlidePendingFiles[i];
+          if (!file) continue;
+          const fd = new FormData();
+          fd.set("carousel_slide_image", file);
+          fd.set("carousel_upload_index", String(i));
+          const up = await uploadCarouselSlideImage(fd);
+          if (!up.success) {
+            setMessage({ type: "error", text: up.error });
+            return;
+          }
+          if (nextCarousel[i]) {
+            nextCarousel[i] = { ...nextCarousel[i], imageUrl: up.url };
+          }
+        }
+        const savedC = await updateCarouselItemsPersist(nextCarousel);
+        if (!savedC.success) {
+          setMessage({ type: "error", text: savedC.error });
+          return;
+        }
+        setCarouselItems(nextCarousel);
+        setCarouselSlideDraftUrls((prev) => {
+          for (const k of pendingCarouselKeys) {
+            const u = prev[Number(k)];
+            if (u) URL.revokeObjectURL(u);
+          }
+          return {};
+        });
+        setCarouselSlidePendingFiles({});
+      }
+
+      if (logoPendingFile) {
+        const fd = new FormData();
+        fd.set("store_logo", logoPendingFile);
+        const up = await uploadLogoLayoutImage(fd);
+        if (!up.success) {
+          setMessage({ type: "error", text: up.error });
+          return;
+        }
+        const savedMeta = await updateLogoUrl(up.url);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setLogoUrl(up.url);
+        setLogoDraftUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setLogoPendingFile(null);
+      }
+
+      let deskUrl = headerBackgroundUrl;
+      let mobUrl = headerBackgroundMobileUrl;
+      if (headerBgDeskPendingFile) {
+        const fd = new FormData();
+        fd.set("header_background", headerBgDeskPendingFile);
+        const up = await uploadHeaderBackgroundDesktop(fd);
+        if (!up.success) {
+          setMessage({ type: "error", text: up.error });
+          return;
+        }
+        deskUrl = up.url;
+      }
+      if (headerBgMobPendingFile) {
+        const fd = new FormData();
+        fd.set("header_background_mobile", headerBgMobPendingFile);
+        const up = await uploadHeaderBackgroundMobile(fd);
+        if (!up.success) {
+          setMessage({ type: "error", text: up.error });
+          return;
+        }
+        mobUrl = up.url;
+      }
+      if (headerBgDeskPendingFile || headerBgMobPendingFile) {
+        const savedH = await updateHeaderBackgroundUrls(deskUrl, mobUrl);
+        if (!savedH.success) {
+          setMessage({ type: "error", text: savedH.error });
+          return;
+        }
+        setHeaderBackgroundUrl(deskUrl);
+        setHeaderBackgroundMobileUrl(mobUrl);
+        setHeaderBgDeskDraftUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setHeaderBgDeskPendingFile(null);
+        setHeaderBgMobDraftUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setHeaderBgMobPendingFile(null);
+      }
+
       const result = await updateLayoutBlocks(blocks);
       if (result.success) {
         setMessage({ type: "success", text: result.message ?? "已儲存" });
@@ -736,6 +1084,237 @@ export default function AdminLayoutPage() {
   const selectedBlock = selectedBlockId ? blocks.find((b) => b.id === selectedBlockId) : null;
   const selectedIndex = selectedBlockId != null ? getBlockIndex(selectedBlockId) : -1;
   const editLink = selectedBlockId ? BLOCK_EDIT_LINKS[selectedBlockId] : null;
+
+  const fullWidthImageEditorBlock =
+    selectedBlockId === "full_width_image" ? (
+      <div className="space-y-2 rounded-lg border border-amber-200/80 bg-white/90 p-3">
+        <p className="text-xs text-gray-600 leading-relaxed">
+          選圖後會立即顯示於畫布；按「儲存版面」時再上傳至 R2 並寫入前台網址。
+        </p>
+        <button
+          type="button"
+          onClick={() => fullWidthImageFileRef.current?.click()}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
+        >
+          <ImageIcon className="h-4 w-4 shrink-0" />
+          {displayFullWidthImageUrl ? "更換單張大圖" : "上傳單張大圖"}
+        </button>
+        {fullWidthImagePendingFile ? (
+          <p className="text-[11px] text-amber-800">
+            待上傳：{fullWidthImagePendingFile.name}（須按「儲存版面」）
+          </p>
+        ) : null}
+        {displayFullWidthImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={displayFullWidthImageUrl}
+            alt=""
+            className="w-full max-h-36 rounded-md border border-gray-200 object-contain bg-gray-50"
+          />
+        ) : null}
+        {fullWidthImagePendingFile || fullWidthImageDraftUrl ? (
+          <button
+            type="button"
+            onClick={clearFullWidthImageDraft}
+            className="text-xs text-gray-600 hover:text-red-600 underline"
+          >
+            取消待上傳預覽
+          </button>
+        ) : null}
+      </div>
+    ) : null;
+
+  const heroImageEditorBlock =
+    selectedBlockId === "hero" || selectedBlockId === "hero_carousel" ? (
+      <div className="space-y-2 rounded-lg border border-amber-200/80 bg-white/90 p-3">
+        <p className="text-xs text-gray-600 leading-relaxed">
+          首頁主圖：選檔後立即顯示於畫布；按「儲存版面」時再上傳至 R2。
+        </p>
+        <button
+          type="button"
+          onClick={() => heroImageFileRef.current?.click()}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
+        >
+          <ImageIcon className="h-4 w-4 shrink-0" />
+          {displayHeroImageUrl ? "更換首頁主圖" : "上傳首頁主圖"}
+        </button>
+        {heroImagePendingFile ? (
+          <p className="text-[11px] text-amber-800">
+            待上傳：{heroImagePendingFile.name}（須按「儲存版面」）
+          </p>
+        ) : null}
+        {displayHeroImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={displayHeroImageUrl}
+            alt=""
+            className="w-full max-h-36 rounded-md border border-gray-200 object-cover bg-gray-50"
+          />
+        ) : null}
+        {heroImagePendingFile || heroImageDraftUrl ? (
+          <button
+            type="button"
+            onClick={clearHeroImageDraft}
+            className="text-xs text-gray-600 hover:text-red-600 underline"
+          >
+            取消待上傳預覽
+          </button>
+        ) : null}
+      </div>
+    ) : null;
+
+  const headerAssetEditorBlock =
+    selectedBlockId === "header" ? (
+      <div className="space-y-3 rounded-lg border border-amber-200/80 bg-white/90 p-3">
+        <p className="text-xs text-gray-600 leading-relaxed">
+          LOGO 與頁首背景：預覽於畫布；按「儲存版面」時再上傳至 R2 並寫入設定。
+        </p>
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-gray-700">LOGO</span>
+          <button
+            type="button"
+            onClick={() => logoFileRef.current?.click()}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
+          >
+            <ImageIcon className="h-4 w-4 shrink-0" />
+            {displayLogoUrl ? "更換 LOGO" : "上傳 LOGO"}
+          </button>
+          {logoPendingFile ? (
+            <p className="text-[11px] text-amber-800">待上傳：{logoPendingFile.name}</p>
+          ) : null}
+          {displayLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={displayLogoUrl}
+              alt=""
+              className="max-h-16 w-auto rounded border border-gray-200 object-contain bg-gray-50"
+            />
+          ) : null}
+          {logoPendingFile || logoDraftUrl ? (
+            <button type="button" onClick={clearLogoDraft} className="text-xs text-gray-600 hover:text-red-600 underline">
+              取消 LOGO 預覽
+            </button>
+          ) : null}
+        </div>
+        <div className="space-y-1.5 border-t border-amber-100/80 pt-2">
+          <span className="text-xs font-medium text-gray-700">頁首背景（桌機）</span>
+          <button
+            type="button"
+            onClick={() => headerBgDeskFileRef.current?.click()}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+          >
+            <ImageIcon className="h-4 w-4 shrink-0" />
+            {displayHeaderBackgroundUrl ? "更換桌機背景" : "上傳桌機背景"}
+          </button>
+          {headerBgDeskPendingFile ? (
+            <p className="text-[11px] text-amber-800">待上傳：{headerBgDeskPendingFile.name}</p>
+          ) : null}
+          {displayHeaderBackgroundUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={displayHeaderBackgroundUrl}
+              alt=""
+              className="w-full max-h-20 rounded object-cover border border-gray-200"
+            />
+          ) : null}
+          {headerBgDeskPendingFile || headerBgDeskDraftUrl ? (
+            <button
+              type="button"
+              onClick={clearHeaderBgDeskDraft}
+              className="text-xs text-gray-600 hover:text-red-600 underline"
+            >
+              取消桌機背景預覽
+            </button>
+          ) : null}
+        </div>
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-gray-700">頁首背景（手機，可選）</span>
+          <button
+            type="button"
+            onClick={() => headerBgMobFileRef.current?.click()}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+          >
+            <ImageIcon className="h-4 w-4 shrink-0" />
+            {displayHeaderBackgroundMobileUrl ? "更換手機背景" : "上傳手機背景"}
+          </button>
+          {headerBgMobPendingFile ? (
+            <p className="text-[11px] text-amber-800">待上傳：{headerBgMobPendingFile.name}</p>
+          ) : null}
+          {displayHeaderBackgroundMobileUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={displayHeaderBackgroundMobileUrl}
+              alt=""
+              className="w-full max-h-20 rounded object-cover border border-gray-200"
+            />
+          ) : null}
+          {headerBgMobPendingFile || headerBgMobDraftUrl ? (
+            <button
+              type="button"
+              onClick={clearHeaderBgMobDraft}
+              className="text-xs text-gray-600 hover:text-red-600 underline"
+            >
+              取消手機背景預覽
+            </button>
+          ) : null}
+        </div>
+      </div>
+    ) : null;
+
+  const carouselSlidesEditorBlock =
+    selectedBlockId === "carousel" || selectedBlockId === "carousel_2" ? (
+      <div className="space-y-3 rounded-lg border border-amber-200/80 bg-white/90 p-3">
+        <p className="text-xs text-gray-600 leading-relaxed">
+          輪播圖：每一則可單獨選圖，預覽於畫布；按「儲存版面」時再上傳至 R2（與前台輪播設定相同資料）。
+        </p>
+        <ul className="space-y-3 max-h-64 overflow-y-auto">
+          {displayCarouselItems.map((item, index) => (
+            <li
+              key={item.id}
+              className="rounded-md border border-gray-200 bg-gray-50/80 p-2 space-y-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-gray-700">第 {index + 1} 則</span>
+                {carouselSlidePendingFiles[index] ? (
+                  <span className="text-[10px] text-amber-800 truncate">{carouselSlidePendingFiles[index].name}</span>
+                ) : null}
+              </div>
+              {item.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.imageUrl}
+                  alt=""
+                  className="w-full max-h-24 rounded object-cover border border-gray-200 bg-white"
+                />
+              ) : (
+                <p className="text-[11px] text-gray-500">尚未設定圖片</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    carouselSlideIndexRef.current = index;
+                    carouselSlideFileRef.current?.click();
+                  }}
+                  className="text-xs font-medium text-amber-800 hover:underline"
+                >
+                  選擇／更換圖片
+                </button>
+                {carouselSlidePendingFiles[index] || carouselSlideDraftUrls[index] ? (
+                  <button
+                    type="button"
+                    onClick={() => clearCarouselSlideDraft(index)}
+                    className="text-xs text-gray-600 hover:text-red-600 underline"
+                  >
+                    取消此則預覽
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
 
   useEffect(() => {
     setSelectedFloatingIconId(null);
@@ -802,18 +1381,18 @@ export default function AdminLayoutPage() {
       selectedBlockId,
       selectedFloatingIconId,
       mobileCanvasZoomPct,
-      heroImageUrl,
-      carouselItems,
+      heroImageUrl: displayHeroImageUrl,
+      carouselItems: displayCarouselItems,
       aboutContent,
       navAboutLabel,
       navCoursesLabel,
       navBookingLabel,
       navFaqLabel,
       activities,
-      fullWidthImageUrl,
-      logoUrl,
-      headerBackgroundUrl,
-      headerBackgroundMobileUrl,
+      fullWidthImageUrl: displayFullWidthImageUrl,
+      logoUrl: displayLogoUrl,
+      headerBackgroundUrl: displayHeaderBackgroundUrl,
+      headerBackgroundMobileUrl: displayHeaderBackgroundMobileUrl,
       showProductMenu,
       pageBackgroundUrl,
       pageBackgroundMobileUrl,
@@ -840,18 +1419,18 @@ export default function AdminLayoutPage() {
       selectedBlockId,
       selectedFloatingIconId,
       mobileCanvasZoomPct,
-      heroImageUrl,
-      carouselItems,
+      displayHeroImageUrl,
+      displayCarouselItems,
       aboutContent,
       navAboutLabel,
       navCoursesLabel,
       navBookingLabel,
       navFaqLabel,
       activities,
-      fullWidthImageUrl,
-      logoUrl,
-      headerBackgroundUrl,
-      headerBackgroundMobileUrl,
+      displayFullWidthImageUrl,
+      displayLogoUrl,
+      displayHeaderBackgroundUrl,
+      displayHeaderBackgroundMobileUrl,
       showProductMenu,
       pageBackgroundUrl,
       pageBackgroundMobileUrl,
@@ -910,8 +1489,8 @@ export default function AdminLayoutPage() {
       </div>
 
       <h1 className="text-xl font-bold text-gray-900">首頁版面</h1>
-      <p className="text-sm text-gray-600 max-w-2xl">
-        左側「可加入的積木」已分組：「分站首頁會顯示」與訪客畫面一致；「僅畫布預覽」為新上架／熱門體驗等佔位，方便調高度與背景，訪客首頁不顯示。畫布預覽含頁首、內文背景與頁尾（與前台設定一致）。請用「桌機版／手機版」切換；點畫布裝飾圖可對應側欄編號。儲存後寫入資料庫。
+      <p className="text-sm text-gray-600 max-w-xl">
+        拖曳左側順序、點畫布調整區塊；區塊高度請依目前畫布「預覽比例」輸入（會換算為前台實際像素）。完成後按「儲存版面」。
       </p>
 
       {message && (
@@ -952,6 +1531,60 @@ export default function AdminLayoutPage() {
           e.target.value = "";
         }}
       />
+      <input
+        ref={fullWidthImageFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleFullWidthImageFileChange}
+      />
+      <input
+        ref={heroImageFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleHeroImageFileChange}
+      />
+      <input
+        ref={logoFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleLogoFileChange}
+      />
+      <input
+        ref={headerBgDeskFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleHeaderBgDeskFileChange}
+      />
+      <input
+        ref={headerBgMobFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleHeaderBgMobFileChange}
+      />
+      <input
+        ref={carouselSlideFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleCarouselSlideFileChange}
+      />
 
       {/* 左側鎖定 + 中間畫布；右側改成點積木才浮出編輯面板 */}
       <div className="flex flex-col md:flex-row gap-6 items-start md:min-h-[420px]">
@@ -985,35 +1618,14 @@ export default function AdminLayoutPage() {
                     </ul>
                   </div>
                 ) : null}
-                {availableAdminPlaceholder.length > 0 ? (
-                  <div>
-                    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-amber-800/90 mb-1.5">
-                      僅畫布預覽（訪客首頁不顯示）
-                    </h3>
-                    <p className="text-[10px] text-gray-500 mb-1.5 leading-snug">
-                      點選後畫布會出現佔位區，可調背景／高度／裝飾圖；內容請至前台設定或總站版型。
-                    </p>
-                    <ul className="space-y-1.5">
-                      {availableAdminPlaceholder.map((id) => (
-                        <li key={id}>
-                          <button
-                            type="button"
-                            onClick={() => addBlock(id)}
-                            className="w-full flex items-center gap-2 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-left text-sm text-amber-950 hover:bg-amber-100 transition-colors"
-                          >
-                            <Plus className="h-4 w-4 shrink-0 text-amber-700" />
-                            {LAYOUT_SECTION_LABELS[id] ?? id}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
                 {availableOptionalBlocks.length > 0 ? (
                   <div>
                     <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
                       進階（總站版型）
                     </h3>
+                    <p className="text-[10px] text-gray-500 mb-1.5 leading-snug">
+                      僅畫布預覽（訪客首頁不顯示）。點選後可調背景／高度／裝飾圖；內容請至前台設定或總站版型。
+                    </p>
                     <ul className="space-y-1.5">
                       {availableOptionalBlocks.map((id) => (
                         <li key={id}>
@@ -1066,6 +1678,7 @@ export default function AdminLayoutPage() {
                   >
                     <GripVertical className="h-4 w-4 text-gray-500 shrink-0" aria-hidden />
                     <span className="flex-1 text-sm text-gray-700 truncate">
+                      <span className="text-gray-400 font-medium tabular-nums mr-1">編號 {i + 1}</span>
                       {LAYOUT_SECTION_LABELS[b.id] ?? b.id}
                     </span>
                   </div>
@@ -1125,8 +1738,8 @@ export default function AdminLayoutPage() {
           {canvasViewportMode === "desktop" ? (
           <div className="w-full max-w-full rounded-xl border border-gray-200 bg-gray-100 shadow-lg shrink-0">
             <div className="px-3 py-2 bg-gray-200 border-b border-gray-300 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
-              <span className="text-center sm:text-left flex-1 min-w-[200px]">
-                完整首頁預覽與前台同一套頁面元件；可點區塊、調高度、拖曳裝飾圖。
+              <span className="text-center sm:text-left flex-1 min-w-[120px] text-gray-500">
+                桌機預覽
               </span>
               <div className="flex flex-wrap items-center gap-1.5 justify-center">
                 <span className="text-gray-500 shrink-0">預覽比例</span>
@@ -1160,18 +1773,18 @@ export default function AdminLayoutPage() {
                 }}
                 designWidthPx={CANVAS_MAX_WIDTH_PX}
                 zoomPercent={canvasZoomPct}
-                heroImageUrl={heroImageUrl}
-                carouselItems={carouselItems}
+                heroImageUrl={displayHeroImageUrl}
+                carouselItems={displayCarouselItems}
                 aboutContent={aboutContent}
                 navAboutLabel={navAboutLabel}
                 navCoursesLabel={navCoursesLabel}
                 navBookingLabel={navBookingLabel}
                 navFaqLabel={navFaqLabel}
                 activities={activities}
-                fullWidthImageUrl={fullWidthImageUrl}
-                logoUrl={logoUrl}
-                headerBackgroundUrl={headerBackgroundUrl}
-                headerBackgroundMobileUrl={headerBackgroundMobileUrl}
+                fullWidthImageUrl={displayFullWidthImageUrl}
+                logoUrl={displayLogoUrl}
+                headerBackgroundUrl={displayHeaderBackgroundUrl}
+                headerBackgroundMobileUrl={displayHeaderBackgroundMobileUrl}
                 showProductMenu={showProductMenu}
                 pageBackgroundUrl={pageBackgroundUrl}
                 pageBackgroundMobileUrl={pageBackgroundMobileUrl}
@@ -1295,6 +1908,11 @@ export default function AdminLayoutPage() {
                 />
               </div>
 
+              {fullWidthImageEditorBlock}
+              {heroImageEditorBlock}
+              {headerAssetEditorBlock}
+              {carouselSlidesEditorBlock}
+
               {editLink && (
                 <Link
                   href={editLink.href}
@@ -1348,17 +1966,37 @@ export default function AdminLayoutPage() {
 
               <div>
                 <p className="text-xs font-medium text-amber-700 mb-1">
-                  目前高度: {selectedBlock.heightPx != null && selectedBlock.heightPx > 0 ? `${selectedBlock.heightPx} px` : "自動"}
+                  目前高度:{" "}
+                  {selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                    ? layoutHeightScale !== 1
+                      ? `畫布約 ${blockHeightPreviewPx(selectedBlock.heightPx)} px（前台 ${selectedBlock.heightPx} px）`
+                      : `${selectedBlock.heightPx} px`
+                    : "自動"}
                 </p>
-                <label className="block text-xs font-medium text-gray-700 mb-1">區塊高度 (px)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  區塊高度（{layoutHeightScale < 1 ? "畫布預覽 px，儲存為前台 px" : "前台 px"}）
+                </label>
                 <input
                   type="number"
                   min={0}
-                  step={10}
-                  value={selectedBlock.heightPx ?? ""}
+                  step={layoutHeightScale < 1 ? 1 : 10}
+                  value={
+                    selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                      ? (blockHeightPreviewPx(selectedBlock.heightPx) ?? "")
+                      : ""
+                  }
                   onChange={(e) => {
                     const v = e.target.value.trim();
-                    setBlockHeightByIndex(selectedIndex, v === "" ? null : parseInt(v, 10));
+                    if (v === "") {
+                      setBlockHeightByIndex(selectedIndex, null);
+                      return;
+                    }
+                    const n = parseInt(v, 10);
+                    if (!Number.isFinite(n) || n < 0) return;
+                    setBlockHeightByIndex(
+                      selectedIndex,
+                      n === 0 ? null : blockHeightStoredFromPreviewInput(n)
+                    );
                   }}
                   placeholder="自動"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -1440,6 +2078,11 @@ export default function AdminLayoutPage() {
               />
             </div>
 
+            {fullWidthImageEditorBlock}
+            {heroImageEditorBlock}
+            {headerAssetEditorBlock}
+            {carouselSlidesEditorBlock}
+
             {editLink && (
               <Link
                 href={editLink.href}
@@ -1493,17 +2136,37 @@ export default function AdminLayoutPage() {
 
             <div>
               <p className="text-xs font-medium text-amber-700 mb-1">
-                目前高度: {selectedBlock.heightPx != null && selectedBlock.heightPx > 0 ? `${selectedBlock.heightPx} px` : "自動"}
+                目前高度:{" "}
+                {selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                  ? layoutHeightScale !== 1
+                    ? `畫布約 ${blockHeightPreviewPx(selectedBlock.heightPx)} px（前台 ${selectedBlock.heightPx} px）`
+                    : `${selectedBlock.heightPx} px`
+                  : "自動"}
               </p>
-              <label className="block text-xs font-medium text-gray-700 mb-1">區塊高度 (px)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                區塊高度（{layoutHeightScale < 1 ? "畫布預覽 px，儲存為前台 px" : "前台 px"}）
+              </label>
               <input
                 type="number"
                 min={0}
-                step={10}
-                value={selectedBlock.heightPx ?? ""}
+                step={layoutHeightScale < 1 ? 1 : 10}
+                value={
+                  selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                    ? (blockHeightPreviewPx(selectedBlock.heightPx) ?? "")
+                    : ""
+                }
                 onChange={(e) => {
                   const v = e.target.value.trim();
-                  setBlockHeightByIndex(selectedIndex, v === "" ? null : parseInt(v, 10));
+                  if (v === "") {
+                    setBlockHeightByIndex(selectedIndex, null);
+                    return;
+                  }
+                  const n = parseInt(v, 10);
+                  if (!Number.isFinite(n) || n < 0) return;
+                  setBlockHeightByIndex(
+                    selectedIndex,
+                    n === 0 ? null : blockHeightStoredFromPreviewInput(n)
+                  );
                 }}
                 placeholder="自動"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"

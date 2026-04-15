@@ -6,8 +6,12 @@ import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "reac
 import FAQ from "@/app/components/FAQ";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import HomeFeaturedCoursesOnePlusSix from "@/app/components/home/HomeFeaturedCoursesOnePlusSix";
+import HomeCoursesGridListBlock from "@/app/components/home/HomeCoursesGridListBlock";
 import HomeMarketplaceCoursesSection from "@/app/components/home/HomeMarketplaceCoursesSection";
 import HeroFloatingIconsLayer from "@/app/components/home/HeroFloatingIconsLayer";
+import { getCoursesForHomepage } from "@/app/actions/productActions";
+import { mapCourseToHomeActivity } from "@/app/lib/mapCourseToHomeActivity";
+import type { Activity } from "@/app/lib/homeSectionTypes";
 import BlockWrapper from "@/app/admin/(protected)/layout/BlockWrapper";
 import HeroFloatingIconsEditor from "@/app/admin/(protected)/layout/HeroFloatingIconsEditor";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
@@ -25,6 +29,8 @@ const BRANCH_LAYOUT_ID_LIST = [
   "carousel",
   "featured_categories",
   "courses",
+  "courses_grid",
+  "courses_list",
   "about",
   "faq",
   "contact",
@@ -37,7 +43,7 @@ const BRANCH_LAYOUT_ID_LIST = [
 const ADMIN_CANVAS_PLACEHOLDER_ID_LIST = ["new_courses", "popular_experiences"] as const;
 
 /** 總站首頁有、分站畫布需預覽選取的積木（訪客分站頁未必渲染） */
-const ADMIN_EXTRA_CANVAS_BLOCK_IDS = ["carousel_2", "full_width_image", "courses_grid", "courses_list"] as const;
+const ADMIN_EXTRA_CANVAS_BLOCK_IDS = ["carousel_2", "full_width_image"] as const;
 
 /** 依 layout_blocks 排序與 enabled，產生渲染順序；前台訪客：hero／hero_carousel 合併為一個 hero 槽；後台畫布：分開列出以便分別選取 */
 function getVisibleOrderedBranchSectionIds(blocks: LayoutBlock[], forAdminCanvas: boolean): string[] {
@@ -81,6 +87,14 @@ export type BranchSiteHomeViewProps = {
   heroImageUrl: string | null;
   /** 後台畫布：單張大圖區塊預覽用（與前台設定同步） */
   fullWidthImageUrl?: string | null;
+  /**
+   * 後台畫布：頁首 LOGO／背景預覽（與 store_settings 同步；訪客首頁未傳此值）
+   */
+  previewHeader?: {
+    logoUrl: string | null;
+    headerBackgroundUrl: string | null;
+    headerBackgroundMobileUrl: string | null;
+  } | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;
   navAboutLabel: string;
@@ -89,12 +103,15 @@ export type BranchSiteHomeViewProps = {
   navFaqLabel: string;
   /** 後台畫布：區塊選取、高度、裝飾圖編輯 */
   adminLayout?: AdminLayoutCanvasConfig | null;
+  /** 後台畫布：與編輯頁同一批課程列表；訪客首頁會自行向 API 載入 */
+  activities?: Activity[];
 };
 
 export default function BranchSiteHomeView({
   layoutBlocks,
   heroImageUrl,
   fullWidthImageUrl = null,
+  previewHeader = null,
   carouselItems,
   aboutContent,
   navAboutLabel,
@@ -102,6 +119,7 @@ export default function BranchSiteHomeView({
   navBookingLabel,
   navFaqLabel,
   adminLayout = null,
+  activities: activitiesFromParent,
 }: BranchSiteHomeViewProps) {
   const {
     siteName,
@@ -161,6 +179,44 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
 
+  const isAdminCanvas = admin != null;
+  const [fetchedHomeActivities, setFetchedHomeActivities] = useState<Activity[]>([]);
+  const [homeFetchLoading, setHomeFetchLoading] = useState(!isAdminCanvas);
+  const [homeFetchError, setHomeFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAdminCanvas) return;
+    let cancelled = false;
+    (async () => {
+      setHomeFetchLoading(true);
+      setHomeFetchError(null);
+      try {
+        const res = await getCoursesForHomepage();
+        if (cancelled) return;
+        if (!res.success) {
+          setFetchedHomeActivities([]);
+          setHomeFetchError(res.error);
+          return;
+        }
+        setFetchedHomeActivities(res.data.map(mapCourseToHomeActivity));
+      } catch (e) {
+        if (!cancelled) {
+          setFetchedHomeActivities([]);
+          setHomeFetchError(e instanceof Error ? e.message : "載入課程失敗");
+        }
+      } finally {
+        if (!cancelled) setHomeFetchLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminCanvas]);
+
+  const homeActivities = isAdminCanvas ? (activitiesFromParent ?? []) : fetchedHomeActivities;
+  const homeCoursesLoading = isAdminCanvas ? false : homeFetchLoading;
+  const homeCoursesError = isAdminCanvas ? null : homeFetchError;
+
   const orderedSectionIds = useMemo(
     () => getVisibleOrderedBranchSectionIds(layoutBlocks, admin != null),
     [layoutBlocks, admin]
@@ -182,16 +238,56 @@ export default function BranchSiteHomeView({
         onResizeHeight={(heightPx) => admin.onBlockResizeHeight(adminId, heightPx)}
         blockLabel={LAYOUT_SECTION_LABELS[adminId] ?? adminId}
         skipBackgroundImage={opts?.skipBackgroundImage}
+        previewScale={admin.canvasPreviewScale ?? 1}
       >
         {children}
       </BlockWrapper>
     );
   };
 
+  const ph = admin && previewHeader ? previewHeader : null;
+  const hasPreviewLogo = !!(ph?.logoUrl && ph.logoUrl.trim());
+  const deskBg = ph?.headerBackgroundUrl?.trim() || null;
+  const mobBg = ph?.headerBackgroundMobileUrl?.trim() || null;
+  const hasPreviewHeaderBg = !!(deskBg || mobBg);
+  const previewMobileBg = mobBg || deskBg;
+  const previewDesktopBg = deskBg || mobBg;
+
   const headerInner = (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-      <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between gap-2">
-        <h1 className="text-xl font-bold text-brand shrink-0">{siteName}</h1>
+    <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm relative overflow-hidden">
+      {hasPreviewHeaderBg && previewMobileBg && previewDesktopBg && previewMobileBg !== previewDesktopBg ? (
+        <>
+          <div
+            className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat md:hidden"
+            style={{ backgroundImage: `url(${previewMobileBg})` }}
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-0 z-0 hidden bg-cover bg-center bg-no-repeat md:block"
+            style={{ backgroundImage: `url(${previewDesktopBg})` }}
+            aria-hidden
+          />
+        </>
+      ) : hasPreviewHeaderBg && previewDesktopBg ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url(${previewDesktopBg})` }}
+          aria-hidden
+        />
+      ) : null}
+      <div className="relative z-10 mx-auto max-w-7xl px-4 h-14 flex items-center justify-between gap-2">
+        {hasPreviewLogo ? (
+          <div className="shrink-0 flex items-center max-h-12">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={ph!.logoUrl!.trim()}
+              alt=""
+              className="max-h-11 w-auto max-w-[200px] object-contain"
+            />
+          </div>
+        ) : (
+          <h1 className="text-xl font-bold text-brand shrink-0">{siteName}</h1>
+        )}
         <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0 overflow-x-auto scrollbar-hide">
           <a href="#about" className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">
             {navAboutLabel || "關於我們"}
@@ -343,7 +439,14 @@ export default function BranchSiteHomeView({
       </section>
     ) : null;
 
-  const coursesInner = <HomeMarketplaceCoursesSection blockStyle={admin ? {} : getBlockStyle("courses")} />;
+  const coursesInner = (
+    <HomeMarketplaceCoursesSection
+      blockStyle={admin ? {} : getBlockStyle("courses")}
+      activities={homeActivities}
+      loading={homeCoursesLoading}
+      error={homeCoursesError}
+    />
+  );
   const featuredCoursesInner = (
     <HomeFeaturedCoursesOnePlusSix blockStyle={admin ? {} : getBlockStyle("featured_categories")} />
   );
@@ -515,14 +618,63 @@ export default function BranchSiteHomeView({
     </footer>
   );
 
+  const renderAdminFloatingIconsOverlay = (blockId: string): React.ReactNode => {
+    if (!admin) return null;
+    const b = getBlock(blockId);
+    if (!b?.floatingIcons?.length) return null;
+    return (
+      <div className="pointer-events-none absolute inset-0 z-[15]">
+        <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b.floatingIcons} />
+        {admin.selectedBlockId === blockId ? (
+          <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+            <HeroFloatingIconsEditor
+              overlayMode
+              coordinateMode={coordMode}
+              icons={b.floatingIcons}
+              onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
+              selectedIconId={admin.selectedFloatingIconId ?? null}
+              onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderCoursesGridOrListSection = (blockId: "courses_grid" | "courses_list"): React.ReactNode => {
+    const inner = (
+      <section className="relative w-full py-6 pb-8 bg-page" style={admin ? {} : getBlockStyle(blockId)}>
+        {admin ? (
+          <div className="max-w-7xl mx-auto px-4 mb-2">
+            <p className="text-[11px] font-medium text-amber-900/90 bg-amber-100/60 border border-amber-200/80 rounded-lg px-2 py-1 inline-block">
+              {blockId === "courses_list"
+                ? "列表：橫向圖＋文字（與總站首頁此版型一致）"
+                : "網格：多欄卡片（與總站首頁此版型一致）"}
+            </p>
+          </div>
+        ) : null}
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">熱門課程</h2>
+          <HomeCoursesGridListBlock
+            variant={blockId === "courses_list" ? "list" : "grid"}
+            activities={homeActivities}
+            loading={homeCoursesLoading}
+            error={homeCoursesError}
+            showPreviewHint={!!admin}
+          />
+        </div>
+        {renderAdminFloatingIconsOverlay(blockId)}
+      </section>
+    );
+    return admin ? wrap(blockId, inner) : inner;
+  };
+
   /** 後台畫布專用：總站版型區塊在分站首頁不渲染，此處顯示佔位以利選取與編輯背景／高度／裝飾圖 */
   const renderAdminOnlyPlaceholder = (
     blockId:
       | "new_courses"
       | "popular_experiences"
-      | "carousel_2"
-      | "courses_grid"
-      | "courses_list",
+      | "carousel_2",
     title: string,
     description: string
   ): React.ReactNode => {
@@ -647,17 +799,9 @@ export default function BranchSiteHomeView({
         return wrap("full_width_image", inner);
       }
       case "courses_grid":
-        return renderAdminOnlyPlaceholder(
-          "courses_grid",
-          LAYOUT_SECTION_LABELS.courses_grid,
-          "後台畫布預覽區。可調整高度、背景圖、裝飾圖；課程內容於商品／課程管理；分站訪客是否顯示依版型而定。"
-        );
+        return renderCoursesGridOrListSection("courses_grid");
       case "courses_list":
-        return renderAdminOnlyPlaceholder(
-          "courses_list",
-          LAYOUT_SECTION_LABELS.courses_list,
-          "後台畫布預覽區。可調整高度、背景圖、裝飾圖；課程內容於商品／課程管理；分站訪客是否顯示依版型而定。"
-        );
+        return renderCoursesGridOrListSection("courses_list");
       default:
         return null;
     }

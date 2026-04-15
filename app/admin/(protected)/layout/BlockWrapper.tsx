@@ -12,6 +12,8 @@ type Props = {
   blockLabel: string;
   /** 頁尾區塊若由子元件自行鋪背景（與前台 HomePageFooter 一致），勿在外層重複鋪圖 */
   skipBackgroundImage?: boolean;
+  /** 畫布 CSS transform 縮放（0.25–1）；拖曳高度時將螢幕位移換算為前台設計 px */
+  previewScale?: number;
 };
 
 /** 畫布上的區塊外層：可點選、可拖曳底部改變高度 */
@@ -23,10 +25,12 @@ export default function BlockWrapper({
   children,
   blockLabel,
   skipBackgroundImage = false,
+  previewScale = 1,
 }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const startYRef = useRef(0);
   const startHeightRef = useRef(0);
+  const scale = previewScale > 0 ? previewScale : 1;
 
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -43,10 +47,11 @@ export default function BlockWrapper({
     (e: MouseEvent) => {
       if (!isDragging) return;
       const dy = e.clientY - startYRef.current;
-      let newH = Math.max(80, startHeightRef.current + dy);
+      const designDy = dy / scale;
+      let newH = Math.max(80, startHeightRef.current + designDy);
       onResizeHeight(newH);
     },
-    [isDragging, onResizeHeight]
+    [isDragging, onResizeHeight, scale]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -62,6 +67,15 @@ export default function BlockWrapper({
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  const rawH = block.heightPx != null && block.heightPx > 0 ? block.heightPx : null;
+  const canvasPreviewH = rawH != null ? Math.round(rawH * scale) : null;
+  const heightBadge =
+    rawH == null
+      ? "自動"
+      : scale !== 1
+        ? `畫布 ${canvasPreviewH} px（前台 ${rawH} px）`
+        : `${rawH} px`;
 
   const blockStyle: React.CSSProperties = {
     minHeight: block.heightPx != null && block.heightPx > 0 ? block.heightPx : undefined,
@@ -106,7 +120,7 @@ export default function BlockWrapper({
             {blockLabel}
           </span>
           <span className="rounded bg-gray-800/90 px-2 py-1 text-xs font-medium text-white shadow">
-            高度: {block.heightPx != null && block.heightPx > 0 ? `${block.heightPx} px` : "自動"}
+            高度: {heightBadge}
           </span>
         </div>
       )}
@@ -118,7 +132,7 @@ export default function BlockWrapper({
         title="拖曳以調整區塊高度"
       >
         <span className="text-white text-xs font-medium">
-          {block.heightPx != null && block.heightPx > 0 ? `${block.heightPx} px` : "自動"} · 拖曳調整
+          {heightBadge} · 拖曳調整
         </span>
       </div>
     </div>

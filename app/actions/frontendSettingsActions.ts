@@ -450,6 +450,21 @@ export async function uploadHeroFloatingIcon(formData: FormData): Promise<
   }
 }
 
+/** 上傳首頁「單張大圖」至 R2（key：`full_width_image`，路徑：`home-full-width`） */
+export async function uploadFullWidthImage(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "full_width_image", "home-full-width");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
 /** 更新首頁區塊順序（後台「首頁版面」儲存用） */
 export async function updateLayoutOrder(order: string[]): Promise<
   { success: true; message?: string } | { success: false; error: string }
@@ -529,6 +544,244 @@ export async function updateFullWidthImageUrl(url: string | null): Promise<
       );
     if (error) return { success: false, error: error.message };
     return { success: true, message: "單張大圖網址已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 上傳首頁主圖（key：`hero_image`，路徑：`home-hero`） */
+export async function uploadHeroLayoutImage(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "hero_image", "home-hero");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 上傳 LOGO（key：`store_logo`，路徑含 `logo` 以利讀取驗證） */
+export async function uploadLogoLayoutImage(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "store_logo", "store-logo");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 上傳頁首背景（桌機） */
+export async function uploadHeaderBackgroundDesktop(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "header_background", "header-bg");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 上傳頁首背景（手機） */
+export async function uploadHeaderBackgroundMobile(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "header_background_mobile", "header-bg-mobile");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 上傳輪播單張圖。FormData 須含檔案欄位 `carousel_slide_image`、文字欄位 `carousel_upload_index`（0-based）。
+ */
+export async function uploadCarouselSlideImage(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const rawIdx = formData.get("carousel_upload_index");
+    const index = Math.min(19, Math.max(0, parseInt(String(rawIdx ?? "0"), 10) || 0));
+    const url = await uploadOneToR2WithPrefix(formData, "carousel_slide_image", `home-carousel-${index}`);
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
+export async function updateHeroImageUrl(url: string | null): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const value = typeof url === "string" && url.trim() ? url.trim() : null;
+    const merged: FrontendSettings = { ...existing, heroImageUrl: value };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      ...persistFrontendSettingsBase(merged),
+      heroImageUrl: value,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "首頁主圖已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+export async function updateLogoUrl(url: string | null): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const value = typeof url === "string" && url.trim() ? url.trim() : null;
+    const merged: FrontendSettings = { ...existing, logoUrl: value };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      ...persistFrontendSettingsBase(merged),
+      logoUrl: value,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "LOGO 已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+export async function updateHeaderBackgroundUrls(
+  desktop: string | null,
+  mobile: string | null
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const desk = typeof desktop === "string" && desktop.trim() ? desktop.trim() : null;
+    const mob = typeof mobile === "string" && mobile.trim() ? mobile.trim() : null;
+    const merged: FrontendSettings = {
+      ...existing,
+      headerBackgroundUrl: desk,
+      headerBackgroundMobileUrl: mob,
+    };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      ...persistFrontendSettingsBase(merged),
+      headerBackgroundUrl: desk,
+      headerBackgroundMobileUrl: mob,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "頁首背景已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+export async function updateCarouselItemsPersist(
+  items: CarouselItem[]
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const max = 20;
+    const normalized: CarouselItem[] = items.slice(0, max).map((x, i) => {
+      const prev = existing.carouselItems[i];
+      const id = typeof x.id === "string" && x.id.trim() ? x.id.trim() : prev?.id ?? `w${i + 1}`;
+      const title = typeof x.title === "string" ? x.title : "";
+      const subtitle = typeof x.subtitle === "string" ? x.subtitle : "";
+      const imageUrl =
+        x.imageUrl != null && String(x.imageUrl).trim() ? String(x.imageUrl).trim() : null;
+      const visible = x.visible === false ? false : true;
+      const linkUrl =
+        x.linkUrl != null && String(x.linkUrl).trim() ? String(x.linkUrl).trim() : prev?.linkUrl ?? null;
+      const buttonText =
+        x.buttonText != null && String(x.buttonText).trim()
+          ? String(x.buttonText).trim()
+          : prev?.buttonText ?? null;
+      return { id, title, subtitle, imageUrl, visible, linkUrl, buttonText };
+    });
+    const merged: FrontendSettings = { ...existing, carouselItems: normalized };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      ...persistFrontendSettingsBase(merged),
+      carouselItems: normalized,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "輪播圖已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";
     return { success: false, error: msg };

@@ -73,6 +73,10 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     zoomPercent,
     heroImageUrl,
     fullWidthImageUrl,
+    logoUrl,
+    headerBackgroundUrl,
+    headerBackgroundMobileUrl,
+    activities,
     carouselItems,
     aboutContent,
     navAboutLabel,
@@ -109,12 +113,16 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     scale,
     heroImageUrl,
     fullWidthImageUrl,
+    activities?.length,
     carouselList.length,
     aboutContent,
     navAboutLabel,
     navCoursesLabel,
     navBookingLabel,
     navFaqLabel,
+    logoUrl,
+    headerBackgroundUrl,
+    headerBackgroundMobileUrl,
   ]);
 
   const scaledH = innerHeight > 0 ? Math.ceil(innerHeight * scale) : Math.ceil(480 * scale);
@@ -146,6 +154,12 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
             layoutBlocks={blocks}
             heroImageUrl={heroImageUrl}
             fullWidthImageUrl={fullWidthImageUrl ?? null}
+            previewHeader={{
+              logoUrl: logoUrl ?? null,
+              headerBackgroundUrl: headerBackgroundUrl ?? null,
+              headerBackgroundMobileUrl: headerBackgroundMobileUrl ?? null,
+            }}
+            activities={activities}
             carouselItems={carouselItems}
             aboutContent={aboutContent}
             navAboutLabel={navAboutLabel}
@@ -160,6 +174,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
               floatingIconsCoordinateMode: coordMode,
               selectedFloatingIconId,
               onSelectFloatingIcon,
+              canvasPreviewScale: scale,
             }}
           />
         </CanvasPageBackground>

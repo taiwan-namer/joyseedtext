@@ -1,134 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
 import { Image as LucideImage, ChevronLeft, ChevronRight } from "lucide-react";
-import { getCoursesForHomepage } from "@/app/actions/productActions";
-import type { CourseForPublic } from "@/app/actions/productActions";
-import { dedupeCategoryList } from "@/lib/constants";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 
 const ACTIVITY_CARD_WIDTH = 280;
 const ACTIVITY_GAP = 16;
 const ACTIVITY_AUTO_SCROLL_MS = 4500;
 
-/** 首頁熱門課程分籤不顯示的分類（仍可由總站 global_categories 帶入，前台略過） */
-const HOME_POPULAR_COURSES_EXCLUDED_CATEGORY_LABELS = new Set(["世界之窗"]);
-
-function courseToActivity(c: CourseForPublic): Activity {
-  const price =
-    c.salePrice != null && c.price != null && c.salePrice < c.price ? c.salePrice : c.price ?? 0;
-  return {
-    id: c.id,
-    title: c.title,
-    price,
-    stock: c.capacity ?? 0,
-    imageUrl: c.imageUrl ?? null,
-    detailHref: `/course/${c.slug || c.id}`,
-    ageTags: c.sidebarOptionLabels ?? c.ageTags ?? [],
-    category: c.marketplace_category?.trim() ? c.marketplace_category.trim() : "課程",
-  };
-}
-
 type Props = {
   /** 與首頁畫布 courses 區塊背景／高度一致 */
   blockStyle?: React.CSSProperties;
+  /** 由父層統一載入（與網格／列表區塊同一批資料） */
+  activities: Activity[];
+  loading: boolean;
+  error?: string | null;
 };
 
 /**
- * 首頁「依總站主題分籤」課程列：分籤來自 /api/global-categories（與課程列表一致），
- * 課程來自 getCoursesForHomepage（全店精簡列，依 marketplace_category 篩選）。
- * 避免只取前 N 筆導致分籤內容與後台修改不同步。
+ * 首頁「熱門課程」橫向輪播列：課程資料由父層 `getCoursesForHomepage` 取得後傳入。
  */
-export default function HomeMarketplaceCoursesSection({ blockStyle }: Props) {
-  const [categoryLabels, setCategoryLabels] = useState<string[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [allActivities, setAllActivities] = useState<Activity[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(true);
-  const [coursesError, setCoursesError] = useState<string | null>(null);
-
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+export default function HomeMarketplaceCoursesSection({ blockStyle, activities, loading, error }: Props) {
   const [activityIndex, setActivityIndex] = useState(0);
   const activityScrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setCategoriesLoading(true);
-      try {
-        const res = await fetch("/api/global-categories", { method: "GET", cache: "no-store" });
-        if (!res.ok) throw new Error("categories fetch failed");
-        const data = (await res.json()) as { categories?: unknown };
-        const raw = data?.categories;
-        const list = Array.isArray(raw)
-          ? raw.map((v): string | null => (typeof v === "string" ? v.trim() : null)).filter((v): v is string => !!v)
-          : [];
-        if (!cancelled) {
-          setCategoryLabels(
-            dedupeCategoryList(list).filter((c) => !HOME_POPULAR_COURSES_EXCLUDED_CATEGORY_LABELS.has(c))
-          );
-        }
-      } catch {
-        if (!cancelled) setCategoryLabels([]);
-      } finally {
-        if (!cancelled) setCategoriesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setCoursesLoading(true);
-      setCoursesError(null);
-      try {
-        const res = await getCoursesForHomepage();
-        if (cancelled) return;
-        if (!res.success) {
-          setAllActivities([]);
-          setCoursesError(res.error);
-          return;
-        }
-        setAllActivities(res.data.map(courseToActivity));
-      } catch (e) {
-        if (!cancelled) {
-          setAllActivities([]);
-          setCoursesError(e instanceof Error ? e.message : "載入課程失敗");
-        }
-      } finally {
-        if (!cancelled) setCoursesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (categoryLabels.length === 0) {
-      setSelectedCategory(null);
-      return;
-    }
-    setSelectedCategory((prev) => {
-      if (prev && categoryLabels.includes(prev)) return prev;
-      return categoryLabels[0];
-    });
-  }, [categoryLabels]);
-
-  const filteredActivities = useMemo(() => {
-    if (!selectedCategory) return [];
-    return allActivities.filter((a) => (a.category ?? "").trim() === selectedCategory);
-  }, [allActivities, selectedCategory]);
-
-  useEffect(() => {
-    setActivityIndex(0);
-    const el = activityScrollRef.current;
-    if (el) el.scrollTo({ left: 0, behavior: "auto" });
-  }, [selectedCategory]);
+  const filteredActivities = useMemo(() => activities, [activities]);
 
   useEffect(() => {
     if (filteredActivities.length === 0) return;
@@ -136,7 +34,7 @@ export default function HomeMarketplaceCoursesSection({ blockStyle }: Props) {
       setActivityIndex((i) => (i + 1) % filteredActivities.length);
     }, ACTIVITY_AUTO_SCROLL_MS);
     return () => clearInterval(timer);
-  }, [filteredActivities.length, selectedCategory]);
+  }, [filteredActivities.length]);
 
   useEffect(() => {
     const el = activityScrollRef.current;
@@ -145,64 +43,11 @@ export default function HomeMarketplaceCoursesSection({ blockStyle }: Props) {
     el.scrollTo({ left: Math.min(activityIndex, filteredActivities.length - 1) * step, behavior: "smooth" });
   }, [activityIndex, filteredActivities.length]);
 
-  const loading = categoriesLoading || coursesLoading;
-
-  const onSelectCategory = useCallback((label: string) => {
-    setSelectedCategory(label);
-  }, []);
-
   return (
     <section className="w-full py-6 pb-8 relative bg-page" style={blockStyle}>
       <div className="max-w-7xl mx-auto px-4 mb-4">
         <h2 className="text-lg font-semibold text-gray-800">熱門課程</h2>
       </div>
-
-      {/* 總站主題分籤（與 global_categories 一致） */}
-      <div className="max-w-7xl mx-auto px-4 mb-5">
-        {categoriesLoading ? (
-          <div className="flex gap-3 overflow-x-auto pb-2 animate-pulse">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="shrink-0 w-[72px] flex flex-col items-center gap-1.5">
-                <div className="w-14 h-14 rounded-xl bg-gray-200" />
-                <div className="h-3 w-12 bg-gray-200 rounded" />
-              </div>
-            ))}
-          </div>
-        ) : categoryLabels.length === 0 ? (
-          <p className="text-sm text-gray-500">尚未設定總站主題分類，請至總站 store_settings.global_categories 設定。</p>
-        ) : (
-          <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
-            {categoryLabels.map((label) => {
-              const selected = label === selectedCategory;
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => onSelectCategory(label)}
-                  className={`shrink-0 snap-start flex flex-col items-center gap-1.5 w-[76px] sm:w-[80px] p-1.5 rounded-xl transition-all ${
-                    selected
-                      ? "ring-2 ring-amber-500 ring-offset-2 ring-offset-[var(--color-background)] bg-white"
-                      : "opacity-90 hover:opacity-100"
-                  }`}
-                >
-                  <div
-                    className={`w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold leading-none ${
-                      selected ? "bg-amber-100 text-amber-900" : "bg-amber-50 text-amber-800"
-                    }`}
-                    aria-hidden
-                  >
-                    {label.slice(0, 1)}
-                  </div>
-                  <span className="text-[10px] sm:text-xs text-gray-700 text-center leading-tight line-clamp-2 w-full">
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       <div className="relative w-full">
         <button
           type="button"
@@ -247,13 +92,13 @@ export default function HomeMarketplaceCoursesSection({ blockStyle }: Props) {
                   </div>
                 </div>
               ))
-            ) : coursesError ? (
+            ) : error ? (
               <div className="shrink-0 w-full max-w-md snap-start bg-white rounded-xl border border-red-100 p-6 text-sm text-red-600">
-                {coursesError}
+                {error}
               </div>
-            ) : !selectedCategory ? null : filteredActivities.length === 0 ? (
+            ) : filteredActivities.length === 0 ? (
               <div className="shrink-0 w-[280px] snap-start bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-500 text-sm">
-                「{selectedCategory}」尚無課程
+                目前尚無課程
               </div>
             ) : (
               filteredActivities.map((activity) => {
