@@ -7,6 +7,8 @@ import { getDefaultLayoutBlocks, type LayoutBlock } from "./lib/frontendSettings
 import BranchSiteHomeView from "./components/home/BranchSiteHomeView";
 
 export default function WonderVoyageHomePage() {
+  /** false 直到 getFrontendSettings 回傳，用以保留主圖區高度，避免精選課程區先排版後被主圖擠下（CLS） */
+  const [heroSettingsLoaded, setHeroSettingsLoaded] = useState(false);
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const [carouselItems, setCarouselItems] = useState<CarouselItem[]>([]);
   const [navAboutLabel, setNavAboutLabel] = useState("關於我們");
@@ -18,6 +20,7 @@ export default function WonderVoyageHomePage() {
 
   useEffect(() => {
     getFrontendSettings().then((s) => {
+      setHeroSettingsLoaded(true);
       setHeroImageUrl(s.heroImageUrl);
       setCarouselItems(
         s.carouselItems.length > 0
@@ -40,6 +43,7 @@ export default function WonderVoyageHomePage() {
   return (
     <BranchSiteHomeView
       layoutBlocks={layoutBlocks}
+      heroSettingsLoaded={heroSettingsLoaded}
       heroImageUrl={heroImageUrl}
       carouselItems={carouselItems}
       aboutContent={aboutContent}

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
+import type { CourseForPublic } from "@/app/actions/productActions";
+import { mapCourseToHomeActivity as mapCourseToHomePageActivity } from "@/lib/homePageActivity";
 import FAQ from "@/app/components/FAQ";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import HomeFeaturedCoursesOnePlusSix from "@/app/components/home/HomeFeaturedCoursesOnePlusSix";
@@ -84,6 +86,11 @@ function LineIcon({ className }: { className?: string }) {
 
 export type BranchSiteHomeViewProps = {
   layoutBlocks: LayoutBlock[];
+  /**
+   * 首頁大圖設定是否已從後台載入完成。false 時仍會佔住主圖區高度（避免下方區塊先出現再被主圖推開）。
+   * 後台畫布預覽請維持 true（預設）。
+   */
+  heroSettingsLoaded?: boolean;
   heroImageUrl: string | null;
   /** 後台畫布：單張大圖區塊預覽用（與前台設定同步） */
   fullWidthImageUrl?: string | null;
@@ -109,6 +116,7 @@ export type BranchSiteHomeViewProps = {
 
 export default function BranchSiteHomeView({
   layoutBlocks,
+  heroSettingsLoaded = true,
   heroImageUrl,
   fullWidthImageUrl = null,
   previewHeader = null,
@@ -180,9 +188,19 @@ export default function BranchSiteHomeView({
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
 
   const isAdminCanvas = admin != null;
-  const [fetchedHomeActivities, setFetchedHomeActivities] = useState<Activity[]>([]);
+  const [homeCoursesRaw, setHomeCoursesRaw] = useState<CourseForPublic[]>([]);
   const [homeFetchLoading, setHomeFetchLoading] = useState(!isAdminCanvas);
   const [homeFetchError, setHomeFetchError] = useState<string | null>(null);
+
+  const homeActivities = useMemo(() => {
+    if (isAdminCanvas) return activitiesFromParent ?? [];
+    return homeCoursesRaw.map(mapCourseToHomeActivity);
+  }, [isAdminCanvas, activitiesFromParent, homeCoursesRaw]);
+
+  const featuredHomePageActivities = useMemo(
+    () => homeCoursesRaw.map(mapCourseToHomePageActivity),
+    [homeCoursesRaw]
+  );
 
   useEffect(() => {
     if (isAdminCanvas) return;
@@ -194,14 +212,14 @@ export default function BranchSiteHomeView({
         const res = await getCoursesForHomepage();
         if (cancelled) return;
         if (!res.success) {
-          setFetchedHomeActivities([]);
+          setHomeCoursesRaw([]);
           setHomeFetchError(res.error);
           return;
         }
-        setFetchedHomeActivities(res.data.map(mapCourseToHomeActivity));
+        setHomeCoursesRaw(res.data);
       } catch (e) {
         if (!cancelled) {
-          setFetchedHomeActivities([]);
+          setHomeCoursesRaw([]);
           setHomeFetchError(e instanceof Error ? e.message : "載入課程失敗");
         }
       } finally {
@@ -212,8 +230,6 @@ export default function BranchSiteHomeView({
       cancelled = true;
     };
   }, [isAdminCanvas]);
-
-  const homeActivities = isAdminCanvas ? (activitiesFromParent ?? []) : fetchedHomeActivities;
   const homeCoursesLoading = isAdminCanvas ? false : homeFetchLoading;
   const homeCoursesError = isAdminCanvas ? null : homeFetchError;
 
@@ -355,6 +371,18 @@ export default function BranchSiteHomeView({
     </section>
   ) : null;
 
+  /** 與 heroInner 同高度，主圖 URL 尚未載入時佔位，避免下方精選／輪播先排版再被主圖推擠 */
+  const heroPlaceholderInner = (
+    <section className="w-full pt-0 pb-4" style={admin ? {} : getBlockStyle("hero")}>
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
+        <div
+          className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50 animate-pulse"
+          aria-hidden
+        />
+      </div>
+    </section>
+  );
+
   const heroCarouselStripInner =
     admin && heroImageUrl && heroBlock && heroCarouselBlock ? (
       <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
@@ -440,7 +468,11 @@ export default function BranchSiteHomeView({
     ) : null;
 
   const featuredCoursesInner = (
-    <HomeFeaturedCoursesOnePlusSix blockStyle={admin ? {} : getBlockStyle("featured_categories")} />
+    <HomeFeaturedCoursesOnePlusSix
+      blockStyle={admin ? {} : getBlockStyle("featured_categories")}
+      prefetchedActivities={!isAdminCanvas ? featuredHomePageActivities : undefined}
+      prefetchedLoading={!isAdminCanvas ? homeCoursesLoading : undefined}
+    />
   );
 
   const aboutInner =
@@ -708,6 +740,9 @@ export default function BranchSiteHomeView({
       case "header":
         return wrap("header", headerInner, { skipBackgroundImage: true });
       case "hero": {
+        if (!heroSettingsLoaded) {
+          return wrap("hero", heroPlaceholderInner, { blockOverride: heroBlock ?? undefined });
+        }
         if (!heroImageUrl) return null;
         return wrap("hero", heroInner, { blockOverride: heroBlock ?? undefined });
       }

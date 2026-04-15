@@ -11,6 +11,9 @@ import { CourseCoverBadgesCompact } from "@/app/components/CourseCoverBadges";
 
 type Props = {
   blockStyle?: React.CSSProperties;
+  /** 父層（BranchSiteHomeView）已載入時傳入，避免與熱門課程重複請求與載入後高度突變 */
+  prefetchedActivities?: HomePageActivity[] | null;
+  prefetchedLoading?: boolean;
 };
 
 const TOTAL_SLOTS = 7;
@@ -20,11 +23,17 @@ function pickPrimaryAgeTag(tags: string[] | undefined): string | null {
   return t[0] ?? null;
 }
 
-export default function HomeFeaturedCoursesOnePlusSix({ blockStyle }: Props) {
+export default function HomeFeaturedCoursesOnePlusSix({
+  blockStyle,
+  prefetchedActivities,
+  prefetchedLoading,
+}: Props) {
+  const useParentData = prefetchedActivities !== undefined;
   const [activities, setActivities] = useState<HomePageActivity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!useParentData);
 
   useEffect(() => {
+    if (useParentData) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -40,13 +49,16 @@ export default function HomeFeaturedCoursesOnePlusSix({ blockStyle }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [useParentData]);
+
+  const resolvedActivities = useParentData ? (prefetchedActivities ?? []) : activities;
+  const resolvedLoading = useParentData ? (prefetchedLoading ?? false) : loading;
 
   const slots = useMemo<(HomePageActivity | null)[]>(() => {
-    const out: (HomePageActivity | null)[] = activities.slice(0, TOTAL_SLOTS);
+    const out: (HomePageActivity | null)[] = resolvedActivities.slice(0, TOTAL_SLOTS);
     while (out.length < TOTAL_SLOTS) out.push(null);
     return out;
-  }, [activities]);
+  }, [resolvedActivities]);
 
   const main = slots[0];
   const secondary = slots.slice(1);
@@ -90,8 +102,8 @@ export default function HomeFeaturedCoursesOnePlusSix({ blockStyle }: Props) {
         <h2 className="text-lg font-semibold text-gray-800">精選課程</h2>
       </div>
       <div className="max-w-7xl mx-auto px-4">
-        {loading ? (
-          <div className="text-sm text-gray-500">載入中…</div>
+        {resolvedLoading ? (
+          <div className="text-sm text-gray-500 min-h-[320px] flex items-start pt-2">載入中…</div>
         ) : (
           <div className="grid gap-4 md:grid-cols-[minmax(0,520px)_minmax(0,1fr)] md:gap-5 items-start">
             <div>{renderCard(main, "main", 0)}</div>
