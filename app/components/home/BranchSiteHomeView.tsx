@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { CourseForPublic } from "@/app/actions/productActions";
@@ -13,8 +14,6 @@ import HeroFloatingIconsLayer from "@/app/components/home/HeroFloatingIconsLayer
 import { getCoursesForHomepage } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity } from "@/app/lib/mapCourseToHomeActivity";
 import type { Activity } from "@/app/lib/homeSectionTypes";
-import BlockWrapper from "@/app/admin/(protected)/layout/BlockWrapper";
-import HeroFloatingIconsEditor from "@/app/admin/(protected)/layout/HeroFloatingIconsEditor";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adminLayoutCanvasTypes";
 import type { CarouselItem, LayoutBlock } from "@/app/lib/frontendSettingsShared";
@@ -24,6 +23,11 @@ import {
   normalizeAboutPageUrl,
 } from "@/app/lib/frontendSettingsShared";
 import FullWidthImageSection from "@/app/components/home/FullWidthImageSection";
+
+const BlockWrapper = dynamic(() => import("@/app/admin/(protected)/layout/BlockWrapper"));
+const HeroFloatingIconsEditor = dynamic(
+  () => import("@/app/admin/(protected)/layout/HeroFloatingIconsEditor")
+);
 
 const CAROUSEL_INTERVAL_MS = 4000;
 
@@ -121,6 +125,11 @@ export type BranchSiteHomeViewProps = {
   adminLayout?: AdminLayoutCanvasConfig | null;
   /** 後台畫布：與編輯頁同一批課程列表；訪客首頁會自行向 API 載入 */
   activities?: Activity[];
+  /**
+   * 伺服端已載入之首頁課程（訪客）；傳入時不呼叫 getCoursesForHomepage。
+   * 後台畫布預覽勿傳，以維持由父層餵入的 activities。
+   */
+  serverHomeCourses?: { courses: CourseForPublic[]; error: string | null };
 };
 
 export default function BranchSiteHomeView({
@@ -138,6 +147,7 @@ export default function BranchSiteHomeView({
   aboutPageUrl = DEFAULT_ABOUT_PAGE_URL,
   adminLayout = null,
   activities: activitiesFromParent,
+  serverHomeCourses,
 }: BranchSiteHomeViewProps) {
   const {
     siteName,
@@ -208,9 +218,11 @@ export default function BranchSiteHomeView({
     if (el.closest("[data-floating-icon-editor]")) return;
     if (el.closest("a[href]")) e.preventDefault();
   };
-  const [homeCoursesRaw, setHomeCoursesRaw] = useState<CourseForPublic[]>([]);
-  const [homeFetchLoading, setHomeFetchLoading] = useState(!isAdminCanvas);
-  const [homeFetchError, setHomeFetchError] = useState<string | null>(null);
+  const [homeCoursesRaw, setHomeCoursesRaw] = useState<CourseForPublic[]>(() => serverHomeCourses?.courses ?? []);
+  const [homeFetchLoading, setHomeFetchLoading] = useState(
+    () => !isAdminCanvas && serverHomeCourses === undefined
+  );
+  const [homeFetchError, setHomeFetchError] = useState<string | null>(() => serverHomeCourses?.error ?? null);
 
   const homeActivities = useMemo(() => {
     if (isAdminCanvas) return activitiesFromParent ?? [];
@@ -224,6 +236,7 @@ export default function BranchSiteHomeView({
 
   useEffect(() => {
     if (isAdminCanvas) return;
+    if (serverHomeCourses !== undefined) return;
     let cancelled = false;
     (async () => {
       setHomeFetchLoading(true);
@@ -249,7 +262,7 @@ export default function BranchSiteHomeView({
     return () => {
       cancelled = true;
     };
-  }, [isAdminCanvas]);
+  }, [isAdminCanvas, serverHomeCourses]);
   const homeCoursesLoading = isAdminCanvas ? false : homeFetchLoading;
   const homeCoursesError = isAdminCanvas ? null : homeFetchError;
 

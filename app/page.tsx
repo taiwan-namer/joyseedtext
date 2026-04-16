@@ -1,66 +1,21 @@
-"use client";
-
-import { useState, useEffect } from "react";
 import { getFrontendSettings } from "./actions/frontendSettingsActions";
-import type { CarouselItem } from "./lib/frontendSettingsShared";
-import {
-  getDefaultLayoutBlocks,
-  type LayoutBlock,
-  DEFAULT_ABOUT_PAGE_URL,
-} from "./lib/frontendSettingsShared";
-import BranchSiteHomeView from "./components/home/BranchSiteHomeView";
+import { getCoursesForHomepageLight } from "./actions/productActions";
+import HomePageClient from "./HomePageClient";
 
-export default function WonderVoyageHomePage() {
-  /** false 直到 getFrontendSettings 回傳，用以保留主圖區高度，避免精選課程區先排版後被主圖擠下（CLS） */
-  const [heroSettingsLoaded, setHeroSettingsLoaded] = useState(false);
-  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
-  const [carouselItems, setCarouselItems] = useState<CarouselItem[]>([]);
-  const [navAboutLabel, setNavAboutLabel] = useState("關於我們");
-  const [navCoursesLabel, setNavCoursesLabel] = useState("課程介紹");
-  const [navBookingLabel, setNavBookingLabel] = useState("課程預約");
-  const [navFaqLabel, setNavFaqLabel] = useState("常見問題");
-  const [aboutContent, setAboutContent] = useState<string | null>(null);
-  const [layoutBlocks, setLayoutBlocks] = useState<LayoutBlock[]>(getDefaultLayoutBlocks());
-  const [fullWidthImageUrl, setFullWidthImageUrl] = useState<string | null>(null);
-  const [aboutPageUrl, setAboutPageUrl] = useState(DEFAULT_ABOUT_PAGE_URL);
-
-  useEffect(() => {
-    getFrontendSettings().then((s) => {
-      setHeroSettingsLoaded(true);
-      setHeroImageUrl(s.heroImageUrl);
-      setFullWidthImageUrl(s.fullWidthImageUrl ?? null);
-      setCarouselItems(
-        s.carouselItems.length > 0
-          ? s.carouselItems
-          : [
-              { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
-              { id: "w2", title: "新課上架", subtitle: "兒童烘焙工作坊", imageUrl: null, visible: true },
-              { id: "w3", title: "限時優惠", subtitle: "報名享早鳥價", imageUrl: null, visible: true },
-            ]
-      );
-      setNavAboutLabel(s.navAboutLabel || "關於我們");
-      setNavCoursesLabel(s.navCoursesLabel || "課程介紹");
-      setNavBookingLabel(s.navBookingLabel || "課程預約");
-      setNavFaqLabel(s.navFaqLabel || "常見問題");
-      setAboutContent(s.aboutContent ?? null);
-      setLayoutBlocks(s.layoutBlocks && s.layoutBlocks.length > 0 ? s.layoutBlocks : getDefaultLayoutBlocks());
-      setAboutPageUrl(s.aboutPageUrl ?? DEFAULT_ABOUT_PAGE_URL);
-    });
-  }, []);
+/**
+ * 首頁：伺服端並行載入前台設定與精簡課程列表，再交 client 渲染互動區塊。
+ */
+export default async function WonderVoyageHomePage() {
+  const [settings, coursesRes] = await Promise.all([
+    getFrontendSettings(),
+    getCoursesForHomepageLight(),
+  ]);
 
   return (
-    <BranchSiteHomeView
-      layoutBlocks={layoutBlocks}
-      heroSettingsLoaded={heroSettingsLoaded}
-      heroImageUrl={heroImageUrl}
-      fullWidthImageUrl={fullWidthImageUrl}
-      carouselItems={carouselItems}
-      aboutContent={aboutContent}
-      navAboutLabel={navAboutLabel}
-      navCoursesLabel={navCoursesLabel}
-      navBookingLabel={navBookingLabel}
-      navFaqLabel={navFaqLabel}
-      aboutPageUrl={aboutPageUrl}
+    <HomePageClient
+      settings={settings}
+      homeCourses={coursesRes.success ? coursesRes.data : []}
+      homeCoursesError={coursesRes.success ? null : coursesRes.error}
     />
   );
 }

@@ -5,7 +5,7 @@
  * 總站 model 的整包設定在 `merchant_id = "model"`；從總站複製範本至分站時，合入本分站 id 之 `frontend_settings`，勿直接改寫總站列（見 `MARKETPLACE_MERCHANT_ID`）。
  */
 
-import { unstable_noStore } from "next/cache";
+import { cache } from "react";
 import { uploadOneToR2, uploadOneToR2WithPrefix } from "@/app/actions/productActions";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import {
@@ -377,10 +377,14 @@ async function readFrontendSettingsUncached(): Promise<FrontendSettings> {
 /**
  * 取得本分站前台設定（首頁大圖、輪播、`layout_blocks` 畫布等）。
  * 查詢 `store_settings.merchant_id === NEXT_PUBLIC_CLIENT_ID`，非總站 `"model"`。
+ * 使用 React `cache`：同一請求內多次呼叫（如 layout metadata 與首頁）只查一次 DB。
  */
-export async function getFrontendSettings(): Promise<FrontendSettings> {
-  unstable_noStore();
+const getFrontendSettingsCached = cache(async (): Promise<FrontendSettings> => {
   return readFrontendSettingsUncached();
+});
+
+export async function getFrontendSettings(): Promise<FrontendSettings> {
+  return getFrontendSettingsCached();
 }
 
 /** 更新畫布區塊（後台「首頁版面」儲存用）；會一併寫入 layout_order 以相容舊版 */

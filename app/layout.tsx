@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { headers } from "next/headers";
 import "./globals.css";
 import { getStoreSettings } from "./actions/storeSettingsActions";
@@ -51,7 +52,7 @@ export default async function RootLayout({
     <html lang="zh-TW">
       <body className="antialiased">
         <StoreSettingsProvider initial={settings}>
-          {children}
+          <Suspense fallback={null}>{children}</Suspense>
           <ChatWidget />
         </StoreSettingsProvider>
       </body>

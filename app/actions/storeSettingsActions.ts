@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { unstable_noStore } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { FAQ_DATA } from "@/app/data/faq";
@@ -114,9 +115,7 @@ function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
   };
 }
 
-/** 取得目前店家的基本資料（網站名字、主色系、社群連結），無則回傳預設 */
-export async function getStoreSettings(): Promise<StoreSettings> {
-  unstable_noStore();
+const loadStoreSettingsForCurrentMerchant = cache(async (): Promise<StoreSettings> => {
   const fallback = (): StoreSettings => ({
     siteName: DEFAULT_SITE_NAME,
     primaryColor: DEFAULT_PRIMARY_COLOR,
@@ -164,6 +163,11 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     /* Supabase 未設定（缺 NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY）或連線失敗時回傳預設，避免 layout 崩潰 */
     return fallback();
   }
+});
+
+/** 取得目前店家的基本資料（網站名字、主色系、社群連結），無則回傳預設。同一請求內多次呼叫只查一次 DB。 */
+export async function getStoreSettings(): Promise<StoreSettings> {
+  return loadStoreSettingsForCurrentMerchant();
 }
 
 /**
