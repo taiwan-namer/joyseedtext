@@ -27,6 +27,7 @@ import {
 } from "@/app/actions/bookingActions";
 import { processBookingRefund } from "@/app/actions/refundActions";
 import AdminRescheduleModal from "@/app/admin/(protected)/bookings/AdminRescheduleModal";
+import { MARKETPLACE_MERCHANT_ID } from "@/lib/constants";
 
 function formatDate(iso: string) {
   try {
@@ -72,19 +73,21 @@ function statusLabel(s: string) {
   }
 }
 
-/** DB：`sold_via_merchant_id`＝結帳網站；與 `merchant_id` 相同時為本店結帳 */
+/**
+ * 結帳來源：`sold_via_merchant_id` 為總站 {@link MARKETPLACE_MERCHANT_ID}（`model`）→「總站」；其餘（含未填、本分站 id）→「本站」。
+ * 依賴結帳流程正確寫入 `sold_via_merchant_id`；未填時畫面上為「本站」，詳情見 tooltip。
+ */
 function checkoutSourceCell(row: BookingWithClass): { text: string; title: string } {
   const sold = row.sold_via_merchant_id?.trim();
   const inv = row.merchant_id?.trim();
   const title = [
+    `顯示：sold_via_merchant_id === "${MARKETPLACE_MERCHANT_ID}" → 總站；否則 → 本站`,
     `庫存歸屬 merchant_id：${inv ?? "—"}`,
     `結帳站 sold_via_merchant_id：${sold ?? "（未填）"}`,
     `開課快照 class_creator_merchant_id：${row.class_creator_merchant_id?.trim() ?? "—"}`,
   ].join("\n");
-  if (!sold) return { text: "—", title };
-  if (inv && sold === inv) return { text: "本店", title };
-  const s = sold.length > 14 ? `${sold.slice(0, 12)}…` : sold;
-  return { text: s, title };
+  const text = sold === MARKETPLACE_MERCHANT_ID ? "總站" : "本站";
+  return { text, title };
 }
 
 function formatCourseDate(row: BookingWithClass) {
@@ -472,7 +475,7 @@ export default function AdminBookingsPage() {
                   <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[100px]">課程名稱</th>
                   <th
                     className="text-left py-2 px-3 font-medium text-gray-700 w-[7.5rem]"
-                    title="結帳網站商家 ID（bookings.sold_via_merchant_id）；總站代銷時通常為總站 id"
+                    title={`sold_via_merchant_id 為總站「${MARKETPLACE_MERCHANT_ID}」顯示「總站」，其餘顯示「本站」；滑鼠移至儲存格可看原始 ID`}
                   >
                     結帳來源
                   </th>

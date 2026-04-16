@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2, X } from "lucide-react";
 import { getPaymentSettings, updatePaymentSettings } from "@/app/actions/frontendSettingsActions";
 
 type InvoiceProvider = "ecpay" | "ezpay";
@@ -18,6 +18,8 @@ export default function PaymentSettingsPage() {
   const [atmBankCode, setAtmBankCode] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
   const [invoiceProvider, setInvoiceProvider] = useState<InvoiceProvider>("ecpay");
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceDraft, setInvoiceDraft] = useState<InvoiceProvider>("ecpay");
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -61,6 +63,19 @@ export default function PaymentSettingsPage() {
         setMessage({ type: "error", text: result.error });
       }
     });
+  };
+
+  const invoiceProviderLabel = (p: InvoiceProvider) =>
+    p === "ezpay" ? "藍新 ezPay" : "綠界 ECPay";
+
+  const openInvoiceModal = () => {
+    setInvoiceDraft(invoiceProvider);
+    setInvoiceModalOpen(true);
+  };
+
+  const confirmInvoiceProvider = () => {
+    setInvoiceProvider(invoiceDraft);
+    setInvoiceModalOpen(false);
   };
 
   if (loading) {
@@ -201,21 +216,99 @@ export default function PaymentSettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-3">
+        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
           <h2 className="text-base font-semibold text-gray-900">發票開立廠商</h2>
           <p className="text-xs text-gray-500">
             付款成功後依此廠商開立電子發票。品項固定為單筆「課程預約」（單位：堂），金額依訂單金額。
           </p>
-          <select
-            value={invoiceProvider}
-            onChange={(e) => setInvoiceProvider((e.target.value as InvoiceProvider) || "ecpay")}
-            disabled={isPending}
-            className="max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white"
-          >
-            <option value="ecpay">綠界 ECPay</option>
-            <option value="ezpay">藍新 ezPay</option>
-          </select>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-gray-700">
+              目前：<span className="font-semibold text-gray-900">{invoiceProviderLabel(invoiceProvider)}</span>
+            </p>
+            <button
+              type="button"
+              onClick={openInvoiceModal}
+              disabled={isPending}
+              className="inline-flex items-center rounded-lg border border-amber-500 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+            >
+              選擇發票廠商
+            </button>
+          </div>
         </section>
+
+        {invoiceModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="invoice-provider-dialog-title"
+            onClick={() => setInvoiceModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <h3 id="invoice-provider-dialog-title" className="text-lg font-semibold text-gray-900">
+                  選擇發票開立廠商
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setInvoiceModalOpen(false)}
+                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                  aria-label="關閉"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600">請選擇付款成功後由哪一廠商開立電子發票。</p>
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50">
+                  <input
+                    type="radio"
+                    name="invoice_provider_choice"
+                    className="mt-1 text-amber-600 focus:ring-amber-500"
+                    checked={invoiceDraft === "ecpay"}
+                    onChange={() => setInvoiceDraft("ecpay")}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-900">綠界 ECPay</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">常見於已串接綠界金流之站點</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50">
+                  <input
+                    type="radio"
+                    name="invoice_provider_choice"
+                    className="mt-1 text-amber-600 focus:ring-amber-500"
+                    checked={invoiceDraft === "ezpay"}
+                    onChange={() => setInvoiceDraft("ezpay")}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-900">藍新 ezPay</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">常見於已串接藍新之站點</span>
+                  </span>
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setInvoiceModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmInvoiceProvider}
+                  className="px-4 py-2 text-sm font-medium text-white bg-amber-500 rounded-lg hover:bg-amber-600"
+                >
+                  確定
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end">
           <button
