@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import {
   type HeroFloatingIcon,
@@ -115,12 +114,12 @@ export default function HeroFloatingIconsLayer({
             }}
           >
             <div className="relative h-full w-full">
-              <Image
+              {/* 使用原生 img：裝飾圖來自 R2 任意公開網域，next/image 需逐一設定 remotePatterns，否則前台不顯示 */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src={icon.imageUrl}
                 alt=""
-                fill
-                sizes={`${Math.max(32, Math.ceil(Math.max(displayW, 48)))}px`}
-                className="object-contain select-none"
+                className="absolute inset-0 h-full w-full object-contain select-none"
                 draggable={false}
               />
             </div>

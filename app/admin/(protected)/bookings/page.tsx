@@ -309,7 +309,7 @@ export default function AdminBookingsPage() {
                   <th className="text-left py-2 px-3 font-medium text-gray-800">訂單編號</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-800">課程</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-800">信箱</th>
-                  <th className="text-right py-2 px-3 font-medium text-gray-800">金額</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-800">金額</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-800 w-32">操作</th>
                 </tr>
               </thead>
@@ -326,7 +326,7 @@ export default function AdminBookingsPage() {
                     <td className="py-2 px-3 text-gray-700 truncate max-w-[180px]" title={p.member_email}>
                       {p.member_email}
                     </td>
-                    <td className="py-2 px-3 text-right font-medium">
+                    <td className="py-2 px-3 text-left font-medium tabular-nums">
                       {p.class_price != null ? `NT$ ${p.class_price.toLocaleString()}` : "—"}
                     </td>
                     <td className="py-2 px-3">
@@ -457,7 +457,7 @@ export default function AdminBookingsPage() {
                   <th className="text-left py-2 px-3 font-medium text-gray-700 w-24">家長姓名</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-700 w-28">電話</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[140px]">購買人信箱</th>
-                  <th className="text-right py-2 px-3 font-medium text-gray-700 w-20">金額</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 w-24">金額</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-700 w-32">購買時間</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-700 w-24">狀態</th>
                   <th className="text-left py-2 pl-3 pr-2 font-medium text-gray-700 min-w-[20rem]">操作</th>
@@ -487,7 +487,7 @@ export default function AdminBookingsPage() {
                     <td className="py-2 px-3 text-gray-900 truncate align-middle">{row.parent_name || "—"}</td>
                     <td className="py-2 px-3 text-gray-600 truncate align-middle">{row.parent_phone || "—"}</td>
                     <td className="py-2 px-3 text-gray-900 truncate align-middle" title={row.member_email}>{row.member_email}</td>
-                    <td className="py-2 px-3 text-right text-gray-900 font-medium whitespace-nowrap align-middle">
+                    <td className="py-2 px-3 text-left text-gray-900 font-medium whitespace-nowrap align-middle tabular-nums">
                       {row.class_price != null ? `NT$ ${row.class_price.toLocaleString()}` : "—"}
                     </td>
                     <td className="py-2 px-3 text-gray-600 text-xs whitespace-nowrap align-middle">{formatDate(row.created_at)}</td>

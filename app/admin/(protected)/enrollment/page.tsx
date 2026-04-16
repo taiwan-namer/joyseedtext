@@ -12,17 +12,37 @@ import {
   type SessionBookingsResult,
 } from "@/app/actions/bookingActions";
 import { updateSessionCapacity } from "@/app/actions/productActions";
+import { metadataHasPeaceForDisplay } from "@/lib/bookingAdminAmounts";
 
+const PEACE_ADDON_NAME_RE = /安心包/;
+
+function hasPeaceAddonPurchase(
+  row: BookingWithMember,
+  classAddonPrices: { name: string; price: number }[] | null
+): boolean {
+  if (metadataHasPeaceForDisplay(row.metadata)) return true;
+  if (!classAddonPrices || !Array.isArray(row.addon_indices)) return false;
+  for (const i of row.addon_indices) {
+    const addon = classAddonPrices[i];
+    if (addon && PEACE_ADDON_NAME_RE.test(String(addon.name ?? ""))) return true;
+  }
+  return false;
+}
+
+/** 加購與課程金額皆冠以 NT$，便於直欄對齊 */
 function buildAddonOptionDisplay(
   row: BookingWithMember,
   classBasePrice: number,
   classAddonPrices: { name: string; price: number }[] | null
 ): string {
-  const parts: string[] = [`課程 ${classBasePrice.toLocaleString()}`];
+  const parts: string[] = [`課程 NT$ ${classBasePrice.toLocaleString()}`];
   if (classAddonPrices && Array.isArray(row.addon_indices) && row.addon_indices.length > 0) {
     for (const i of row.addon_indices) {
       const addon = classAddonPrices[i];
-      if (addon) parts.push(`${addon.name} ${addon.price}`);
+      if (addon) {
+        const p = Number(addon.price);
+        parts.push(`${addon.name} NT$ ${Number.isFinite(p) ? p.toLocaleString() : String(addon.price)}`);
+      }
     }
   }
   return parts.join(" + ");
@@ -227,6 +247,7 @@ function SessionAccordion({
                     <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">有無過敏或特殊疾病</th>
                     <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">聯絡電話</th>
                     <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 hidden sm:table-cell">加購選項</th>
+                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 w-[4.5rem]">安心包</th>
                     <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">訂單狀態</th>
                   </tr>
                 </thead>
@@ -241,8 +262,20 @@ function SessionAccordion({
                       <td className="py-3 px-3 sm:px-4 text-gray-700">{row.kid_age || "—"}</td>
                       <td className="py-3 px-3 sm:px-4 text-gray-700">{row.allergy_or_special_note || "—"}</td>
                       <td className="py-3 px-3 sm:px-4 text-gray-700">{row.contact_phone || "—"}</td>
-                      <td className="py-3 px-3 sm:px-4 text-gray-700 hidden sm:table-cell">
+                      <td className="py-3 px-3 sm:px-4 text-gray-700 hidden sm:table-cell text-left tabular-nums">
                         {buildAddonOptionDisplay(row, sessionData.classBasePrice, sessionData.classAddonPrices)}
+                      </td>
+                      <td className="py-3 px-3 sm:px-4 align-middle">
+                        {hasPeaceAddonPurchase(row, sessionData.classAddonPrices) ? (
+                          <span
+                            className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900"
+                            title="已加購安心包"
+                          >
+                            已購
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="py-3 px-3 sm:px-4">
                         <span

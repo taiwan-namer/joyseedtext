@@ -2034,6 +2034,8 @@ export type BookingWithMember = {
   contact_phone: string | null;
   /** 所選加購在 classes.addon_prices 的索引，用於顯示「課程 800 + 珍珠奶茶50 + 雞排60」 */
   addon_indices: number[] | null;
+  /** 結帳快照（安心包拆帳等），供點名簿顯示是否購買安心包 */
+  metadata: unknown | null;
   status: string;
   created_at: string;
 };
@@ -2491,7 +2493,7 @@ export async function getBookingsForSession(
       supabase
         .from("bookings")
         .select(
-          "id, member_email, parent_name, parent_phone, kid_name, kid_age, allergy_or_special_note, addon_indices, status, created_at"
+          "id, member_email, parent_name, parent_phone, kid_name, kid_age, allergy_or_special_note, addon_indices, metadata, status, created_at"
         )
         .eq("class_id", countClassId),
       access
@@ -2511,6 +2513,7 @@ export async function getBookingsForSession(
       allergy_or_special_note: row.allergy_or_special_note != null ? String(row.allergy_or_special_note).trim() || null : null,
       contact_phone: row.parent_phone != null ? String(row.parent_phone).trim() || null : null,
       addon_indices: parseAddonIndicesFromDb(row.addon_indices),
+      metadata: row.metadata ?? null,
       status: String(row.status),
       created_at: String(row.created_at),
     }));

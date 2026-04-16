@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity as mapCourseToHomePageActivity } from "@/lib/homePageActivity";
 import FAQ from "@/app/components/FAQ";
@@ -294,6 +294,29 @@ export default function BranchSiteHomeView({
     );
   };
 
+  /** 訪客與後台皆顯示裝飾圖層；僅後台且選取該積木時顯示編輯器 */
+  const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
+    const b = getBlock(blockId);
+    if (!b?.floatingIcons?.length) return null;
+    return (
+      <div className="pointer-events-none absolute inset-0 z-[15]">
+        <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b.floatingIcons} />
+        {admin && admin.selectedBlockId === blockId ? (
+          <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+            <HeroFloatingIconsEditor
+              overlayMode
+              coordinateMode={coordMode}
+              icons={b.floatingIcons}
+              onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
+              selectedIconId={admin.selectedFloatingIconId ?? null}
+              onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const ph = admin && previewHeader ? previewHeader : null;
   const hasPreviewLogo = !!(ph?.logoUrl && ph.logoUrl.trim());
   const deskBg = ph?.headerBackgroundUrl?.trim() || null;
@@ -393,30 +416,41 @@ export default function BranchSiteHomeView({
     ((heroEditBlockId === "hero" && (heroBlock?.floatingIcons?.length ?? 0) > 0) ||
       (heroEditBlockId === "hero_carousel" && !heroBlock && (heroCarouselBlock?.floatingIcons?.length ?? 0) > 0));
 
-  const heroInner = heroImageUrl ? (
+  /** 有主圖或裝飾圖即顯示主圖區；僅裝飾、無主圖時仍畫出同比例底框，否則前台完全不渲染導致裝飾看不到 */
+  const heroImageTrimmed = heroImageUrl?.trim() || null;
+  const hasMainHeroVisual =
+    !!heroImageTrimmed || (iconsForMainHeroSection != null && iconsForMainHeroSection.length > 0);
+
+  const heroInner = hasMainHeroVisual ? (
     <section className="w-full pt-0 pb-4" style={admin ? {} : getBlockStyle("hero")}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
         <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
-          <div className="absolute inset-0 z-[15]">
-            <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={iconsForMainHeroSection!} />
-            {showFloatingEditorOnMainHero && heroIconsForEditor && heroIconsForEditor.length > 0 && heroEditBlockId ? (
-              <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
-                <HeroFloatingIconsEditor
-                  overlayMode
-                  coordinateMode={coordMode}
-                  icons={heroIconsForEditor}
-                  onChange={(next) => admin.onBlockFloatingIconsChange(heroEditBlockId, next)}
-                  selectedIconId={admin.selectedFloatingIconId ?? null}
-                  onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(heroEditBlockId, id)}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+          {heroImageTrimmed ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={heroImageTrimmed} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-amber-50" aria-hidden />
+          )}
+          {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
+            <div className="absolute inset-0 z-[15]">
+              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={iconsForMainHeroSection!} />
+              {showFloatingEditorOnMainHero && heroIconsForEditor && heroIconsForEditor.length > 0 && heroEditBlockId ? (
+                <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+                  <HeroFloatingIconsEditor
+                    overlayMode
+                    coordinateMode={coordMode}
+                    icons={heroIconsForEditor}
+                    onChange={(next) => admin.onBlockFloatingIconsChange(heroEditBlockId, next)}
+                    selectedIconId={admin.selectedFloatingIconId ?? null}
+                    onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(heroEditBlockId, id)}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </section>
   ) : null;
@@ -518,18 +552,21 @@ export default function BranchSiteHomeView({
     ) : null;
 
   const featuredCoursesInner = (
-    <HomeFeaturedCoursesOnePlusSix
-      blockStyle={admin ? {} : getBlockStyle("featured_categories")}
-      prefetchedActivities={!isAdminCanvas ? featuredHomePageActivities : undefined}
-      prefetchedLoading={!isAdminCanvas ? homeCoursesLoading : undefined}
-    />
+    <div className="relative w-full">
+      <HomeFeaturedCoursesOnePlusSix
+        blockStyle={admin ? {} : getBlockStyle("featured_categories")}
+        prefetchedActivities={!isAdminCanvas ? featuredHomePageActivities : undefined}
+        prefetchedLoading={!isAdminCanvas ? homeCoursesLoading : undefined}
+      />
+      {renderBlockFloatingIconsOverlay("featured_categories")}
+    </div>
   );
 
   const aboutInner =
     aboutContent != null && aboutContent.trim() !== "" ? (
       <section
         id="about"
-        className="py-12 px-4 scroll-mt-20 border-t border-gray-100"
+        className="relative py-12 px-4 scroll-mt-20 border-t border-gray-100"
         style={
           admin
             ? { backgroundColor: aboutSectionBackgroundColor }
@@ -543,20 +580,29 @@ export default function BranchSiteHomeView({
             dangerouslySetInnerHTML={{ __html: aboutContent }}
           />
         </div>
+        {renderBlockFloatingIconsOverlay("about")}
       </section>
     ) : null;
 
   const faqInner = (
-    <section id="faq" className="bg-white py-12 px-4 scroll-mt-20" style={admin ? {} : getBlockStyle("faq")}>
+    <section
+      id="faq"
+      className="relative bg-white py-12 px-4 scroll-mt-20"
+      style={admin ? {} : getBlockStyle("faq")}
+    >
       <div className="mx-auto max-w-7xl">
         <h2 className="text-xl font-bold text-gray-900 mb-8 text-center">常見問題</h2>
         <FAQ />
       </div>
+      {renderBlockFloatingIconsOverlay("faq")}
     </section>
   );
 
   const contactInner = (
-    <section className="bg-page border-t border-gray-100 py-12 px-4" style={admin ? {} : getBlockStyle("contact")}>
+    <section
+      className="relative bg-page border-t border-gray-100 py-12 px-4"
+      style={admin ? {} : getBlockStyle("contact")}
+    >
       <div className="mx-auto max-w-7xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="space-y-6">
@@ -679,41 +725,20 @@ export default function BranchSiteHomeView({
           </Link>
         </div>
       </div>
+      {renderBlockFloatingIconsOverlay("contact")}
     </section>
   );
 
   const footerInner = (
-    <footer className="bg-white border-t border-gray-100 mt-auto" style={admin ? {} : getBlockStyle("footer")}>
+    <footer className="relative bg-white border-t border-gray-100 mt-auto" style={admin ? {} : getBlockStyle("footer")}>
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="text-center text-gray-400 text-sm">
           <p>© 2026 {siteName} WonderVoyage 版權所有</p>
         </div>
       </div>
+      {renderBlockFloatingIconsOverlay("footer")}
     </footer>
   );
-
-  const renderAdminFloatingIconsOverlay = (blockId: string): React.ReactNode => {
-    if (!admin) return null;
-    const b = getBlock(blockId);
-    if (!b?.floatingIcons?.length) return null;
-    return (
-      <div className="pointer-events-none absolute inset-0 z-[15]">
-        <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b.floatingIcons} />
-        {admin.selectedBlockId === blockId ? (
-          <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
-            <HeroFloatingIconsEditor
-              overlayMode
-              coordinateMode={coordMode}
-              icons={b.floatingIcons}
-              onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
-              selectedIconId={admin.selectedFloatingIconId ?? null}
-              onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
-            />
-          </div>
-        ) : null}
-      </div>
-    );
-  };
 
   const renderCoursesGridOrListSection = (
     blockId: "courses" | "courses_grid" | "courses_list"
@@ -740,7 +765,7 @@ export default function BranchSiteHomeView({
             showPreviewHint={!!admin}
           />
         </div>
-        {renderAdminFloatingIconsOverlay(blockId)}
+        {renderBlockFloatingIconsOverlay(blockId)}
       </section>
     );
     return admin ? wrap(blockId, inner) : inner;
@@ -793,7 +818,7 @@ export default function BranchSiteHomeView({
         if (!heroSettingsLoaded) {
           return wrap("hero", heroPlaceholderInner, { blockOverride: heroBlock ?? undefined });
         }
-        if (!heroImageUrl) return null;
+        if (!heroInner) return null;
         return wrap("hero", heroInner, { blockOverride: heroBlock ?? undefined });
       }
       case "hero_carousel": {
@@ -878,20 +903,26 @@ export default function BranchSiteHomeView({
           );
           return wrap("full_width_image", inner);
         }
-        if (!fullWidthImageUrl?.trim()) return null;
-        const inner = (
+        const fw = fullWidthImageUrl?.trim() ?? "";
+        const hasFloat = (b?.floatingIcons?.length ?? 0) > 0;
+        if (!fw && !hasFloat) return null;
+        const innerVisitor = (
           <section className="relative w-full" style={getBlockStyle("full_width_image")}>
-            <FullWidthImageSection imageUrl={fullWidthImageUrl} />
-            {(b?.floatingIcons?.length ?? 0) > 0 ? (
+            {fw ? (
+              <FullWidthImageSection imageUrl={fw} />
+            ) : (
+              <div className="relative w-full min-h-[120px] rounded-lg bg-gray-50" aria-hidden />
+            )}
+            {hasFloat ? (
               <div className="pointer-events-none absolute inset-0 z-[30] flex justify-center px-4">
-                <div className="relative h-full w-full max-w-7xl">
+                <div className="relative h-full min-h-[120px] w-full max-w-7xl">
                   <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
                 </div>
               </div>
             ) : null}
           </section>
         );
-        return wrap("full_width_image", inner);
+        return wrap("full_width_image", innerVisitor);
       }
       case "courses_grid":
         return renderCoursesGridOrListSection("courses_grid");
