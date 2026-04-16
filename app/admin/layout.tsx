@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronRight,
   ChevronLeft,
@@ -153,14 +153,16 @@ function Sidebar({
         {SIDEBAR_MENU.map((item) => {
           if ("href" in item && item.href && !("children" in item)) {
             const newTab = "newTab" in item && item.newTab;
+            const prefetchThis =
+              !item.href.startsWith("/admin") || item.href === "/admin/dashboard";
             return (
               <Link
                 key={item.label}
                 href={item.href}
-                prefetch={!item.href.startsWith("/admin")}
+                prefetch={prefetchThis}
                 target={newTab ? "_blank" : undefined}
                 rel={newTab ? "noopener noreferrer" : undefined}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors touch-manipulation"
                 onClick={isMobile ? onClose : undefined}
               >
                 <item.icon className="w-4 h-4 shrink-0" />
@@ -194,8 +196,21 @@ function Sidebar({
                     <div key={child.label}>
                       <Link
                         href={href}
-                        prefetch={false}
-                        className={`flex items-center gap-2 py-2 pl-8 pr-4 text-sm transition-colors ${
+                        prefetch={
+                          href === "/admin/settings" ||
+                          href === "/admin/layout" ||
+                          href === "/admin/members" ||
+                          href === "/admin/intro/courses" ||
+                          href === "/admin/about" ||
+                          href === "/admin" ||
+                          href === "/admin/faq" ||
+                          href === "/admin/seo" ||
+                          href === "/admin/bookings" ||
+                          href === "/admin/reconciliation" ||
+                          href === "/admin/enrollment" ||
+                          href === "/admin/payment-settings"
+                        }
+                        className={`flex items-center gap-2 py-2 pl-8 pr-4 text-sm transition-colors touch-manipulation ${
                           isActive
                             ? "bg-amber-600/20 text-amber-400 font-medium"
                             : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
@@ -205,17 +220,25 @@ function Sidebar({
                         <span>{(child as { label: string }).label}</span>
                       </Link>
                       {((child as { sub?: string[] }).sub?.length ?? 0) > 0 &&
-                        (child as { sub?: string[] }).sub!.map((subLabel) => (
+                        (child as { sub?: string[] }).sub!.map((subLabel) => {
+                          const subHref =
+                            subLabel === "新增課程"
+                              ? "/admin/classes/new"
+                              : subLabel === "常見問題"
+                                ? "/admin/faq"
+                                : "/admin";
+                          return (
                           <Link
                             key={subLabel}
-                            href={subLabel === "新增課程" ? "/admin/classes/new" : subLabel === "常見問題" ? "/admin/faq" : "/admin"}
-                            prefetch={false}
+                            href={subHref}
+                            prefetch={subHref === "/admin/classes/new" || subHref === "/admin/faq"}
                             className="flex items-center gap-2 py-1.5 pl-12 pr-4 text-xs text-slate-400 hover:text-slate-200"
                             onClick={isMobile ? onClose : undefined}
                           >
                             {subLabel}
                           </Link>
-                        ))}
+                          );
+                        })}
                     </div>
                   );
                   })}
@@ -261,7 +284,7 @@ function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
         <button
           type="button"
           onClick={onMenuClick}
-          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 md:hidden"
+          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 md:hidden touch-manipulation"
           aria-label="開啟選單"
         >
           <Menu className="w-6 h-6" />
@@ -302,8 +325,27 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (pathname === "/admin/login") return;
+    if (pathname !== "/admin/dashboard") router.prefetch("/admin/dashboard");
+    if (pathname !== "/admin/settings") router.prefetch("/admin/settings");
+    if (pathname !== "/admin/layout") router.prefetch("/admin/layout");
+    if (pathname !== "/admin/members") router.prefetch("/admin/members");
+    if (pathname !== "/admin/intro/courses") router.prefetch("/admin/intro/courses");
+    if (pathname !== "/admin/about") router.prefetch("/admin/about");
+    if (pathname !== "/admin") router.prefetch("/admin");
+    if (pathname !== "/admin/classes/new") router.prefetch("/admin/classes/new");
+    if (pathname !== "/admin/faq") router.prefetch("/admin/faq");
+    if (pathname !== "/admin/seo") router.prefetch("/admin/seo");
+    if (pathname !== "/admin/bookings") router.prefetch("/admin/bookings");
+    if (pathname !== "/admin/reconciliation") router.prefetch("/admin/reconciliation");
+    if (pathname !== "/admin/enrollment") router.prefetch("/admin/enrollment");
+    if (pathname !== "/admin/payment-settings") router.prefetch("/admin/payment-settings");
+  }, [pathname, router]);
 
   if (pathname === "/admin/login") {
     return <>{children}</>;

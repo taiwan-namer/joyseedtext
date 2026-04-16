@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle, Mail, Gift } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
@@ -10,9 +10,15 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function BookingSuccessPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const bookingId = searchParams.get("bookingId") ?? "";
   const { siteName } = useStoreSettings();
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    router.prefetch("/");
+    router.prefetch("/member");
+  }, [router]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -33,7 +39,7 @@ export default function BookingSuccessPage() {
     <div className="min-h-screen flex flex-col bg-page">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm shrink-0">
         <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-brand">
+          <Link href="/" prefetch className="text-xl font-bold text-brand">
             {siteName}
           </Link>
           <HeaderMember />
@@ -75,7 +81,7 @@ export default function BookingSuccessPage() {
               <button
                 type="button"
                 onClick={goToEmailSignup}
-                className="w-full py-3 px-4 rounded-xl font-medium text-gray-900 bg-white border border-gray-300 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+                className="w-full touch-manipulation py-3 px-4 rounded-xl font-medium text-gray-900 bg-white border border-gray-300 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
               >
                 <Mail className="w-5 h-5 shrink-0 text-gray-500" />
                 <span>使用 E-mail 登入或註冊</span>
@@ -83,7 +89,7 @@ export default function BookingSuccessPage() {
               <button
                 type="button"
                 onClick={goToLogin}
-                className="w-full py-3 px-4 rounded-xl font-medium text-gray-900 bg-white border border-gray-300 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+                className="w-full touch-manipulation py-3 px-4 rounded-xl font-medium text-gray-900 bg-white border border-gray-300 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
               >
                 <span className="flex items-center justify-center w-5 h-5 rounded-full border border-gray-400 text-xs font-bold text-gray-700 shrink-0">
                   G
@@ -99,6 +105,7 @@ export default function BookingSuccessPage() {
           {bookingId && (
             <Link
               href="/member"
+              prefetch
               className="text-sm font-medium text-amber-600 hover:text-amber-700"
             >
               前往會員中心查看訂單
@@ -106,7 +113,8 @@ export default function BookingSuccessPage() {
           )}
           <Link
             href="/"
-            className="text-xs text-gray-400 underline hover:text-gray-600 transition-colors"
+            prefetch
+            className="text-xs text-gray-400 underline hover:text-gray-600 transition-colors touch-manipulation"
           >
             返回首頁
           </Link>

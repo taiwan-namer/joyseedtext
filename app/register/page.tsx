@@ -43,7 +43,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex flex-col">
       <header className="border-b border-amber-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="mx-auto max-w-lg px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-brand">
+          <Link href="/" prefetch className="text-lg font-bold text-brand touch-manipulation">
             {siteName}
           </Link>
           <HeaderMember />

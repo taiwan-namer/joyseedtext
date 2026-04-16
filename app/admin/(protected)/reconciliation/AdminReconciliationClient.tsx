@@ -218,14 +218,16 @@ export default function AdminReconciliationClient() {
     order_total: Number(x.order_total) || 0,
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { signal?: AbortSignal }) => {
     if (!startDate || !endDate) return;
+    const signal = opts?.signal;
     setLoading(true);
     setError(null);
     try {
       const q = new URLSearchParams({ start_date: startDate, end_date: endDate });
-      const res = await fetch(`/api/admin/reconciliation?${q}`);
+      const res = await fetch(`/api/admin/reconciliation?${q}`, { signal });
       const data = await res.json().catch(() => ({}));
+      if (signal?.aborted) return;
       if (!res.ok) {
         setError(typeof data.error === "string" ? data.error : "載入失敗");
         setLinesHq([]);
@@ -245,6 +247,8 @@ export default function AdminReconciliationClient() {
       setTotalsHq(normalizeTotals(data.totals_hq));
       setTotalsLocal(normalizeTotals(data.totals_local));
     } catch (e) {
+      if (signal?.aborted) return;
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "載入失敗");
       setLinesHq([]);
       setLinesLocal([]);
@@ -252,12 +256,14 @@ export default function AdminReconciliationClient() {
       setTotalsHq(null);
       setTotalsLocal(null);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [startDate, endDate]);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    void load({ signal: ac.signal });
+    return () => ac.abort();
   }, [load]);
 
   return (
@@ -293,7 +299,7 @@ export default function AdminReconciliationClient() {
           type="button"
           onClick={() => load()}
           disabled={loading}
-          className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 min-h-[44px]"
+          className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 min-h-[44px] touch-manipulation"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin inline mr-2" aria-hidden /> : null}
           重新整理

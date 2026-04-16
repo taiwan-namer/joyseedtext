@@ -25,8 +25,10 @@ export default function PaymentSettingsPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     getPaymentSettings()
       .then((data) => {
+        if (cancelled) return;
         setPaymentNewebpayEnabled(data.paymentNewebpayEnabled ?? false);
         setPaymentEcpayEnabled(data.paymentEcpayEnabled ?? false);
         setPaymentLinepayEnabled(data.paymentLinepayEnabled ?? false);
@@ -37,9 +39,15 @@ export default function PaymentSettingsPage() {
         setInvoiceProvider(data.invoiceProvider === "ezpay" ? "ezpay" : "ecpay");
       })
       .catch((err) => {
+        if (cancelled) return;
         setMessage({ type: "error", text: err?.message ?? "無法載入" });
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -314,7 +322,7 @@ export default function PaymentSettingsPage() {
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 font-medium text-white hover:bg-amber-600 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 font-medium text-white hover:bg-amber-600 disabled:opacity-60 touch-manipulation min-h-[44px] min-w-[120px]"
           >
             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {isPending ? "儲存中…" : "儲存"}

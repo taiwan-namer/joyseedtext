@@ -53,6 +53,7 @@ function CourseCard({ activity }: { activity: Activity }) {
         </div>
         <Link
           href={activity.detailHref}
+          prefetch
           className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
             isSoldOut
               ? "bg-gray-200 text-gray-500 cursor-not-allowed pointer-events-none"
@@ -102,6 +103,7 @@ function CourseListItem({ activity }: { activity: Activity }) {
           <p className="text-amber-600 font-semibold">NT$ {activity.price.toLocaleString()} 起</p>
           <Link
             href={activity.detailHref}
+            prefetch
             className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               isSoldOut
                 ? "bg-gray-200 text-gray-500 cursor-not-allowed pointer-events-none"

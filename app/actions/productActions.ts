@@ -600,11 +600,10 @@ export async function createCourseFull(formData: FormData): Promise<
     const mainUrl = await uploadOneToR2(formData, "image_main");
     if (!mainUrl) return { success: false, error: "請上傳主圖" };
 
-    const galleryUrls: string[] = [];
-    for (const key of ["image_1", "image_2", "image_3", "image_4", "image_5"]) {
-      const url = await uploadOneToR2(formData, key);
-      if (url) galleryUrls.push(url);
-    }
+    const galleryKeys = ["image_1", "image_2", "image_3", "image_4", "image_5"] as const;
+    const galleryUrls = (
+      await Promise.all(galleryKeys.map((key) => uploadOneToR2(formData, key)))
+    ).filter((url): url is string => !!url);
 
     const courseIntro = (formData.get("course_intro") as string)?.trim() ?? "";
     const postContent = (formData.get("post_content") as string)?.trim() ?? "";
@@ -1427,11 +1426,8 @@ export async function updateCourseFull(
     const keepMain = mainUrl ?? existingRow?.image_url ?? null;
     const existingGallery: string[] = Array.isArray(existingRow?.gallery_urls) ? (existingRow.gallery_urls as string[]) : [];
 
-    const uploadedGallery: (string | null)[] = [];
-    for (const key of ["image_1", "image_2", "image_3", "image_4"]) {
-      const url = await uploadOneToR2(formData, key);
-      uploadedGallery.push(url);
-    }
+    const galleryKeys = ["image_1", "image_2", "image_3", "image_4"] as const;
+    const uploadedGallery = await Promise.all(galleryKeys.map((key) => uploadOneToR2(formData, key)));
     const finalGallery = uploadedGallery.map((url, i) => url ?? existingGallery[i]).filter(Boolean) as string[];
 
     const classDateRaw = (formData.get("class_date") as string)?.trim() || null;
@@ -1553,16 +1549,18 @@ export async function updateCourseFull(
       }
     }
 
-    if (merchantId) {
-      const { backupCourseToIntro } = await import("@/app/actions/courseIntroActions");
-      await backupCourseToIntro(merchantId, id, {
-        title,
-        imageUrl: keepMain,
-        galleryUrls: finalGallery,
-        introText: courseIntro,
-      });
-    }
-    await revalidateHomepageCoursesListCache();
+    const { backupCourseToIntro } = await import("@/app/actions/courseIntroActions");
+    await Promise.all([
+      merchantId
+        ? backupCourseToIntro(merchantId, id, {
+            title,
+            imageUrl: keepMain,
+            galleryUrls: finalGallery,
+            introText: courseIntro,
+          })
+        : Promise.resolve(),
+      revalidateHomepageCoursesListCache(),
+    ]);
     revalidatePath(`/course/${id}`);
     const prevPublic =
       existingRow?.slug != null && String(existingRow.slug).trim() !== ""

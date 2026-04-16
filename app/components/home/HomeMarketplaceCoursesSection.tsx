@@ -138,6 +138,7 @@ export default function HomeMarketplaceCoursesSection({ blockStyle, activities, 
                       </div>
                       <Link
                         href={activity.detailHref}
+                        prefetch
                         className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
                           isSoldOut
                             ? "bg-gray-200 text-gray-500 cursor-not-allowed pointer-events-none"

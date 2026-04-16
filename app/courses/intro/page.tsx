@@ -25,11 +25,11 @@ export default function CourseIntroArticlesPage() {
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between gap-3">
-          <Link href="/" className="text-xl font-bold text-brand shrink-0">
+          <Link href="/" prefetch className="text-xl font-bold text-brand shrink-0 touch-manipulation">
             {siteName}
           </Link>
           <div className="flex items-center gap-3 shrink-0">
-            <Link href="/courses" className="text-sm text-gray-600 hover:text-brand whitespace-nowrap">
+            <Link href="/courses" prefetch className="text-sm text-gray-600 hover:text-brand whitespace-nowrap">
               課程列表
             </Link>
             <HeaderMember />
@@ -41,13 +41,13 @@ export default function CourseIntroArticlesPage() {
         <nav className="mb-6 text-sm text-gray-500" aria-label="麵包屑">
           <ol className="flex flex-wrap items-center gap-1">
             <li>
-              <Link href="/" className="hover:text-brand transition-colors">
+              <Link href="/" prefetch className="hover:text-brand transition-colors touch-manipulation">
                 首頁
               </Link>
             </li>
             <li className="flex items-center gap-1">
               <ChevronRight className="w-4 h-4 shrink-0" />
-              <Link href="/courses" className="hover:text-brand transition-colors">
+              <Link href="/courses" prefetch className="hover:text-brand transition-colors">
                 課程列表
               </Link>
             </li>

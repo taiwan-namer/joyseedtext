@@ -1,43 +1,34 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ChevronRight, Image as ImageIcon } from "lucide-react";
-import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
-import { HeaderMember } from "@/app/components/HeaderMember";
 import { getCoursesForHomepage } from "@/app/actions/productActions";
-import type { CourseForPublic } from "@/app/actions/productActions";
+import { getStoreSettings } from "@/app/actions/storeSettingsActions";
+import { HeaderMember } from "@/app/components/HeaderMember";
 
-export default function CourseBookingPage() {
-  const { siteName } = useStoreSettings();
-  const [courses, setCourses] = useState<CourseForPublic[]>([]);
-
-  useEffect(() => {
-    getCoursesForHomepage().then((res) => {
-      if (res.success && res.data.length > 0) {
-        setCourses(res.data);
-      }
-    });
-  }, []);
+/**
+ * 課程預約列表：伺服端載入課程（避免 client 進頁再 fetch）。
+ */
+export default async function CourseBookingPage() {
+  const [res, store] = await Promise.all([getCoursesForHomepage(), getStoreSettings()]);
+  const courses = res.success ? res.data : [];
+  const loadError = res.success ? null : res.error;
 
   return (
     <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="mx-auto max-w-screen-md px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-brand">
-            {siteName}
+          <Link href="/" prefetch className="text-xl font-bold text-brand">
+            {store.siteName}
           </Link>
           <HeaderMember />
         </div>
       </header>
 
       <div className="mx-auto max-w-screen-md px-4 py-6">
-        {/* 麵包屑 */}
         <nav className="mb-6 text-sm text-gray-500" aria-label="麵包屑">
           <ol className="flex flex-wrap items-center gap-1">
             <li>
-              <Link href="/" className="hover:text-amber-600 transition-colors">
+              <Link href="/" prefetch className="hover:text-amber-600 transition-colors">
                 首頁
               </Link>
             </li>
@@ -50,16 +41,26 @@ export default function CourseBookingPage() {
 
         <h1 className="text-xl font-semibold text-gray-800 mb-6">課程預約</h1>
 
+        {loadError ? (
+          <p className="text-red-600 text-sm mb-4" role="alert">
+            {loadError}
+          </p>
+        ) : null}
+
         <ul className="space-y-4">
-          {courses.length === 0 ? (
+          {courses.length === 0 && !loadError ? (
             <li className="py-12 text-center text-gray-500 text-sm">尚無課程，請至後台新增課程</li>
           ) : (
             courses.map((course) => {
-              const price = course.salePrice != null && course.price != null && course.salePrice < course.price ? course.salePrice : course.price ?? 0;
+              const price =
+                course.salePrice != null && course.price != null && course.salePrice < course.price
+                  ? course.salePrice
+                  : course.price ?? 0;
               return (
                 <li key={course.id}>
                   <Link
                     href={`/course/${course.slug || course.id}`}
+                    prefetch
                     className="flex overflow-hidden bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
                   >
                     <div className="relative w-36 h-28 shrink-0 rounded-l-lg bg-gray-200 flex items-center justify-center overflow-hidden">

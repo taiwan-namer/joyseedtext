@@ -128,15 +128,23 @@ export default function AboutPage() {
   }, [codeInput, codeFontSize, codeToImageDataUrl, execEditorCommand]);
 
   useEffect(() => {
+    let cancelled = false;
     getAboutPageData()
       .then((data) => {
+        if (cancelled) return;
         setNavAboutLabel(data.navAboutLabel ?? "關於我們");
         setAboutContent(data.aboutContent ?? "");
       })
       .catch((err) => {
+        if (cancelled) return;
         setMessage({ type: "error", text: err?.message ?? "無法載入" });
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {

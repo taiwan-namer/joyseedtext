@@ -19,10 +19,15 @@ export default function AdminFaqPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     getFaqItems().then((list) => {
+      if (cancelled) return;
       setItems(list.length > 0 ? list : [{ id: generateId(), question: "", answer: "" }]);
       setLoading(false);
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const addItem = () => {
@@ -77,7 +82,7 @@ export default function AdminFaqPage() {
             type="button"
             onClick={handleSave}
             disabled={isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-60 touch-manipulation min-h-[44px]"
           >
             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {isPending ? "儲存中…" : "儲存"}

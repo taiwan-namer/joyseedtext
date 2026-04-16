@@ -998,6 +998,8 @@ export async function updateAboutPage(formData: FormData): Promise<
         { onConflict: "merchant_id" }
       );
     if (error) return { success: false, error: error.message };
+    revalidatePath("/about");
+    revalidatePath("/");
     return { success: true, message: "關於我們已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";

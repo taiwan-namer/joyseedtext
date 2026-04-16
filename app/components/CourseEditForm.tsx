@@ -1023,7 +1023,11 @@ export default function CourseEditForm({
               </section>
 
               <div className="flex justify-end">
-                <button type="submit" disabled={isPending} className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-3 font-medium text-white hover:bg-amber-600 disabled:opacity-60">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-3 font-medium text-white hover:bg-amber-600 disabled:opacity-60 touch-manipulation min-h-[44px] min-w-[120px]"
+                >
                   {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
                   {isPending ? "儲存中…" : courseId ? "儲存變更" : "儲存課程"}
                 </button>

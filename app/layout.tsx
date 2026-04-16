@@ -6,6 +6,7 @@ import { getStoreSettings } from "./actions/storeSettingsActions";
 import { getSeoSettings } from "./actions/frontendSettingsActions";
 import { StoreSettingsProvider } from "./providers/StoreSettingsProvider";
 import ChatWidget from "./components/chat/ChatWidget";
+import HomeRoutePrefetch from "./components/HomeRoutePrefetch";
 import { getMainSiteCanonicalOrigin } from "@/lib/mainSiteCanonical";
 import { isIndexingAllowed } from "@/lib/siteIndexing";
 
@@ -52,6 +53,7 @@ export default async function RootLayout({
     <html lang="zh-TW">
       <body className="antialiased">
         <StoreSettingsProvider initial={settings}>
+          <HomeRoutePrefetch />
           <Suspense fallback={null}>{children}</Suspense>
           <ChatWidget />
         </StoreSettingsProvider>

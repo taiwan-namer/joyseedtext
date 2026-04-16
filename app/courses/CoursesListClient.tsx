@@ -1,29 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Image as ImageIcon } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
-import { CourseCardSkeleton } from "@/app/components/CourseCardSkeleton";
-import { getCoursesForListpage } from "@/app/actions/productActions";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import { COURSES_LIST_PAGE_SIZE, dedupeCategoryList } from "@/lib/constants";
-
-function parsePositiveInt(value: string | null, fallback: number): number {
-  if (value == null || value === "") return fallback;
-  const n = Number.parseInt(value, 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
-function parseOptionalAge(value: string): number | null {
-  if (value === "") return null;
-  const n = Number.parseInt(value, 10);
-  if (!Number.isFinite(n) || n < 0 || n > 99) return null;
-  return n;
-}
 
 function buildQueryString(next: Record<string, string | undefined>): string {
   const p = new URLSearchParams();
@@ -34,26 +19,39 @@ function buildQueryString(next: Record<string, string | undefined>): string {
   return s ? `?${s}` : "";
 }
 
-export default function CoursesListClient() {
+export type CoursesListClientProps = {
+  courses: CourseForPublic[];
+  total: number;
+  listError: string | null;
+  remoteCategoryOptions: string[];
+  page: number;
+  category: string;
+  searchQuery: string;
+  startDate: string;
+  endDate: string;
+  minAge: string;
+  maxAge: string;
+};
+
+/**
+ * 課程列表互動層：資料由伺服端 {@link app/courses/page.tsx} 依 URL 注入，篩選／分頁改 URL 後由 RSC 重算。
+ */
+export default function CoursesListClient({
+  courses,
+  total,
+  listError,
+  remoteCategoryOptions,
+  page,
+  category,
+  searchQuery,
+  startDate,
+  endDate,
+  minAge,
+  maxAge,
+}: CoursesListClientProps) {
   const { siteName } = useStoreSettings();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const page = parsePositiveInt(searchParams.get("page"), 1);
-  const category = searchParams.get("category") ?? "";
-  const searchQuery = searchParams.get("searchQuery") ?? "";
-  const startDate = searchParams.get("startDate") ?? "";
-  const endDate = searchParams.get("endDate") ?? "";
-  const minAge = searchParams.get("minAge") ?? "";
-  const maxAge = searchParams.get("maxAge") ?? "";
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [courses, setCourses] = useState<CourseForPublic[]>([]);
-  const [total, setTotal] = useState(0);
-  /** 總站 global_categories（僅 API，無寫死清單） */
-  const [remoteCategoryOptions, setRemoteCategoryOptions] = useState<string[]>([]);
 
   const categoryFilterOptions = useMemo(() => {
     const list = dedupeCategoryList(remoteCategoryOptions);
@@ -62,60 +60,19 @@ export default function CoursesListClient() {
     return list;
   }, [remoteCategoryOptions, category]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/global-categories", { method: "GET" });
-        if (!res.ok) throw new Error("failed");
-        const data = (await res.json()) as { categories?: unknown };
-        const raw = data?.categories;
-        if (!Array.isArray(raw)) {
-          if (!cancelled) setRemoteCategoryOptions([]);
-          return;
-        }
-        const list = raw
-          .map((v): string | null => (typeof v === "string" ? v.trim() : null))
-          .filter((v): v is string => !!v);
-        if (!cancelled) setRemoteCategoryOptions(dedupeCategoryList(list));
-      } catch {
-        if (!cancelled) setRemoteCategoryOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const queryKey = useMemo(() => searchParams.toString(), [searchParams]);
-
-  const fetchList = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const res = await getCoursesForListpage({
-      page,
-      pageSize: COURSES_LIST_PAGE_SIZE,
-      category: category || undefined,
-      searchQuery: searchQuery || undefined,
-      startDate: startDate || null,
-      endDate: endDate || null,
-      minAge: parseOptionalAge(minAge),
-      maxAge: parseOptionalAge(maxAge),
-    });
-    setLoading(false);
-    if (!res.success) {
-      setCourses([]);
-      setTotal(0);
-      setError(res.error);
-      return;
-    }
-    setCourses(res.data);
-    setTotal(res.total);
-  }, [page, category, searchQuery, startDate, endDate, minAge, maxAge]);
-
-  useEffect(() => {
-    void fetchList();
-  }, [fetchList, queryKey]);
+  const queryKey = useMemo(
+    () =>
+      new URLSearchParams({
+        ...(page > 1 ? { page: String(page) } : {}),
+        ...(category ? { category } : {}),
+        ...(searchQuery ? { searchQuery } : {}),
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+        ...(minAge ? { minAge } : {}),
+        ...(maxAge ? { maxAge } : {}),
+      }).toString(),
+    [page, category, searchQuery, startDate, endDate, minAge, maxAge]
+  );
 
   const totalPages = Math.max(1, Math.ceil(total / COURSES_LIST_PAGE_SIZE));
 
@@ -151,11 +108,15 @@ export default function CoursesListClient() {
     <div className="min-h-screen bg-page">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-3">
-          <Link href="/" className="text-xl font-bold text-brand shrink-0">
+          <Link href="/" className="text-xl font-bold text-brand shrink-0" prefetch>
             {siteName}
           </Link>
           <div className="flex items-center gap-3 shrink-0">
-            <Link href="/courses/intro" className="text-sm text-gray-600 hover:text-brand whitespace-nowrap hidden sm:inline">
+            <Link
+              href="/courses/intro"
+              prefetch
+              className="text-sm text-gray-600 hover:text-brand whitespace-nowrap hidden sm:inline"
+            >
               介紹文章
             </Link>
             <HeaderMember />
@@ -167,7 +128,7 @@ export default function CoursesListClient() {
         <nav className="mb-6 text-sm text-gray-500" aria-label="麵包屑">
           <ol className="flex flex-wrap items-center gap-1">
             <li>
-              <Link href="/" className="hover:text-brand transition-colors">
+              <Link href="/" prefetch className="hover:text-brand transition-colors">
                 首頁
               </Link>
             </li>
@@ -180,15 +141,13 @@ export default function CoursesListClient() {
 
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
           <h1 className="text-xl font-bold text-gray-900">課程列表</h1>
-          <Link
-            href="/courses/intro"
-            className="text-sm text-brand hover:underline w-fit"
-          >
+          <Link href="/courses/intro" prefetch className="text-sm text-brand hover:underline w-fit">
             查看課程介紹文章 →
           </Link>
         </div>
 
         <form
+          key={queryKey}
           onSubmit={onFilterSubmit}
           className="mb-8 p-4 rounded-xl border border-gray-200 bg-white space-y-4 shadow-sm"
         >
@@ -206,7 +165,6 @@ export default function CoursesListClient() {
             <label className="block text-sm">
               <span className="text-gray-600 mb-1 block">主題分類</span>
               <select
-                key={`cat-${category}-${categoryFilterOptions.join("\u0001")}`}
                 name="category"
                 defaultValue={category}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
@@ -281,78 +239,75 @@ export default function CoursesListClient() {
           </div>
         </form>
 
-        {error && (
+        {listError && (
           <p className="text-red-600 text-sm mb-4" role="alert">
-            {error}
+            {listError}
           </p>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {loading
-            ? Array.from({ length: COURSES_LIST_PAGE_SIZE }).map((_, i) => <CourseCardSkeleton key={i} />)
-            : courses.length === 0
-              ? (
-                  <p className="text-gray-500 col-span-full py-12 text-center">
-                    沒有符合條件的課程。
-                  </p>
-                )
-              : courses.map((course) => {
-                  const price =
-                    course.salePrice != null && course.price != null && course.salePrice < course.price
-                      ? course.salePrice
-                      : course.price ?? 0;
-                  const tags = course.sidebarOptionLabels ?? course.ageTags ?? [];
-                  const soldOut = course.capacity === 0;
-                  return (
-                    <article
-                      key={course.id}
-                      className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+          {courses.length === 0 ? (
+            <p className="text-gray-500 col-span-full py-12 text-center">沒有符合條件的課程。</p>
+          ) : (
+            courses.map((course) => {
+              const price =
+                course.salePrice != null && course.price != null && course.salePrice < course.price
+                  ? course.salePrice
+                  : course.price ?? 0;
+              const tags = course.sidebarOptionLabels ?? course.ageTags ?? [];
+              const soldOut = course.capacity === 0;
+              return (
+                <article
+                  key={course.id}
+                  className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+                >
+                  <div className="relative aspect-square bg-gray-200 flex items-center justify-center overflow-hidden">
+                    {course.imageUrl ? (
+                      <Image
+                        src={course.imageUrl}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      />
+                    ) : (
+                      <ImageIcon className="w-14 h-14 text-gray-400 relative z-[1]" strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <div className="p-4 flex-1 flex flex-col min-h-0">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      {course.marketplace_category ? (
+                        <span className="text-xs text-gray-500 truncate">{course.marketplace_category}</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">課程</span>
+                      )}
+                      {tags.length > 0 && (
+                        <span className="text-xs text-gray-600 shrink-0 text-right">{tags.join("、")}</span>
+                      )}
+                    </div>
+                    <h2 className="font-semibold text-gray-900 line-clamp-2 mb-2">{course.title}</h2>
+                    <p className="text-amber-600 font-semibold text-sm mb-4">
+                      NT$ {price.toLocaleString()} 起
+                    </p>
+                    <Link
+                      href={`/course/${course.slug || course.id}`}
+                      prefetch
+                      className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
+                        soldOut
+                          ? "bg-gray-200 text-gray-500 pointer-events-none"
+                          : "bg-amber-500 text-white hover:bg-amber-600"
+                      }`}
                     >
-                      <div className="relative aspect-square bg-gray-200 flex items-center justify-center overflow-hidden">
-                        {course.imageUrl ? (
-                          <Image
-                            src={course.imageUrl}
-                            alt=""
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          />
-                        ) : (
-                          <ImageIcon className="w-14 h-14 text-gray-400 relative z-[1]" strokeWidth={1.5} />
-                        )}
-                      </div>
-                      <div className="p-4 flex-1 flex flex-col min-h-0">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          {course.marketplace_category ? (
-                            <span className="text-xs text-gray-500 truncate">{course.marketplace_category}</span>
-                          ) : (
-                            <span className="text-xs text-gray-400">課程</span>
-                          )}
-                          {tags.length > 0 && (
-                            <span className="text-xs text-gray-600 shrink-0 text-right">{tags.join("、")}</span>
-                          )}
-                        </div>
-                        <h2 className="font-semibold text-gray-900 line-clamp-2 mb-2">{course.title}</h2>
-                        <p className="text-amber-600 font-semibold text-sm mb-4">
-                          NT$ {price.toLocaleString()} 起
-                        </p>
-                        <Link
-                          href={`/course/${course.slug || course.id}`}
-                          className={`mt-auto w-full py-2.5 rounded-lg text-sm font-medium text-center transition-colors block ${
-                            soldOut
-                              ? "bg-gray-200 text-gray-500 pointer-events-none"
-                              : "bg-amber-500 text-white hover:bg-amber-600"
-                          }`}
-                        >
-                          查看詳情
-                        </Link>
-                      </div>
-                    </article>
-                  );
-                })}
+                      查看詳情
+                    </Link>
+                  </div>
+                </article>
+              );
+            })
+          )}
         </div>
 
-        {!loading && totalPages > 1 && (
+        {totalPages > 1 && (
           <nav
             className="mt-10 flex flex-wrap items-center justify-center gap-2"
             aria-label="分頁"

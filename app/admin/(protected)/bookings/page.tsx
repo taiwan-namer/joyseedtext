@@ -167,7 +167,19 @@ export default function AdminBookingsPage() {
   };
 
   useEffect(() => {
-    fetchList();
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      const bookingsRes = await getAdminBookings();
+      if (cancelled) return;
+      if (bookingsRes.success) setList(bookingsRes.data);
+      else setError(bookingsRes.error);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleMarkAsPaid = async (bookingId: string) => {

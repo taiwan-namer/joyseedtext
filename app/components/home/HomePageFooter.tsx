@@ -56,7 +56,7 @@ function AboutFooterLink({ href, children }: { href: string; children: ReactNode
     );
   }
   return (
-    <Link href={href} className="hover:underline">
+    <Link href={href} prefetch className="hover:underline">
       {children}
     </Link>
   );

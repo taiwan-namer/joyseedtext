@@ -1,35 +1,60 @@
-import { Suspense } from "react";
-import { CourseCardSkeleton } from "@/app/components/CourseCardSkeleton";
-import { COURSES_LIST_PAGE_SIZE } from "@/lib/constants";
+import { getCoursesForListpage } from "@/app/actions/productActions";
+import { getGlobalCategoriesFromMain } from "@/app/actions/storeSettingsActions";
+import { COURSES_LIST_PAGE_SIZE, dedupeCategoryList } from "@/lib/constants";
 import CoursesListClient from "./CoursesListClient";
+import {
+  getSearchParam,
+  parseOptionalAge,
+  parsePositiveInt,
+} from "./listSearchParams";
 
-function CoursesListPageFallback() {
-  return (
-    <div className="min-h-screen bg-page">
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-        <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
-          <div className="h-7 w-32 rounded-md bg-gray-200 animate-pulse" />
-          <div className="h-8 w-24 rounded-md bg-gray-200 animate-pulse" />
-        </div>
-      </header>
-      <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="h-4 w-48 rounded bg-gray-200 animate-pulse mb-8" />
-        <div className="h-8 w-40 rounded bg-gray-200 animate-pulse mb-8" />
-        <div className="h-40 rounded-xl bg-gray-200 animate-pulse mb-8" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Array.from({ length: COURSES_LIST_PAGE_SIZE }).map((_, i) => (
-            <CourseCardSkeleton key={i} />
-          ))}
-        </div>
-      </div>
-    </div>
+/**
+ * 課程列表：伺服端依 URL 查詢載入資料，首屏即含列表（避免進頁後 client 再 fetch）。
+ */
+export default async function CoursesListPage({
+  searchParams,
+}: {
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
+  const page = parsePositiveInt(getSearchParam(searchParams, "page"), 1);
+  const category = getSearchParam(searchParams, "category");
+  const searchQuery = getSearchParam(searchParams, "searchQuery");
+  const startDate = getSearchParam(searchParams, "startDate");
+  const endDate = getSearchParam(searchParams, "endDate");
+  const minAge = getSearchParam(searchParams, "minAge");
+  const maxAge = getSearchParam(searchParams, "maxAge");
+
+  const [listRes, rawCategories] = await Promise.all([
+    getCoursesForListpage({
+      page,
+      pageSize: COURSES_LIST_PAGE_SIZE,
+      category: category || undefined,
+      searchQuery: searchQuery || undefined,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      minAge: parseOptionalAge(minAge),
+      maxAge: parseOptionalAge(maxAge),
+    }),
+    getGlobalCategoriesFromMain(),
+  ]);
+
+  const remoteCategoryOptions = dedupeCategoryList(
+    Array.isArray(rawCategories) ? rawCategories : []
   );
-}
 
-export default function CoursesListPage() {
   return (
-    <Suspense fallback={<CoursesListPageFallback />}>
-      <CoursesListClient />
-    </Suspense>
+    <CoursesListClient
+      courses={listRes.success ? listRes.data : []}
+      total={listRes.success ? listRes.total : 0}
+      listError={listRes.success ? null : listRes.error}
+      remoteCategoryOptions={remoteCategoryOptions}
+      page={page}
+      category={category}
+      searchQuery={searchQuery}
+      startDate={startDate}
+      endDate={endDate}
+      minAge={minAge}
+      maxAge={maxAge}
+    />
   );
 }

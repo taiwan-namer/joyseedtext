@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { X, Eye, EyeOff, Mail } from "lucide-react";
+import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { syncAuthUserToMembers } from "@/app/actions/memberActions";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
@@ -23,8 +24,8 @@ export type LoginModalProps = {
   onClose: () => void;
   /** 從網址 ?openLogin=email 進來時傳 2，直接顯示 E-mail 登入表單 */
   initialStep?: 1 | 2 | 3;
-  /** 登入／註冊成功後呼叫（例如結帳頁用來觸發完成報名） */
-  onSuccess?: () => void;
+  /** 登入／註冊成功後呼叫（例如結帳頁用來立即送出報名）；傳入 Supabase session 可省一次 getSession */
+  onSuccess?: (session: Session | null) => void;
   /** OAuth 導向時帶上的 next，回站時導回此網址 */
   returnTo?: string;
   /** 使用 Google 登入、即將導出前呼叫（例如結帳頁寫入暫存） */
@@ -94,14 +95,14 @@ export default function LoginModal({
     setLoginLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setFormError(error.message);
         return;
       }
-      await syncAuthUserToMembers();
-      onSuccess?.();
+      onSuccess?.(data.session ?? null);
       onClose();
+      void syncAuthUserToMembers().catch(() => {});
     } finally {
       setLoginLoading(false);
     }
@@ -134,11 +135,11 @@ export default function LoginModal({
         setFormError(error.message);
         return;
       }
-      await syncAuthUserToMembers();
       // Supabase 若已關閉「確認信箱」，signUp 會直接回傳 session，視為註冊完成
       if (data.session) {
-        onSuccess?.();
+        onSuccess?.(data.session);
         onClose();
+        void syncAuthUserToMembers().catch(() => {});
         return;
       }
       setFormError(null);
@@ -197,7 +198,7 @@ export default function LoginModal({
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={oauthLoading}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 font-medium hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 font-medium hover:bg-gray-50 disabled:opacity-60 transition-colors touch-manipulation min-h-[48px]"
               >
                 <GoogleIcon className="w-5 h-5 shrink-0" />
                 {oauthLoading ? "處理中…" : "使用 Google 登入"}
@@ -205,7 +206,7 @@ export default function LoginModal({
               <button
                 type="button"
                 onClick={() => { setFormError(null); setStep(2); }}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 font-medium hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 font-medium hover:bg-gray-50 transition-colors touch-manipulation min-h-[48px]"
               >
                 <Mail className="w-5 h-5 shrink-0 text-gray-500" />
                 使用 E-mail 登入或註冊
@@ -213,13 +214,13 @@ export default function LoginModal({
             </div>
             <div className="px-6 pb-6 text-center text-sm text-gray-500 space-y-1">
               <p>
-                <Link href="/" className="text-amber-600 hover:underline">聯絡我們</Link>
+                <Link href="/" prefetch className="text-amber-600 hover:underline touch-manipulation">聯絡我們</Link>
               </p>
               <p>
                 註冊或登入即表示您瞭解並同意
-                <Link href="/" className="text-amber-600 hover:underline"> 服務條款 </Link>
+                <Link href="/" prefetch className="text-amber-600 hover:underline touch-manipulation"> 服務條款 </Link>
                 及
-                <Link href="/" className="text-amber-600 hover:underline"> 隱私政策</Link>。
+                <Link href="/" prefetch className="text-amber-600 hover:underline touch-manipulation"> 隱私政策</Link>。
               </p>
             </div>
           </>
@@ -276,7 +277,7 @@ export default function LoginModal({
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full py-2.5 rounded-lg font-medium text-gray-800 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 transition-colors"
+                  className="w-full py-2.5 rounded-lg font-medium text-gray-800 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 transition-colors touch-manipulation min-h-[48px]"
                 >
                   {loginLoading ? "登入中…" : "登入"}
                 </button>
@@ -375,7 +376,7 @@ export default function LoginModal({
                 <button
                   type="submit"
                   disabled={registerLoading}
-                  className="w-full py-2.5 rounded-lg font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 transition-colors"
+                  className="w-full py-2.5 rounded-lg font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 transition-colors touch-manipulation min-h-[48px]"
                 >
                   {registerLoading ? "註冊中…" : "註冊"}
                 </button>

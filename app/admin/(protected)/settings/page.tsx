@@ -70,8 +70,10 @@ export default function AdminSettingsPage() {
   const [passwordPending, setPasswordPending] = useState(false);
 
   useEffect(() => {
-    getStoreSettings()
-      .then((s) => {
+    let cancelled = false;
+    Promise.all([getStoreSettings(), getFrontendSettings()])
+      .then(([s, f]) => {
+        if (cancelled) return;
         setSiteName(s.siteName);
         setPrimaryColor(s.primaryColor);
         setBackgroundColor(s.backgroundColor ?? "#fafaf9");
@@ -88,9 +90,6 @@ export default function AdminSettingsPage() {
         setContactEmail(s.contactEmail ?? "");
         setContactPhone(s.contactPhone ?? "");
         setContactAddress(s.contactAddress ?? "");
-      })
-      .then(() => getFrontendSettings())
-      .then((f) => {
         setNavCoursesLabel(f.navCoursesLabel ?? "課程介紹");
         setNavBookingLabel(f.navBookingLabel ?? "課程預約");
         setNavFaqLabel(f.navFaqLabel ?? "常見問題");
@@ -99,9 +98,14 @@ export default function AdminSettingsPage() {
         setMemberIconSelectedIndex(Math.min(f.memberIconSelectedIndex ?? 0, Math.max(0, gallery.length - 1)));
       })
       .catch((err) => {
-        setMessage({ type: "error", text: err?.message ?? "無法載入設定" });
+        if (!cancelled) setMessage({ type: "error", text: err?.message ?? "無法載入設定" });
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {

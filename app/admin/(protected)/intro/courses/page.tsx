@@ -37,7 +37,22 @@ export default function AdminIntroCoursesPage() {
   };
 
   useEffect(() => {
-    fetchList();
+    let cancelled = false;
+    void (async () => {
+      setIsLoading(true);
+      setError(null);
+      const result = await getCourseIntroPostsForAdmin();
+      if (cancelled) return;
+      if (result.success) {
+        setPosts(result.data);
+      } else {
+        setError(result.error);
+      }
+      setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredPosts = filterText.trim()

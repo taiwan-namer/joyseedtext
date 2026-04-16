@@ -35,7 +35,28 @@ export default function AdminProductsPage() {
   };
 
   useEffect(() => {
-    fetchList();
+    let cancelled = false;
+    void (async () => {
+      setIsLoading(true);
+      setError(null);
+      const [classResult, countResult] = await Promise.all([
+        getClassesForAdmin(),
+        getEnrollmentCountsForAdmin(),
+      ]);
+      if (cancelled) return;
+      if (classResult.success) {
+        setClasses(classResult.data);
+      } else {
+        setError(classResult.error);
+      }
+      if (countResult.success) {
+        setEnrollmentCounts(countResult.data);
+      }
+      setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredClasses = filterText.trim()
@@ -108,6 +129,7 @@ export default function AdminProductsPage() {
           </div>
           <Link
             href="/admin/classes/new"
+            prefetch
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
           >
             <Plus className="w-4 h-4" />

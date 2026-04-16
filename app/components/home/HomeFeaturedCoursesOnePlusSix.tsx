@@ -90,7 +90,7 @@ export default function HomeFeaturedCoursesOnePlusSix({
 
     if (!activity) return <div key={`placeholder-${idx}`}>{card}</div>;
     return (
-      <Link key={activity.id} href={activity.detailHref} className="block">
+      <Link key={activity.id} href={activity.detailHref} prefetch className="block">
         {card}
       </Link>
     );

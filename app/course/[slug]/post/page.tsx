@@ -82,7 +82,7 @@ export default function CoursePostPage() {
       return (
         <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4 px-4">
           <p className="text-gray-700 text-center">找不到此課程或連結已失效。</p>
-          <Link href="/" className="text-amber-600 font-medium hover:underline">
+          <Link href="/" prefetch className="text-amber-600 font-medium hover:underline touch-manipulation">
             回首頁
           </Link>
         </div>
@@ -104,12 +104,13 @@ export default function CoursePostPage() {
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-brand">
+          <Link href="/" prefetch className="text-xl font-bold text-brand touch-manipulation">
             {siteName}
           </Link>
           <div className="flex items-center gap-2">
             <Link
               href="/courses/intro"
+              prefetch
               className="text-sm text-gray-500 hover:text-brand transition-colors"
             >
               課程介紹
@@ -123,13 +124,13 @@ export default function CoursePostPage() {
         <nav className="mb-6 text-sm text-gray-400" aria-label="麵包屑">
           <ol className="flex flex-wrap items-center gap-1">
             <li>
-              <Link href="/" className="hover:text-amber-600 transition-colors">
+              <Link href="/" prefetch className="hover:text-amber-600 transition-colors touch-manipulation">
                 首頁
               </Link>
             </li>
             <li className="flex items-center gap-1">
               <ChevronRight className="w-4 h-4 shrink-0" />
-              <Link href="/courses/intro" className="hover:text-amber-600 transition-colors">
+              <Link href="/courses/intro" prefetch className="hover:text-amber-600 transition-colors">
                 課程介紹
               </Link>
             </li>

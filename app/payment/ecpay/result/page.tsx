@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getStoreSettings } from "@/app/actions/storeSettingsActions";
 import { HeaderMember } from "@/app/components/HeaderMember";
+import PaymentResultPrefetch from "@/app/components/PaymentResultPrefetch";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { EcpayResultAutoRefresh } from "./EcpayResultAutoRefresh";
 
@@ -82,10 +83,11 @@ export default async function EcpayResultPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-page">
+      <PaymentResultPrefetch />
       <EcpayResultAutoRefresh active={status === "unpaid"} />
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm shrink-0">
         <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-brand">
+          <Link href="/" prefetch className="text-xl font-bold text-brand">
             {settings.siteName}
           </Link>
           <HeaderMember />
@@ -121,10 +123,10 @@ export default async function EcpayResultPage({
             </>
           )}
           <div className="mt-6 flex flex-col items-center gap-2">
-            <Link href="/member" className="text-sm font-medium text-amber-600 hover:text-amber-700">
+            <Link href="/member" prefetch className="text-sm font-medium text-amber-600 hover:text-amber-700">
               前往會員中心
             </Link>
-            <Link href="/" className="text-xs text-gray-400 underline hover:text-gray-600">
+            <Link href="/" prefetch className="text-xs text-gray-400 underline hover:text-gray-600 touch-manipulation">
               返回首頁
             </Link>
           </div>

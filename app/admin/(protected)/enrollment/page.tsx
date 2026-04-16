@@ -312,22 +312,28 @@ export default function AdminEnrollmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [mobileDateMenuOpen, setMobileDateMenuOpen] = useState(false);
 
-  const refreshMonth = useCallback(async () => {
+  const refreshMonth = useCallback(async (opts?: { isCancelled?: () => boolean }) => {
+    const stale = () => opts?.isCancelled?.() ?? false;
     setCalendarLoading(true);
     setError(null);
     const res = await getRollcallSessionsInMonth(viewYear, viewMonth);
+    if (stale()) return;
     if (res.success) {
       setMonthData(res.byDate);
-      void getRollcallDatesWithCounts();
+      if (!stale()) void getRollcallDatesWithCounts();
     } else {
       setError(res.error);
       setMonthData({});
     }
-    setCalendarLoading(false);
+    if (!stale()) setCalendarLoading(false);
   }, [viewYear, viewMonth]);
 
   useEffect(() => {
-    void refreshMonth();
+    let cancelled = false;
+    void refreshMonth({ isCancelled: () => cancelled });
+    return () => {
+      cancelled = true;
+    };
   }, [refreshMonth]);
 
   const { startStr, endStr } = monthBounds(viewYear, viewMonth);
@@ -413,7 +419,7 @@ export default function AdminEnrollmentPage() {
             <button
               type="button"
               onClick={goPrevMonth}
-              className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50 touch-manipulation min-h-[44px] min-w-[44px]"
               aria-label="上個月"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -421,7 +427,7 @@ export default function AdminEnrollmentPage() {
             <button
               type="button"
               onClick={goNextMonth}
-              className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50 touch-manipulation min-h-[44px] min-w-[44px]"
               aria-label="下個月"
             >
               <ChevronRight className="w-5 h-5" />
@@ -429,7 +435,7 @@ export default function AdminEnrollmentPage() {
             <button
               type="button"
               onClick={goToday}
-              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100 touch-manipulation min-h-[44px]"
             >
               今天
             </button>

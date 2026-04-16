@@ -105,7 +105,8 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 min-w-0">
             <Link
               href="/"
-              className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
+              prefetch
+              className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors shrink-0 touch-manipulation"
               aria-label="返回首頁"
             >
               <ChevronLeft className="w-5 h-5" />

@@ -40,6 +40,7 @@ export default function Header({
 }: HeaderProps) {
   const router = useRouter();
   useEffect(() => {
+    router.prefetch("/");
     router.prefetch("/courses");
   }, [router]);
 
@@ -80,7 +81,8 @@ export default function Header({
         <div className="w-[30%] flex justify-center items-center">
           <Link
             href="/"
-            className="inline-flex items-center justify-center translate-y-[22px] sm:translate-y-[26px]"
+            prefetch
+            className="inline-flex touch-manipulation items-center justify-center translate-y-[22px] sm:translate-y-[26px]"
           >
             {hasLogo ? (
               <Image

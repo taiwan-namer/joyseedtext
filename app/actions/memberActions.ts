@@ -3,6 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
@@ -12,7 +13,7 @@ function envTrim(key: string): string {
 /**
  * 將「目前登入者」同步到 members 表（與 OAuth 回呼邏輯一致）。
  * 供 E-mail 登入／註冊成功後呼叫，確保後台 B會員功能管理 能列出該會員。
- * 從 cookie 讀取 session，若該 email 尚未在 members 則寫入，merchant_id 強制用 env。
+ * 從 cookie 讀取 session，以 upsert 寫入 members（與 OAuth 回呼一致），merchant_id 強制用 env。
  */
 export async function syncAuthUserToMembers(): Promise<
   | { success: true }
@@ -56,24 +57,17 @@ export async function syncAuthUserToMembers(): Promise<
       email.split("@")[0] ||
       "會員";
 
-    const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabaseAdmin = createServerSupabase();
-    const { data: existing } = await supabaseAdmin
-      .from("members")
-      .select("id")
-      .eq("merchant_id", merchantId)
-      .eq("email", email)
-      .maybeSingle();
-
-    if (!existing) {
-      const { error: insertErr } = await supabaseAdmin.from("members").insert({
+    const { error: upsertErr } = await supabaseAdmin.from("members").upsert(
+      {
         merchant_id: merchantId,
         name: name.trim() || null,
         phone: null,
         email,
-      });
-      if (insertErr) return { success: false, error: insertErr.message };
-    }
+      },
+      { onConflict: "merchant_id,email" }
+    );
+    if (upsertErr) return { success: false, error: upsertErr.message };
     return { success: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : "同步失敗";
@@ -99,7 +93,6 @@ export async function ensureMemberForBooking(params: {
     const email = (params.email ?? "").trim();
     if (!email) return { success: false, error: "請填寫電子信箱" };
 
-    const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { data: existing } = await supabase
       .from("members")
@@ -174,7 +167,6 @@ export async function registerMember(formData: {
     if (!name) return { success: false, error: "請填寫姓名" };
     if (!phone) return { success: false, error: "請填寫手機號碼" };
 
-    const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase.from("members").insert({
       merchant_id: merchantId,
@@ -207,7 +199,6 @@ export async function deleteMember(memberId: string): Promise<
     const id = (memberId ?? "").trim();
     if (!id) return { success: false, error: "無效的會員" };
 
-    const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
       .from("members")

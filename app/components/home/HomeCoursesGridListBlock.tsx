@@ -179,6 +179,7 @@ export default function HomeCoursesGridListBlock({
                 <div className="flex shrink-0 flex-col items-stretch justify-center self-center pl-1">
                   <Link
                     href={activity.detailHref}
+                    prefetch
                     className={`inline-flex min-h-[2.25rem] min-w-[4.5rem] items-center justify-center rounded-full px-4 text-xs font-semibold transition-colors sm:text-sm ${
                       isSoldOut
                         ? "cursor-not-allowed bg-gray-100 text-gray-400 pointer-events-none"
@@ -227,6 +228,7 @@ export default function HomeCoursesGridListBlock({
               </p>
               <Link
                 href={activity.detailHref}
+                prefetch
                 className={`mt-auto block w-full rounded-lg py-2.5 text-center text-sm font-medium transition-colors ${
                   isSoldOut
                     ? "cursor-not-allowed bg-gray-200 text-gray-500 pointer-events-none"

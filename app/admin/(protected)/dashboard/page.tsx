@@ -109,11 +109,11 @@ export default function AdminDashboardPage() {
       try {
         const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
         if (filterCourseId) params.set("course_id", filterCourseId);
-        const [summaryRes, monthlyRes] = await Promise.all([
+        const [summaryRes, monthlyRes, bookingsRes] = await Promise.all([
           fetch(`/api/dashboard/revenue-summary?${params}`),
           fetch("/api/dashboard/monthly-revenue"),
+          getAdminBookings(),
         ]);
-        const bookingsRes = await getAdminBookings();
 
         if (cancelled) return;
 
@@ -174,7 +174,8 @@ export default function AdminDashboardPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/admin"
-          className="inline-flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900"
+          prefetch
+          className="inline-flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900 touch-manipulation"
         >
           <ChevronLeft className="w-4 h-4" />
           返回後台
@@ -308,7 +309,8 @@ export default function AdminDashboardPage() {
               <h2 className="text-sm font-semibold text-gray-800">最近訂單</h2>
               <Link
                 href="/admin/bookings"
-                className="text-sm font-medium text-amber-600 hover:text-amber-700"
+                prefetch
+                className="text-sm font-medium text-amber-600 hover:text-amber-700 touch-manipulation"
               >
                 查看全部
               </Link>

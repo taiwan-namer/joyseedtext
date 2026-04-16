@@ -383,8 +383,10 @@ export default function AdminLayoutPage() {
   const [heroFloatUploading, setHeroFloatUploading] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     Promise.all([getFrontendSettings(), getCoursesForHomepage()])
       .then(([s, coursesRes]) => {
+        if (cancelled) return;
         // 先拿後台已儲存的積木，若沒有就用預設；再同步成「目前首頁實際使用」的區塊集合
         // 以資料庫儲存為準；勿強制補回預設積木（否則刪除並儲存後重新整理會復原）
         const nextBlocks =
@@ -444,10 +446,17 @@ export default function AdminLayoutPage() {
         }
       })
       .catch(() => {
-        setBlocks(getDefaultLayoutBlocks());
-        setAboutPageUrl(DEFAULT_ABOUT_PAGE_URL);
+        if (!cancelled) {
+          setBlocks(getDefaultLayoutBlocks());
+          setAboutPageUrl(DEFAULT_ABOUT_PAGE_URL);
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const currentIds = blocks.map((b) => b.id);

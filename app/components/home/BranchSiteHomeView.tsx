@@ -382,19 +382,31 @@ export default function BranchSiteHomeView({
               href={aboutNavHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-600 hover:text-brand text-sm whitespace-nowrap"
+              className="text-gray-600 hover:text-brand text-sm whitespace-nowrap touch-manipulation py-1.5 -my-1.5"
             >
               {navAboutLabel || "關於我們"}
             </a>
           ) : (
-            <Link href={aboutNavHref} className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">
+            <Link
+              href={aboutNavHref}
+              prefetch
+              className="text-gray-600 hover:text-brand text-sm whitespace-nowrap touch-manipulation py-1.5 -my-1.5"
+            >
               {navAboutLabel || "關於我們"}
             </Link>
           )}
-          <Link href="/courses" className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">
+          <Link
+            href="/courses"
+            prefetch
+            className="text-gray-600 hover:text-brand text-sm whitespace-nowrap touch-manipulation py-1.5 -my-1.5"
+          >
             {navCoursesLabel || "課程介紹"}
           </Link>
-          <Link href="/course/booking" className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">
+          <Link
+            href="/course/booking"
+            prefetch
+            className="text-gray-600 hover:text-brand text-sm whitespace-nowrap"
+          >
             {navBookingLabel || "課程預約"}
           </Link>
           <a href="#faq" className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">

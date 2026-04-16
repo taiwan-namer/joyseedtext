@@ -29,6 +29,7 @@ import {
   getOrderAdminClassCreatorMerchantIdFilter,
   type AdminBookingsAccessFilter,
 } from "@/lib/bookingsMerchantFilter";
+import { ensureMemberForBooking } from "@/app/actions/memberActions";
 
 /** 發票開立請改由 `@/lib/invoice/service` 的 `issueInvoice`（不可在此 re-export：`use server` 檔僅允許 export async 函式本體）。 */
 
@@ -257,8 +258,19 @@ export async function createBooking(
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!merchantId) return { success: false, error: "未設定店家" };
 
-    const email = (memberEmail ?? "").trim();
+    /** 已登入時以 cookie session 為準，避免結帳頁多一次 client getSession + 分開 ensure 的往返 */
+    const sessionEmail = await getCurrentMemberEmail();
+    const email = (sessionEmail?.trim() || (memberEmail ?? "").trim());
     if (!email) return { success: false, error: "請提供會員信箱" };
+
+    const ensureRes = await ensureMemberForBooking({
+      name: (parentName ?? "").trim(),
+      phone: (parentPhone ?? "").trim(),
+      email,
+    });
+    if (!ensureRes.success) {
+      return { success: false, error: ensureRes.error };
+    }
 
     const supabase = createServerSupabase();
 

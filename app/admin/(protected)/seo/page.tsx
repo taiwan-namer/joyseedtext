@@ -18,17 +18,25 @@ export default function SeoPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     getSeoSettings()
       .then((data) => {
+        if (cancelled) return;
         setSeoTitle(data.seoTitle ?? "");
         setSeoKeywords(data.seoKeywords ?? "");
         setSeoDescription(data.seoDescription ?? "");
         setSeoFaviconUrl(data.seoFaviconUrl ?? "");
       })
       .catch((err) => {
+        if (cancelled) return;
         setMessage({ type: "error", text: err?.message ?? "無法載入" });
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleFaviconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,7 +231,7 @@ export default function SeoPage() {
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-6 py-2.5 font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-6 py-2.5 font-medium text-white hover:bg-gray-800 disabled:opacity-60 touch-manipulation min-h-[44px] min-w-[120px]"
           >
             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {isPending ? "儲存中…" : "儲存"}

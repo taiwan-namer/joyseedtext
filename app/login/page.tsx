@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
@@ -32,12 +32,18 @@ function GoogleIcon({ className }: { className?: string }) {
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const nextUrl = searchParams.get("next") ?? "/";
   const { siteName } = useStoreSettings();
   const [loading, setLoading] = useState<"google" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = createClient();
+
+  useEffect(() => {
+    const next = nextUrl.startsWith("/") && !nextUrl.startsWith("//") ? nextUrl : "/";
+    router.prefetch(next);
+  }, [router, nextUrl]);
 
   const handleGoogleLogin = async () => {
     setError(null);
@@ -63,7 +69,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex flex-col">
       <header className="border-b border-amber-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="mx-auto max-w-lg px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-brand">
+          <Link href="/" prefetch className="text-lg font-bold text-brand touch-manipulation">
             {siteName}
           </Link>
           <HeaderMember />
@@ -93,7 +99,7 @@ export default function LoginPage() {
               type="button"
               onClick={handleGoogleLogin}
               disabled={!!loading}
-              className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border-2 border-gray-200 bg-white text-gray-800 font-medium hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              className="w-full flex items-center justify-center gap-3 min-h-[48px] py-3.5 px-4 rounded-xl border-2 border-gray-200 bg-white text-gray-800 font-medium hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors touch-manipulation"
             >
               <GoogleIcon className="w-6 h-6 shrink-0" />
               {loading === "google" ? "處理中…" : "以 Google 帳號繼續"}
@@ -108,7 +114,7 @@ export default function LoginPage() {
 
             <Link
               href={`/register?next=${encodeURIComponent(nextUrl)}`}
-              className="block w-full py-3 px-4 rounded-xl border-2 border-amber-200 bg-amber-50 text-amber-800 font-medium hover:bg-amber-100 hover:border-amber-300 text-center transition-colors"
+              className="block w-full min-h-[48px] py-3 px-4 rounded-xl border-2 border-amber-200 bg-amber-50 text-amber-800 font-medium hover:bg-amber-100 hover:border-amber-300 text-center transition-colors touch-manipulation flex items-center justify-center"
             >
               使用 E-mail 註冊
             </Link>
