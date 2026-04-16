@@ -8,6 +8,8 @@ import {
   formatFloatingIconSlotLabel,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
+
+const DEFAULT_SCALE_REF = LAYOUT_DESIGN_CANVAS_WIDTH_PX;
 import {
   findRowGroupContainingSlot1Based,
   getAboutFloatingIconComputedPct,
@@ -34,6 +36,8 @@ type Props = {
   selectedIconId?: string | null;
   /** 點選裝飾圖時（含拖曳前）通知父層，供側欄捲動至對應編號 */
   onIconPointerDown?: (id: string) => void;
+  /** 與 HeroFloatingIconsLayer 之 scaleReferenceWidthPx 一致 */
+  scaleReferenceWidthPx?: number;
 };
 
 function clampPct(n: number): number {
@@ -51,24 +55,26 @@ export default function HeroFloatingIconsEditor({
   coordinateMode = "desktop",
   selectedIconId = null,
   onIconPointerDown,
+  scaleReferenceWidthPx = DEFAULT_SCALE_REF,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scaleBase = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : DEFAULT_SCALE_REF;
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [hostWidth, setHostWidth] = useState<number>(LAYOUT_DESIGN_CANVAS_WIDTH_PX);
-  const iconScale = Math.max(0.2, hostWidth / LAYOUT_DESIGN_CANVAS_WIDTH_PX);
+  const [hostWidth, setHostWidth] = useState<number>(scaleBase);
+  const iconScale = Math.max(0.2, hostWidth / scaleBase);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const apply = () => {
-      const w = Math.max(1, el.clientWidth || LAYOUT_DESIGN_CANVAS_WIDTH_PX);
+      const w = Math.max(1, el.clientWidth || scaleBase);
       setHostWidth((prev) => (prev === w ? prev : w));
     };
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [scaleBase]);
 
   /** 刪除／上傳替換列表時避免仍拖著已不存在的 id */
   useEffect(() => {

@@ -46,6 +46,7 @@ export default function HomePageClient({ settings, homeCourses, homeCoursesError
       navFaqLabel={settings.navFaqLabel || "常見問題"}
       aboutPageUrl={settings.aboutPageUrl ?? DEFAULT_ABOUT_PAGE_URL}
       serverHomeCourses={{ courses: homeCourses, error: homeCoursesError }}
+      viewportFloatingIcons={settings.viewportFloatingIcons ?? []}
     />
   );
 }

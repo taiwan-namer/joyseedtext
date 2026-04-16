@@ -16,9 +16,10 @@ import { mapCourseToHomeActivity } from "@/app/lib/mapCourseToHomeActivity";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adminLayoutCanvasTypes";
-import type { CarouselItem, LayoutBlock } from "@/app/lib/frontendSettingsShared";
+import type { CarouselItem, HeroFloatingIcon, LayoutBlock } from "@/app/lib/frontendSettingsShared";
 import {
   DEFAULT_ABOUT_PAGE_URL,
+  LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX,
   LAYOUT_SECTION_LABELS,
   normalizeAboutPageUrl,
 } from "@/app/lib/frontendSettingsShared";
@@ -130,6 +131,8 @@ export type BranchSiteHomeViewProps = {
    * 後台畫布預覽勿傳，以維持由父層餵入的 activities。
    */
   serverHomeCourses?: { courses: CourseForPublic[]; error: string | null };
+  /** 訪客首頁：全螢幕裝飾層（瀏覽器視窗座標）；後台畫布勿傳 */
+  viewportFloatingIcons?: HeroFloatingIcon[] | null;
 };
 
 export default function BranchSiteHomeView({
@@ -148,6 +151,7 @@ export default function BranchSiteHomeView({
   adminLayout = null,
   activities: activitiesFromParent,
   serverHomeCourses,
+  viewportFloatingIcons = null,
 }: BranchSiteHomeViewProps) {
   const {
     siteName,
@@ -955,6 +959,15 @@ export default function BranchSiteHomeView({
           }
         : {})}
     >
+      {!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0 ? (
+        <div className="pointer-events-none fixed inset-0 z-[24]" aria-hidden>
+          <HeroFloatingIconsLayer
+            icons={viewportFloatingIcons ?? undefined}
+            coordinateViewport={coordMode}
+            scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+          />
+        </div>
+      ) : null}
       {orderedSectionIds.map((id) => {
         const node = renderSectionById(id);
         if (node == null) return null;

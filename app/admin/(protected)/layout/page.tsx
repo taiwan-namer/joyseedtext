@@ -45,6 +45,7 @@ import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 import { readImageNaturalSizeFromFile } from "@/lib/readImageNaturalSizeFromFile";
 import LayoutCanvas from "./LayoutCanvas";
+import ViewportFloatingIconsEditorPanel from "./ViewportFloatingIconsEditorPanel";
 import {
   LAYOUT_MOBILE_PREVIEW_WIDTH_PX,
   LAYOUT_PREVIEW_BLOCK_HEIGHT,
@@ -276,6 +277,7 @@ export default function AdminLayoutPage() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const heroFloatFileRef = useRef<HTMLInputElement | null>(null);
+  const viewportFloatFileRef = useRef<HTMLInputElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const mobilePreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
   const blockListItemRefs = useRef<Record<string, HTMLLIElement | null>>({});
@@ -291,6 +293,9 @@ export default function AdminLayoutPage() {
   const canvasViewportModeRef = useRef<"desktop" | "mobile">("desktop");
   canvasViewportModeRef.current = canvasViewportMode;
   const [selectedFloatingIconId, setSelectedFloatingIconId] = useState<string | null>(null);
+  const [viewportFloatingIcons, setViewportFloatingIcons] = useState<HeroFloatingIcon[]>([]);
+  const [viewportSelectedFloatingIconId, setViewportSelectedFloatingIconId] = useState<string | null>(null);
+  const [viewportFloatUploading, setViewportFloatUploading] = useState(false);
   const mobileCanvasSectionRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     setFloatingEditViewport(canvasViewportMode === "mobile" ? "mobile" : "desktop");
@@ -414,6 +419,7 @@ export default function AdminLayoutPage() {
         setHomeCoursesBlockBackgroundUrl(s.homeCoursesBlockBackgroundUrl ?? null);
         setHomeCoursesBlockBackgroundMobileUrl(s.homeCoursesBlockBackgroundMobileUrl ?? null);
         setHomeNewCoursesIconUrl(s.homeNewCoursesIconUrl ?? null);
+        setViewportFloatingIcons(s.viewportFloatingIcons ?? []);
         if (coursesRes.success && coursesRes.data.length > 0) {
           setActivities(
             coursesRes.data.map((c) => ({
@@ -507,6 +513,7 @@ export default function AdminLayoutPage() {
       (canvasViewportModeRef.current === "mobile" ? "mobile" : "desktop");
     setFloatingEditViewport(ev);
     setSelectedBlockId(blockId);
+    setViewportSelectedFloatingIconId(null);
     if (typeof window !== "undefined") {
       setEditorPos(computeEditorPosition(blockId));
     }
@@ -704,6 +711,49 @@ export default function AdminLayoutPage() {
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, []);
+
+  const handleViewportFloatFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setViewportFloatUploading(true);
+    setMessage(null);
+    try {
+      const natural = await readImageNaturalSizeFromFile(file).catch(() => ({ width: 72, height: 72 }));
+      const widthPx = Math.max(16, Math.round(natural.width));
+      const heightPx = Math.max(16, Math.round(natural.height));
+      const fd = new FormData();
+      fd.set("float_image", file);
+      const r = await uploadHeroFloatingIcon(fd);
+      if (r.success) {
+        const id =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `vf-${Date.now()}`;
+        setViewportFloatingIcons((prev) => [
+          ...prev,
+          {
+            id,
+            imageUrl: r.url,
+            leftPct: 92,
+            topPct: 40,
+            widthPx,
+            heightPx,
+            enabled: true,
+          },
+        ]);
+        setViewportSelectedFloatingIconId(id);
+        setSelectedBlockId(null);
+        setMessage({ type: "success", text: "全螢幕裝飾圖已上傳，請在下方預覽拖曳定位後按「儲存版面」。" });
+      } else {
+        setMessage({ type: "error", text: r.error });
+      }
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "上傳失敗" });
+    } finally {
+      setViewportFloatUploading(false);
+    }
+  };
 
   const handleFloatFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1069,7 +1119,7 @@ export default function AdminLayoutPage() {
         setHeaderBgMobPendingFile(null);
       }
 
-      const result = await updateLayoutBlocks(blocks);
+      const result = await updateLayoutBlocks(blocks, viewportFloatingIcons);
       if (result.success) {
         setMessage({ type: "success", text: result.message ?? "已儲存" });
       } else {
@@ -1516,6 +1566,15 @@ export default function AdminLayoutPage() {
         onChange={handleFloatFile}
       />
       <input
+        ref={viewportFloatFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleViewportFloatFile}
+      />
+      <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
@@ -1759,6 +1818,7 @@ export default function AdminLayoutPage() {
                 floatingIconsCoordinateMode="desktop"
                 selectedFloatingIconId={selectedFloatingIconId}
                 onSelectFloatingIcon={(blockId, iconId) => {
+                  setViewportSelectedFloatingIconId(null);
                   setSelectedFloatingIconId(iconId);
                   handleSelectBlock(blockId, { scrollCanvasIntoView: false });
                 }}
@@ -1843,6 +1903,26 @@ export default function AdminLayoutPage() {
             </div>
           </div>
           ) : null}
+
+          <ViewportFloatingIconsEditorPanel
+            icons={viewportFloatingIcons}
+            onChange={setViewportFloatingIcons}
+            coordinateMode="desktop"
+            selectedFloatingIconId={viewportSelectedFloatingIconId}
+            onSelectFloatingIcon={(id) => {
+              setViewportSelectedFloatingIconId(id);
+              if (id !== null) {
+                setSelectedBlockId(null);
+                setSelectedFloatingIconId(null);
+              }
+            }}
+            onRemoveIcon={(id) => {
+              setViewportFloatingIcons((prev) => prev.filter((ic) => ic.id !== id));
+              setViewportSelectedFloatingIconId((cur) => (cur === id ? null : cur));
+            }}
+            uploading={viewportFloatUploading}
+            onRequestUpload={() => viewportFloatFileRef.current?.click()}
+          />
 
           <div className="mt-4 flex items-center gap-3 shrink-0 pb-4">
             <button

@@ -17,6 +17,10 @@ type Props = {
   verticalNudgePxBySlot1Based?: Readonly<Record<number, number>>;
   underContent?: boolean;
   wrapperClassName?: string;
+  /**
+   * 裝飾圖寬度縮放基準（px）。區塊內預設 1280（與 max-w-7xl 一致）；全螢幕層請傳 1920（與模擬視窗寬一致）。
+   */
+  scaleReferenceWidthPx?: number;
 };
 
 function useNarrowMaxMd(): boolean {
@@ -40,9 +44,11 @@ export default function HeroFloatingIconsLayer({
   verticalNudgePxBySlot1Based,
   underContent = false,
   wrapperClassName = "",
+  scaleReferenceWidthPx = LAYOUT_DESIGN_CANVAS_WIDTH_PX,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const [hostWidth, setHostWidth] = useState<number>(LAYOUT_DESIGN_CANVAS_WIDTH_PX);
+  const scaleBase = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
+  const [hostWidth, setHostWidth] = useState<number>(scaleBase);
   const narrowAuto = useNarrowMaxMd();
   const resolvedMode: "desktop" | "mobile" =
     coordinateViewport === "mobile" ? "mobile" : coordinateViewport === "desktop" ? "desktop" : narrowAuto ? "mobile" : "desktop";
@@ -51,21 +57,21 @@ export default function HeroFloatingIconsLayer({
   const centerSet = horizontalCenterSlots1Based ?? [];
   const rowGroups = horizontalRowGroups1Based ?? [];
   const nudgeMap = verticalNudgePxBySlot1Based ?? {};
-  const iconScale = Math.max(0.2, hostWidth / LAYOUT_DESIGN_CANVAS_WIDTH_PX);
+  const iconScale = Math.max(0.2, hostWidth / scaleBase);
   const useAboutRules = resolvedMode === "desktop" && (centerSet.length > 0 || rowGroups.length > 0);
 
   useEffect(() => {
     const el = hostRef.current;
     if (!el) return;
     const apply = () => {
-      const w = Math.max(1, el.clientWidth || LAYOUT_DESIGN_CANVAS_WIDTH_PX);
+      const w = Math.max(1, el.clientWidth || scaleBase);
       setHostWidth((prev) => (prev === w ? prev : w));
     };
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [list.length]);
+  }, [list.length, scaleBase]);
 
   if (list.length === 0) return null;
 

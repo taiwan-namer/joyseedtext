@@ -13,6 +13,7 @@ import {
   type CarouselItem,
   type FeaturedCategory,
   type FrontendSettings,
+  type HeroFloatingIcon,
   type LayoutBlock,
   DEFAULT_MEMBER_ICON_URLS,
   DEFAULT_CAROUSEL,
@@ -163,6 +164,7 @@ function defaultFrontendSettingsWhenMissing(): FrontendSettings {
     layoutOrder: DEFAULT_LAYOUT_ORDER,
     fullWidthImageUrl: null,
     layoutBlocks: getDefaultLayoutBlocks(),
+    viewportFloatingIcons: [],
     featuredCategories: DEFAULT_FEATURED_CATEGORIES,
     featuredSectionIconUrl: null,
     homeHotCoursesIconUrl: null,
@@ -285,6 +287,7 @@ async function readFrontendSettingsUncached(): Promise<FrontendSettings> {
         parseLayoutBlocks(raw.layout_blocks ?? raw.layoutBlocks),
         raw
       ),
+      viewportFloatingIcons: parseHeroFloatingIcons(raw.viewportFloatingIcons ?? raw.viewport_floating_icons),
       featuredCategories: parseFeaturedCategories(raw.featured_categories),
       featuredSectionIconUrl: normalizeUploadedAssetUrl(
         typeof raw.featuredSectionIconUrl === "string" ? raw.featuredSectionIconUrl : null,
@@ -399,9 +402,10 @@ export async function getFrontendSettings(): Promise<FrontendSettings> {
 }
 
 /** 更新畫布區塊（後台「首頁版面」儲存用）；會一併寫入 layout_order 以相容舊版 */
-export async function updateLayoutBlocks(blocks: LayoutBlock[]): Promise<
-  { success: true; message?: string } | { success: false; error: string }
-> {
+export async function updateLayoutBlocks(
+  blocks: LayoutBlock[],
+  viewportFloatingIcons?: HeroFloatingIcon[]
+): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
     await verifyAdminSession();
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
@@ -409,7 +413,11 @@ export async function updateLayoutBlocks(blocks: LayoutBlock[]): Promise<
     const existing = await getFrontendSettings();
     const sorted = [...blocks].sort((a, b) => a.order - b.order);
     const layout_order = sorted.map((b) => b.id);
-    const merged: FrontendSettings = { ...existing, layoutBlocks: sorted };
+    const merged: FrontendSettings = {
+      ...existing,
+      layoutBlocks: sorted,
+      ...(viewportFloatingIcons !== undefined ? { viewportFloatingIcons } : {}),
+    };
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const frontendSettings: Record<string, unknown> = {

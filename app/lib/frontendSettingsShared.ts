@@ -14,6 +14,11 @@ export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
  */
 export const LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX = 1920 as const;
 
+/**
+ * 後台「全螢幕裝飾」編輯區參考高度（px，常見 1920×1080）；前台以實際 layout viewport 高度為準。
+ */
+export const LAYOUT_VIEWPORT_REFERENCE_HEIGHT_PX = 1080 as const;
+
 export type CarouselItem = {
   id: string;
   title: string;
@@ -174,6 +179,11 @@ export type FrontendSettings = {
   fullWidthImageUrl: string | null;
   /** 畫布區塊（含順序、高度、背景圖）；有值時前台依此渲染，否則用 layoutOrder */
   layoutBlocks: LayoutBlock[];
+  /**
+   * 全螢幕裝飾層（相對瀏覽器 layout viewport 的百分比座標，中心錨點）；
+   * 可置於主內容欄（max-w-7xl）兩側留白，與各區塊內裝飾圖分開。
+   */
+  viewportFloatingIcons: HeroFloatingIcon[];
   /** 精選課程分館列表（後台可編輯） */
   featuredCategories: FeaturedCategory[];
   /** 精選課程區塊上方小圖示（書本雲朵等） */
@@ -340,6 +350,7 @@ export function persistFrontendSettingsBase(existing: FrontendSettings): Record<
     layout_order: existing.layoutOrder,
     fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
     layout_blocks: existing.layoutBlocks.map((b) => serializeLayoutBlockForPersist(b)),
+    viewport_floating_icons: serializeFloatingIconsForPersist(existing.viewportFloatingIcons),
     featured_categories: existing.featuredCategories,
     featuredSectionIconUrl: existing.featuredSectionIconUrl ?? null,
     homeHotCoursesIconUrl: existing.homeHotCoursesIconUrl ?? null,
