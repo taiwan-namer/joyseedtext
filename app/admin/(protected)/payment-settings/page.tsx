@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { getPaymentSettings, updatePaymentSettings } from "@/app/actions/frontendSettingsActions";
 
+type InvoiceProvider = "ecpay" | "ezpay";
+
 export default function PaymentSettingsPage() {
   const router = useRouter();
   const [paymentNewebpayEnabled, setPaymentNewebpayEnabled] = useState(false);
@@ -15,6 +17,7 @@ export default function PaymentSettingsPage() {
   const [atmBankName, setAtmBankName] = useState("");
   const [atmBankCode, setAtmBankCode] = useState("");
   const [atmBankAccount, setAtmBankAccount] = useState("");
+  const [invoiceProvider, setInvoiceProvider] = useState<InvoiceProvider>("ecpay");
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -29,6 +32,7 @@ export default function PaymentSettingsPage() {
         setAtmBankName(data.atmBankName ?? "");
         setAtmBankCode(data.atmBankCode ?? "");
         setAtmBankAccount(data.atmBankAccount ?? "");
+        setInvoiceProvider(data.invoiceProvider === "ezpay" ? "ezpay" : "ecpay");
       })
       .catch((err) => {
         setMessage({ type: "error", text: err?.message ?? "無法載入" });
@@ -47,6 +51,7 @@ export default function PaymentSettingsPage() {
     formData.set("atm_bank_name", atmBankName);
     formData.set("atm_bank_code", atmBankCode);
     formData.set("atm_bank_account", atmBankAccount);
+    formData.set("invoice_provider", invoiceProvider);
     startTransition(async () => {
       const result = await updatePaymentSettings(formData);
       if (result.success) {
@@ -78,9 +83,10 @@ export default function PaymentSettingsPage() {
           返回後台
         </Link>
       </div>
-      <h1 className="text-xl font-bold text-gray-900">金流設定</h1>
+      <h1 className="text-xl font-bold text-gray-900">金流／發票設定</h1>
       <p className="text-sm text-gray-600">
-        開啟／關閉各付款方式，結帳頁將只顯示已開啟的選項。API 由系統環境變數設定，此處不需填寫。ATM 轉帳開啟時請填寫銀行資訊，結帳頁會顯示給消費者。
+        開啟／關閉各付款方式，結帳頁將只顯示已開啟的選項；並選擇付款成功後由哪一廠商開立電子發票。API 由系統環境變數設定，此處不需填寫。ATM
+        轉帳開啟時請填寫銀行資訊，結帳頁會顯示給消費者。
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -193,6 +199,22 @@ export default function PaymentSettingsPage() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-3">
+          <h2 className="text-base font-semibold text-gray-900">發票開立廠商</h2>
+          <p className="text-xs text-gray-500">
+            付款成功後依此廠商開立電子發票。品項固定為單筆「課程預約」（單位：堂），金額依訂單金額。
+          </p>
+          <select
+            value={invoiceProvider}
+            onChange={(e) => setInvoiceProvider((e.target.value as InvoiceProvider) || "ecpay")}
+            disabled={isPending}
+            className="max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white"
+          >
+            <option value="ecpay">綠界 ECPay</option>
+            <option value="ezpay">藍新 ezPay</option>
+          </select>
         </section>
 
         <div className="flex justify-end">

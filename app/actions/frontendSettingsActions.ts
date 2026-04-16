@@ -465,6 +465,26 @@ export async function uploadFullWidthImage(formData: FormData): Promise<
   }
 }
 
+/** 關於我們富文本：內嵌圖片上傳至 R2（key：`about_content_image`，路徑：`pages/about`） */
+export async function uploadAboutPageContentImage(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "about_content_image", "pages/about");
+    if (!url) {
+      return {
+        success: false,
+        error: "請選擇有效的圖片檔案（JPEG／PNG／GIF／WebP，10MB 以下）",
+      };
+    }
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
 /** 更新首頁區塊順序（後台「首頁版面」儲存用） */
 export async function updateLayoutOrder(order: string[]): Promise<
   { success: true; message?: string } | { success: false; error: string }
@@ -1098,7 +1118,7 @@ export async function updateSeoSettings(formData: FormData): Promise<
   }
 }
 
-/** 金流設定：供後台金流設定頁與結帳頁使用（開關與 ATM 銀行資訊） */
+/** 金流／發票：供後台金流設定頁與結帳頁使用（開關、ATM、發票開立廠商） */
 export async function getPaymentSettings(): Promise<{
   linePayApi: string | null;
   thirdPartyApi: string | null;
@@ -1109,8 +1129,11 @@ export async function getPaymentSettings(): Promise<{
   paymentEcpayEnabled: boolean;
   paymentLinepayEnabled: boolean;
   paymentAtmEnabled: boolean;
+  invoiceProvider: "ecpay" | "ezpay";
 }> {
+  const { getStoreSettings } = await import("@/app/actions/storeSettingsActions");
   const s = await getFrontendSettings();
+  const store = await getStoreSettings();
   return {
     linePayApi: s.linePayApi ?? null,
     thirdPartyApi: s.thirdPartyApi ?? null,
@@ -1121,10 +1144,11 @@ export async function getPaymentSettings(): Promise<{
     paymentEcpayEnabled: s.paymentEcpayEnabled ?? false,
     paymentLinepayEnabled: s.paymentLinepayEnabled ?? false,
     paymentAtmEnabled: s.paymentAtmEnabled ?? false,
+    invoiceProvider: store.invoiceProvider === "ezpay" ? "ezpay" : "ecpay",
   };
 }
 
-/** 金流設定頁：更新各金流開關與 ATM 銀行資訊（不讓用戶填 API，僅開關；ATM 開啟時填銀行資訊） */
+/** 金流／發票設定頁：更新各金流開關、ATM、發票開立廠商（後台已移除發票品項編輯，儲存時清空 `invoice_items` 以使用預設「課程預約」單筆） */
 export async function updatePaymentSettings(formData: FormData): Promise<
   { success: true; message?: string } | { success: false; error: string }
 > {
@@ -1140,6 +1164,8 @@ export async function updatePaymentSettings(formData: FormData): Promise<
     const atmBankName = (formData.get("atm_bank_name") as string)?.trim() || null;
     const atmBankCode = (formData.get("atm_bank_code") as string)?.trim() || null;
     const atmBankAccount = (formData.get("atm_bank_account") as string)?.trim() || null;
+    const invoiceProviderRaw = (formData.get("invoice_provider") as string)?.trim().toLowerCase();
+    const invoiceProvider = invoiceProviderRaw === "ezpay" ? "ezpay" : "ecpay";
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -1179,7 +1205,16 @@ export async function updatePaymentSettings(formData: FormData): Promise<
         { onConflict: "merchant_id" }
       );
     if (error) return { success: false, error: error.message };
-    return { success: true, message: "金流設定已儲存" };
+    const { error: invError } = await supabase
+      .from("store_settings")
+      .update({
+        invoice_provider: invoiceProvider,
+        invoice_items: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("merchant_id", merchantId);
+    if (invError) return { success: false, error: invError.message };
+    return { success: true, message: "金流／發票設定已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";
     return { success: false, error: msg };

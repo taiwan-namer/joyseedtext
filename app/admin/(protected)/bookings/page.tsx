@@ -464,25 +464,25 @@ export default function AdminBookingsPage() {
           ) : filteredList.length === 0 ? (
             <p className="py-8 px-4 text-gray-500 text-sm">篩選後無符合的訂單</p>
           ) : (
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1040px] text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-24">訂單編號</th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-36">課程日期</th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 min-w-[100px]">課程名稱</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 w-24">訂單編號</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 w-36">課程日期</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[100px]">課程名稱</th>
                   <th
-                    className="text-left py-2.5 px-3 font-medium text-gray-700 w-[7.5rem]"
+                    className="text-left py-2 px-3 font-medium text-gray-700 w-[7.5rem]"
                     title="結帳網站商家 ID（bookings.sold_via_merchant_id）；總站代銷時通常為總站 id"
                   >
                     結帳來源
                   </th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-24">家長姓名</th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-28">電話</th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 min-w-[140px]">購買人信箱</th>
-                  <th className="text-right py-2.5 px-3 font-medium text-gray-700 w-20">金額</th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-32">購買時間</th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-24">狀態</th>
-                  <th className="text-left py-2.5 px-3 font-medium text-gray-700 w-36">操作</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 w-24">家長姓名</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 w-28">電話</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[140px]">購買人信箱</th>
+                  <th className="text-right py-2 px-3 font-medium text-gray-700 w-20">金額</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 w-32">購買時間</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-700 w-24">狀態</th>
+                  <th className="text-left py-2 pl-3 pr-2 font-medium text-gray-700 min-w-[20rem]">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -491,29 +491,29 @@ export default function AdminBookingsPage() {
                   return (
                   <tr
                     key={row.id}
-                    className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors py-1"
+                    className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors"
                   >
-                    <td className="py-2.5 px-3 text-gray-600 font-mono text-xs truncate" title={row.id}>
+                    <td className="py-2 px-3 text-gray-600 font-mono text-xs truncate align-middle" title={row.id}>
                       {row.id.slice(0, 8)}…
                     </td>
-                    <td className="py-2.5 px-3 text-gray-700 text-xs" title={!row.slot_date ? "此筆為舊訂單或未選擇場次，故無課程日期" : undefined}>
+                    <td className="py-2 px-3 text-gray-700 text-xs align-middle" title={!row.slot_date ? "此筆為舊訂單或未選擇場次，故無課程日期" : undefined}>
                       {formatCourseDate(row)}
                     </td>
-                    <td className="py-2.5 px-3 text-gray-900 truncate">{row.class_title || "—"}</td>
+                    <td className="py-2 px-3 text-gray-900 truncate align-middle">{row.class_title || "—"}</td>
                     <td
-                      className="py-2.5 px-3 text-gray-700 font-mono text-xs truncate max-w-[8rem]"
+                      className="py-2 px-3 text-gray-700 font-mono text-xs truncate max-w-[8rem] align-middle"
                       title={src.title}
                     >
                       {src.text}
                     </td>
-                    <td className="py-2.5 px-3 text-gray-900 truncate">{row.parent_name || "—"}</td>
-                    <td className="py-2.5 px-3 text-gray-600 truncate">{row.parent_phone || "—"}</td>
-                    <td className="py-2.5 px-3 text-gray-900 truncate" title={row.member_email}>{row.member_email}</td>
-                    <td className="py-2.5 px-3 text-right text-gray-900 font-medium whitespace-nowrap">
+                    <td className="py-2 px-3 text-gray-900 truncate align-middle">{row.parent_name || "—"}</td>
+                    <td className="py-2 px-3 text-gray-600 truncate align-middle">{row.parent_phone || "—"}</td>
+                    <td className="py-2 px-3 text-gray-900 truncate align-middle" title={row.member_email}>{row.member_email}</td>
+                    <td className="py-2 px-3 text-right text-gray-900 font-medium whitespace-nowrap align-middle">
                       {row.class_price != null ? `NT$ ${row.class_price.toLocaleString()}` : "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-gray-600 text-xs whitespace-nowrap">{formatDate(row.created_at)}</td>
-                    <td className="py-2.5 px-3">
+                    <td className="py-2 px-3 text-gray-600 text-xs whitespace-nowrap align-middle">{formatDate(row.created_at)}</td>
+                    <td className="py-2 px-3 align-middle">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                           row.status === "completed"
@@ -528,14 +528,14 @@ export default function AdminBookingsPage() {
                         {statusLabel(row.status)}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3">
-                      <div className="flex items-center gap-2 flex-wrap">
+                    <td className="py-2 pl-3 pr-2 align-middle">
+                      <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
                         {(row.status === "unpaid" || row.status === "upcoming") && (row.payment_method === "atm" || !row.payment_method) && (
                           <button
                             type="button"
                             onClick={() => handleMarkAsPaid(row.id)}
                             disabled={markingPaidId === row.id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-500 text-white text-xs font-medium hover:bg-sky-600 disabled:opacity-60 transition-colors"
+                            className="inline-flex shrink-0 items-center gap-1 px-2 py-1 rounded-md bg-sky-500 text-white text-xs font-medium hover:bg-sky-600 disabled:opacity-60 transition-colors"
                           >
                             {markingPaidId === row.id ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -549,7 +549,7 @@ export default function AdminBookingsPage() {
                           <button
                             type="button"
                             onClick={() => setRescheduleBookingId(row.id)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-600/80 text-amber-900 text-xs font-medium hover:bg-amber-50 transition-colors"
+                            className="inline-flex shrink-0 items-center gap-1 px-2 py-1 rounded-md border border-amber-600/80 text-amber-900 text-xs font-medium hover:bg-amber-50 transition-colors"
                             title="改至同課程其他場次"
                           >
                             <CalendarClock className="w-3.5 h-3.5" />
@@ -561,7 +561,7 @@ export default function AdminBookingsPage() {
                             type="button"
                             onClick={() => handleComplete(row.id)}
                             disabled={completingId === row.id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 disabled:opacity-60 transition-colors"
+                            className="inline-flex shrink-0 items-center gap-1 px-2 py-1 rounded-md bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 disabled:opacity-60 transition-colors"
                           >
                             {completingId === row.id ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -587,7 +587,7 @@ export default function AdminBookingsPage() {
                                     ? "藍新退款（需有 newebpay_merchant_order_no；建議一併有 newebpay_trade_no 以利電子錢包備援）"
                                     : "綠界信用卡退刷（需有交易編號與 PaymentType）"
                               }
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                              className="inline-flex shrink-0 items-center gap-1 px-2 py-1 rounded-md bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
                             >
                               {refundingId === row.id ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -605,7 +605,7 @@ export default function AdminBookingsPage() {
                           type="button"
                           onClick={() => handleDelete(row.id)}
                           disabled={deletingId === row.id}
-                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-60 transition-colors"
+                          className="inline-flex shrink-0 items-center justify-center h-8 w-8 rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-60 transition-colors"
                           title="刪除訂單"
                           aria-label="刪除訂單"
                         >

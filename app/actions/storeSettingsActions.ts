@@ -420,7 +420,7 @@ export async function updateAiChatSettings(
   }
 }
 
-/** 更新發票設定（後台發票設定頁：廠商 + 品項） */
+/** 更新發票廠商與品項（後台已改由「金流／發票設定」更新廠商並清空品項；保留供相容或腳本） */
 export async function updateInvoiceSettings(
   invoiceProvider: "ecpay" | "ezpay",
   items: InvoiceItemSetting[]

@@ -4,14 +4,16 @@ import { useEffect, useState, useTransition, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2, Bold, Italic, Underline, Link as LinkIcon, Image, Code } from "lucide-react";
-import { getAboutPageData, updateAboutPage } from "@/app/actions/frontendSettingsActions";
+import { getAboutPageData, updateAboutPage, uploadAboutPageContentImage } from "@/app/actions/frontendSettingsActions";
 
 export default function AboutPage() {
   const router = useRouter();
   const [navAboutLabel, setNavAboutLabel] = useState("關於我們");
   const [aboutContent, setAboutContent] = useState("");
   const aboutEditorRef = useRef<HTMLDivElement>(null);
+  const aboutImageFileRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
+  const [aboutImageUploading, setAboutImageUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [codeModalOpen, setCodeModalOpen] = useState(false);
@@ -29,12 +31,49 @@ export default function AboutPage() {
     document.execCommand(command, false, value ?? "");
   }, []);
 
-  const insertImage = useCallback(() => {
+  const insertImageHtml = useCallback(
+    (url: string) => {
+      const safe = url.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+      execEditorCommand(
+        "insertHTML",
+        `<img src="${safe}" alt="" style="max-width:100%;height:auto;" />`
+      );
+    },
+    [execEditorCommand]
+  );
+
+  const insertImageFromUrl = useCallback(() => {
     const url = window.prompt("請輸入圖片網址：");
-    if (url?.trim()) {
-      execEditorCommand("insertHTML", `<img src="${url.trim()}" alt="" style="max-width:100%;height:auto;" />`);
-    }
-  }, [execEditorCommand]);
+    if (url?.trim()) insertImageHtml(url.trim());
+  }, [insertImageHtml]);
+
+  const onAboutImageFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !file.type.startsWith("image/")) {
+        if (file) setMessage({ type: "error", text: "請選擇圖片檔案" });
+        return;
+      }
+      setAboutImageUploading(true);
+      setMessage(null);
+      try {
+        const fd = new FormData();
+        fd.set("about_content_image", file);
+        const result = await uploadAboutPageContentImage(fd);
+        if (result.success) {
+          insertImageHtml(result.url);
+        } else {
+          setMessage({ type: "error", text: result.error });
+        }
+      } catch (err) {
+        setMessage({ type: "error", text: err instanceof Error ? err.message : "上傳失敗" });
+      } finally {
+        setAboutImageUploading(false);
+      }
+    },
+    [insertImageHtml]
+  );
 
   const insertLink = useCallback(() => {
     const url = window.prompt("請輸入連結網址：");
@@ -172,7 +211,18 @@ export default function AboutPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">關於我們內容</label>
-            <p className="mb-2 text-xs text-gray-500">首頁點「關於我們」後顯示的區塊，可填寫、插入圖片、程式碼轉圖片、調整字型、超連結</p>
+            <p className="mb-2 text-xs text-gray-500">
+              首頁點「關於我們」後顯示的區塊。插入圖片請優先使用「上傳圖片」（會存至 R2 並以公開網址顯示於前台）；亦可改用「網址」手動填入外部圖片連結。
+            </p>
+            <input
+              ref={aboutImageFileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={onAboutImageFileChange}
+            />
             <div className="rounded-lg border border-gray-300 bg-white overflow-hidden">
               <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 bg-gray-50">
                 <button type="button" onClick={() => execEditorCommand("bold")} className="p-2 rounded hover:bg-gray-200" title="粗體">
@@ -188,9 +238,30 @@ export default function AboutPage() {
                 <button type="button" onClick={insertLink} className="p-2 rounded hover:bg-gray-200" title="插入超連結">
                   <LinkIcon className="w-4 h-4" />
                 </button>
-                <button type="button" onClick={insertImage} className="p-2 rounded hover:bg-gray-200" title="插入圖片">
+                <button
+                  type="button"
+                  onClick={() => aboutImageFileRef.current?.click()}
+                  disabled={aboutImageUploading || isPending}
+                  className="p-2 rounded hover:bg-gray-200 disabled:opacity-50"
+                  title="上傳圖片至雲端並插入（R2）"
+                >
                   <Image className="w-4 h-4" />
                 </button>
+                <button
+                  type="button"
+                  onClick={insertImageFromUrl}
+                  disabled={aboutImageUploading || isPending}
+                  className="px-2 py-1.5 text-xs font-medium text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
+                  title="改以圖片網址插入"
+                >
+                  網址
+                </button>
+                {aboutImageUploading ? (
+                  <span className="text-xs text-amber-700 flex items-center gap-1">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    上傳中…
+                  </span>
+                ) : null}
                 <button type="button" onClick={() => setCodeModalOpen(true)} className="p-2 rounded hover:bg-gray-200" title="程式碼轉圖片">
                   <Code className="w-4 h-4" />
                 </button>
