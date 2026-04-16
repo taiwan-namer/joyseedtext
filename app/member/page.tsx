@@ -13,6 +13,14 @@ import {
   type BookingWithClass,
 } from "@/app/actions/bookingActions";
 import { processMemberBookingRefund } from "@/app/actions/refundActions";
+import MemberRescheduleModal from "@/app/member/MemberRescheduleModal";
+import {
+  calendarDaysFromTodayTaipeiToSlotDate,
+  rescheduleWindowFromDiff,
+  COPY_RESCHEDULE_INTRO,
+  COPY_RESCHEDULE_BLOCKED,
+  COPY_RESCHEDULE_NO_SLOT,
+} from "@/lib/memberBookingPolicy";
 
 const MEMBER_STORAGE_KEY = "member_registered";
 
@@ -104,7 +112,10 @@ type OrderDisplay = {
   id: string;
   courseName: string;
   courseSlug: string;
-  date: string;
+  /** 訂單建立日 */
+  orderDate: string;
+  /** 上課場次（無則顯示場次未設定） */
+  courseSessionLabel: string;
   participant: string;
   amount: number;
   status: DisplayStatus;
@@ -113,14 +124,27 @@ type OrderDisplay = {
   addonSummary: string | null;
 };
 
+function formatBookingSessionLabel(b: BookingWithClass): string {
+  const d = b.slot_date?.trim();
+  const t = b.slot_time?.trim();
+  if (d && t) return `${d} ${t}`;
+  if (d) return d;
+  if (t) return t;
+  return "場次未設定";
+}
+
 function OrderCard({
   order,
   showRefundButton,
   onRefundClick,
+  showRescheduleButton,
+  onRescheduleClick,
 }: {
   order: OrderDisplay;
   showRefundButton: boolean;
   onRefundClick?: () => void;
+  showRescheduleButton: boolean;
+  onRescheduleClick?: () => void;
 }) {
   const courseHref = `/course/${order.courseSlug}`;
   return (
@@ -150,8 +174,12 @@ function OrderCard({
         </div>
         <dl className="text-sm text-gray-600 space-y-0.5">
           <div className="flex items-center gap-1.5">
-            <dt className="text-gray-500 shrink-0 w-12">日期</dt>
-            <dd>{order.date}</dd>
+            <dt className="text-gray-500 shrink-0 w-20">訂購日期</dt>
+            <dd>{order.orderDate}</dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <dt className="text-gray-500 shrink-0 w-20">課程場次</dt>
+            <dd>{order.courseSessionLabel}</dd>
           </div>
           <div className="flex items-center gap-1.5">
             <dt className="text-gray-500 shrink-0 w-12">參加者</dt>
@@ -163,26 +191,41 @@ function OrderCard({
               <dd className="text-gray-700">{order.addonSummary}</dd>
             </div>
           )}
-          <div className="flex items-center justify-between gap-2 -mt-0.5 min-h-[1.25rem]">
+          <div className="flex flex-wrap items-center justify-between gap-2 -mt-0.5 min-h-[1.25rem]">
             <div className="flex items-center gap-1.5">
               <dt className="text-gray-500 shrink-0 w-12">金額</dt>
               <dd className="font-medium text-gray-900">
                 NT$ {order.amount.toLocaleString()}
               </dd>
             </div>
-            {showRefundButton && onRefundClick && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onRefundClick();
-                }}
-                className="inline-flex items-center justify-center h-6 px-2.5 rounded-md border border-gray-300 text-gray-600 text-xs hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0 leading-none"
-              >
-                申請退款/取消
-              </button>
-            )}
+            <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+              {showRescheduleButton && onRescheduleClick && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRescheduleClick();
+                  }}
+                  className="inline-flex items-center justify-center h-6 px-2.5 rounded-md border border-amber-500/80 text-amber-800 text-xs hover:bg-amber-50 transition-colors whitespace-nowrap leading-none"
+                >
+                  改期
+                </button>
+              )}
+              {showRefundButton && onRefundClick && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRefundClick();
+                  }}
+                  className="inline-flex items-center justify-center h-6 px-2.5 rounded-md border border-gray-300 text-gray-600 text-xs hover:bg-gray-50 transition-colors whitespace-nowrap leading-none"
+                >
+                  申請退款/取消
+                </button>
+              )}
+            </div>
           </div>
         </dl>
       </div>
@@ -217,7 +260,8 @@ function mapBookingToOrder(b: BookingWithClass): OrderDisplay {
     id: b.id,
     courseName: b.class_title ?? "未命名課程",
     courseSlug: b.class_id,
-    date: formatBookingDate(b.created_at),
+    orderDate: formatBookingDate(b.created_at),
+    courseSessionLabel: formatBookingSessionLabel(b),
     participant: b.parent_name?.trim() || "—",
     amount: b.class_price ?? 0,
     status: bookingToDisplayStatus(b.status, b.refund_status),
@@ -233,6 +277,10 @@ export default function MemberDashboardPage() {
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
+  const [rescheduleGate, setRescheduleGate] = useState<
+    null | { bookingId: string; variant: "intro" | "blocked" | "no_slot" }
+  >(null);
   const [bookings, setBookings] = useState<BookingWithClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -330,6 +378,40 @@ export default function MemberDashboardPage() {
     setSelectedOrderId(null);
   };
 
+  const openRescheduleFlow = (orderId: string) => {
+    const b = bookings.find((x) => x.id === orderId);
+    if (!b) return;
+    const slotYmd =
+      b.slot_date != null && String(b.slot_date).trim() !== ""
+        ? String(b.slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const diff = calendarDaysFromTodayTaipeiToSlotDate(slotYmd);
+    const rw = rescheduleWindowFromDiff(diff);
+    if (rw === "blocked") {
+      setRescheduleGate({ bookingId: orderId, variant: "blocked" });
+      return;
+    }
+    if (rw === "no_slot_date") {
+      setRescheduleGate({ bookingId: orderId, variant: "no_slot" });
+      return;
+    }
+    setRescheduleGate({ bookingId: orderId, variant: "intro" });
+  };
+
+  const closeRescheduleGate = () => setRescheduleGate(null);
+
+  const confirmRescheduleIntro = () => {
+    if (!rescheduleGate || rescheduleGate.variant !== "intro") return;
+    const id = rescheduleGate.bookingId;
+    setRescheduleGate(null);
+    setRescheduleBookingId(id);
+  };
+
+  const refreshBookings = async () => {
+    const refreshed = await getMyBookings();
+    if (refreshed.success) setBookings(refreshed.data);
+  };
+
   const selectedBooking =
     selectedOrderId != null ? bookings.find((b) => b.id === selectedOrderId) ?? null : null;
 
@@ -369,8 +451,7 @@ export default function MemberDashboardPage() {
         return;
       }
 
-      const refreshed = await getMyBookings();
-      if (refreshed.success) setBookings(refreshed.data);
+      await refreshBookings();
       closeRefundModal();
     } finally {
       setRefundSubmitting(false);
@@ -379,6 +460,7 @@ export default function MemberDashboardPage() {
 
   const canRefund = (status: DisplayStatus) =>
     status === "UNPAID" || status === "PAID";
+  const canReschedule = (status: DisplayStatus) => status === "UNPAID" || status === "PAID";
 
   return (
     <div className="min-h-screen bg-page">
@@ -448,6 +530,8 @@ export default function MemberDashboardPage() {
                   order={order}
                   showRefundButton={canRefund(order.status)}
                   onRefundClick={() => openRefundModal(order.id)}
+                  showRescheduleButton={canReschedule(order.status)}
+                  onRescheduleClick={() => openRescheduleFlow(order.id)}
                 />
               ))
             )}
@@ -460,12 +544,81 @@ export default function MemberDashboardPage() {
               <p className="text-gray-500 py-8 text-center">尚無歷史訂單</p>
             ) : (
               historyOrders.map((order) => (
-                <OrderCard key={order.id} order={order} showRefundButton={false} />
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  showRefundButton={false}
+                  showRescheduleButton={false}
+                />
               ))
             )}
           </div>
         )}
       </main>
+
+      {rescheduleGate && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={closeRescheduleGate} aria-hidden />
+          <div
+            className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reschedule-gate-title"
+          >
+            <h2 id="reschedule-gate-title" className="text-lg font-bold text-gray-900">
+              改期
+            </h2>
+            {rescheduleGate.variant === "intro" ? (
+              <>
+                <p className="mt-3 text-sm font-medium text-gray-800">{COPY_RESCHEDULE_INTRO}</p>
+                <p className="mt-2 text-sm text-gray-600">
+                  按下「繼續改期」後，將開啟可選場次；若無其他場次可選，畫面會另行提示。
+                </p>
+                <div className="mt-6 flex flex-wrap justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeRescheduleGate}
+                    className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    返回
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmRescheduleIntro}
+                    className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-95"
+                  >
+                    繼續改期
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 text-sm text-gray-700">
+                  {rescheduleGate.variant === "blocked"
+                    ? COPY_RESCHEDULE_BLOCKED
+                    : COPY_RESCHEDULE_NO_SLOT}
+                </p>
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={closeRescheduleGate}
+                    className="rounded-lg bg-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-300"
+                  >
+                    我知道了
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <MemberRescheduleModal
+        bookingId={rescheduleBookingId}
+        open={rescheduleBookingId !== null}
+        onClose={() => setRescheduleBookingId(null)}
+        onSuccess={() => void refreshBookings()}
+      />
 
       {/* Refund Modal */}
       {refundModalOpen && (

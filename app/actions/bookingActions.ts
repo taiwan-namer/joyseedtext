@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
@@ -10,6 +11,12 @@ import { logPaymentApi } from "@/lib/paymentLogs";
 import { getAppUrl, resolvePaymentPublicBaseUrl } from "@/lib/appUrl";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { normalizeSlotTime } from "@/lib/slotTime";
+import {
+  calendarDaysFromTodayTaipeiToSlotDate,
+  rescheduleWindowFromDiff,
+  COPY_RESCHEDULE_BLOCKED,
+  COPY_RESCHEDULE_NO_SLOT,
+} from "@/lib/memberBookingPolicy";
 import { bookingHasExplicitSessionSlot } from "@/lib/bookingSessionSlot";
 import {
   computeBookingDisplayClassPrice,
@@ -508,6 +515,533 @@ export async function getSlotRemainingCounts(classId: string): Promise<
     return { success: true, slots };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "取得剩餘名額失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** bookings.slot_time 與場次 key 一致 */
+function normalizeBookingSlotTimeHHMM(v: unknown): string {
+  return normalizeSlotTime(v == null ? "" : String(v));
+}
+
+/** 會員改期：不可改到已過的日期／當日已過的時段 */
+function slotNotPastForMember(slotDateStr: string, slotTimeRaw: string): boolean {
+  const dateStr = slotDateStr.replace(/T.*$/, "").slice(0, 10);
+  const timeStr = normalizeSlotTime(slotTimeRaw);
+  const now = new Date();
+  const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!dateMatch) return true;
+  const y = Number(dateMatch[1]);
+  const m = Number(dateMatch[2]);
+  const d = Number(dateMatch[3]);
+  const slotStartMs = new Date(y, m - 1, d).getTime();
+  if (slotStartMs < todayStartMs) return false;
+  if (slotStartMs === todayStartMs) {
+    const tm = timeStr.match(/^(\d{2}):(\d{2})$/);
+    if (tm) {
+      const hh = Number(tm[1]);
+      const mm = Number(tm[2]);
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const slotMinutes = hh * 60 + mm;
+      if (slotMinutes < nowMinutes) return false;
+    }
+  }
+  return true;
+}
+
+function timeStrToMinutesBooking(t: string): number | null {
+  const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  return hh * 60 + mm;
+}
+
+function bookingStatusAllowsReschedule(st: string): boolean {
+  const s = st.toLowerCase();
+  return s === "unpaid" || s === "upcoming" || s === "paid";
+}
+
+/**
+ * 會員中心改期：預覽同課程可選場次與是否尚有「非目前場次」可改。
+ */
+export async function getReschedulePreview(bookingId: string): Promise<
+  | {
+      success: true;
+      classId: string;
+      currentDate: string | null;
+      currentTime: string | null;
+      scheduledSlots: { date: string; time: string }[];
+      slotRemainingList: SlotRemaining[];
+      status: string;
+      hasOtherSlotOption: boolean;
+      capacityEnforced: boolean;
+    }
+  | { success: false; error: string }
+> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    const email = await getCurrentMemberEmail();
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    if (!email) return { success: false, error: "請先登入" };
+
+    const id = (bookingId ?? "").trim();
+    if (!id) return { success: false, error: "缺少訂單編號" };
+
+    const supabase = createServerSupabase();
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: row, error } = await applyAdminBookingsAccess(
+      supabase
+        .from("bookings")
+        .select("id, member_email, status, class_id, slot_date, slot_time")
+        .eq("id", id)
+        .eq("member_email", email),
+      access
+    ).maybeSingle();
+
+    if (error || !row) return { success: false, error: error?.message ?? "找不到訂單" };
+
+    const memberEmail = String((row as { member_email?: unknown }).member_email ?? "").trim();
+    if (memberEmail.toLowerCase() !== email.trim().toLowerCase()) {
+      return { success: false, error: "無權限" };
+    }
+
+    const st = String((row as { status?: unknown }).status ?? "").toLowerCase();
+    if (!bookingStatusAllowsReschedule(st)) {
+      return { success: false, error: "此訂單狀態無法改期" };
+    }
+
+    const rowSlot = row as { slot_date?: unknown };
+    const slotYmd =
+      rowSlot.slot_date != null && String(rowSlot.slot_date).trim() !== ""
+        ? String(rowSlot.slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const diffUntil = calendarDaysFromTodayTaipeiToSlotDate(slotYmd);
+    const rw = rescheduleWindowFromDiff(diffUntil);
+    if (rw === "no_slot_date") {
+      return { success: false, error: COPY_RESCHEDULE_NO_SLOT };
+    }
+    if (rw === "blocked") {
+      return { success: false, error: COPY_RESCHEDULE_BLOCKED };
+    }
+
+    const classId = String((row as { class_id?: unknown }).class_id ?? "").trim();
+    if (!classId) return { success: false, error: "訂單資料不完整" };
+
+    const slotRes = await getSlotRemainingCounts(classId);
+    if (!slotRes.success) return { success: false, error: slotRes.error };
+
+    const curRaw = row as { slot_date?: unknown; slot_time?: unknown };
+    const currentDate =
+      curRaw.slot_date != null && String(curRaw.slot_date).trim() !== ""
+        ? String(curRaw.slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const currentTime =
+      curRaw.slot_time != null && String(curRaw.slot_time).trim() !== ""
+        ? normalizeBookingSlotTimeHHMM(curRaw.slot_time)
+        : null;
+
+    const scheduledSlots = slotRes.slots.map((s) => ({ date: s.date, time: s.time }));
+    const capacityEnforced = st === "paid";
+
+    let hasOtherSlotOption = false;
+    if (scheduledSlots.length === 0) {
+      hasOtherSlotOption = false;
+    } else {
+      const k0 = currentDate && currentTime ? `${currentDate}|${currentTime}` : "";
+      for (const s of slotRes.slots) {
+        const k1 = `${s.date}|${normalizeSlotTime(s.time)}`;
+        if (k0 && k1 === k0) continue;
+        if (!slotNotPastForMember(s.date, s.time)) continue;
+        if (capacityEnforced) {
+          if (s.remaining >= 1) {
+            hasOtherSlotOption = true;
+            break;
+          }
+        } else {
+          hasOtherSlotOption = true;
+          break;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      classId,
+      currentDate,
+      currentTime,
+      slotRemainingList: slotRes.slots,
+      scheduledSlots,
+      status: st,
+      hasOtherSlotOption,
+      capacityEnforced,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "讀取改期資料失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 會員中心：將訂單改至同課程之其他場次（unpaid／upcoming／paid）。
+ */
+export async function rescheduleMyBooking(params: {
+  bookingId: string;
+  newSlotDate: string;
+  newSlotTime: string;
+}): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    const email = await getCurrentMemberEmail();
+    if (!merchantId) return { success: false, error: "未設定店家" };
+    if (!email) return { success: false, error: "請先登入" };
+
+    const bookingId = (params.bookingId ?? "").trim();
+    const newSlotDate = (params.newSlotDate ?? "").trim().replace(/T.*$/, "").slice(0, 10);
+    const newSlotTime = normalizeSlotTime(params.newSlotTime ?? "");
+    if (!bookingId) return { success: false, error: "缺少訂單編號" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newSlotDate)) return { success: false, error: "日期格式不正確" };
+    if (!/^\d{2}:\d{2}$/.test(newSlotTime)) return { success: false, error: "時間格式不正確" };
+
+    const supabase = createServerSupabase();
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: row, error: fetchErr } = await applyAdminBookingsAccess(
+      supabase
+        .from("bookings")
+        .select("id, member_email, status, class_id, slot_date, slot_time, merchant_id")
+        .eq("id", bookingId)
+        .eq("member_email", email),
+      access
+    ).maybeSingle();
+
+    if (fetchErr || !row) return { success: false, error: fetchErr?.message ?? "找不到訂單" };
+
+    const memberEmail = String((row as { member_email?: unknown }).member_email ?? "").trim();
+    if (memberEmail.toLowerCase() !== email.trim().toLowerCase()) {
+      return { success: false, error: "無權限修改此訂單" };
+    }
+
+    const st = String((row as { status?: unknown }).status ?? "").toLowerCase();
+    if (!bookingStatusAllowsReschedule(st)) {
+      return { success: false, error: "此訂單狀態無法改期" };
+    }
+
+    const rowSlotRes = row as { slot_date?: unknown };
+    const slotYmdRes =
+      rowSlotRes.slot_date != null && String(rowSlotRes.slot_date).trim() !== ""
+        ? String(rowSlotRes.slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const diffRes = calendarDaysFromTodayTaipeiToSlotDate(slotYmdRes);
+    const rwRes = rescheduleWindowFromDiff(diffRes);
+    if (rwRes === "no_slot_date") {
+      return { success: false, error: COPY_RESCHEDULE_NO_SLOT };
+    }
+    if (rwRes === "blocked") {
+      return { success: false, error: COPY_RESCHEDULE_BLOCKED };
+    }
+
+    const classId = String((row as { class_id?: unknown }).class_id ?? "").trim();
+    const bookingOwnerMid = String((row as { merchant_id?: unknown }).merchant_id ?? "").trim();
+    const curDate =
+      (row as { slot_date?: unknown }).slot_date != null &&
+      String((row as { slot_date: unknown }).slot_date).trim() !== ""
+        ? String((row as { slot_date: unknown }).slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const curTimeRaw = (row as { slot_time?: unknown }).slot_time;
+    const curTime =
+      curTimeRaw != null && String(curTimeRaw).trim() !== ""
+        ? normalizeBookingSlotTimeHHMM(curTimeRaw)
+        : null;
+
+    if (curDate === newSlotDate && curTime === newSlotTime) {
+      return { success: true };
+    }
+
+    const slotList = await getSlotRemainingCounts(classId);
+    if (!slotList.success) return { success: false, error: slotList.error };
+    if (slotList.slots.length === 0) {
+      return { success: false, error: "此課程無可改期場次" };
+    }
+
+    if (!bookingOwnerMid) return { success: false, error: "訂單資料不完整" };
+    const allowed = await isSlotAllowed(supabase, bookingOwnerMid, classId, newSlotDate, newSlotTime);
+    if (!allowed.allowed) {
+      return { success: false, error: allowed.error ?? "所選場次不可預約" };
+    }
+
+    if (!slotNotPastForMember(newSlotDate, newSlotTime)) {
+      return { success: false, error: "不可改到已過的場次" };
+    }
+
+    const capacityEnforced = st === "paid";
+    if (capacityEnforced) {
+      const selMin = timeStrToMinutesBooking(newSlotTime);
+      const hit = slotList.slots.find((s) => {
+        if (s.date !== newSlotDate) return false;
+        if (selMin != null) {
+          const sm = timeStrToMinutesBooking(s.time);
+          if (sm != null) return sm === selMin;
+        }
+        return normalizeBookingSlotTimeHHMM(s.time) === newSlotTime;
+      });
+      if (!hit || hit.remaining < 1) {
+        return { success: false, error: "該場次名額已滿，請選擇其他時段" };
+      }
+    }
+
+    const { error: updErr } = await applyAdminBookingsAccess(
+      supabase
+        .from("bookings")
+        .update({
+          slot_date: newSlotDate,
+          slot_time: newSlotTime,
+        })
+        .eq("id", bookingId)
+        .eq("member_email", email),
+      access
+    );
+
+    if (updErr) return { success: false, error: updErr.message };
+
+    revalidatePath("/member");
+    return { success: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "改期失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 後台訂單管理：改期預覽（規則與 {@link getReschedulePreview} 相同，改以管理員權限與店家範圍驗證）。
+ */
+export async function getReschedulePreviewAsAdmin(bookingId: string): Promise<
+  | {
+      success: true;
+      classId: string;
+      currentDate: string | null;
+      currentTime: string | null;
+      scheduledSlots: { date: string; time: string }[];
+      slotRemainingList: SlotRemaining[];
+      status: string;
+      hasOtherSlotOption: boolean;
+      capacityEnforced: boolean;
+    }
+  | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const id = (bookingId ?? "").trim();
+    if (!id) return { success: false, error: "缺少訂單編號" };
+
+    const supabase = createServerSupabase();
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: row, error } = await applyAdminBookingsAccess(
+      supabase.from("bookings").select("id, status, class_id, slot_date, slot_time").eq("id", id),
+      access
+    ).maybeSingle();
+
+    if (error || !row) return { success: false, error: error?.message ?? "找不到訂單" };
+
+    const st = String((row as { status?: unknown }).status ?? "").toLowerCase();
+    if (!bookingStatusAllowsReschedule(st)) {
+      return { success: false, error: "此訂單狀態無法改期" };
+    }
+
+    const rowSlot = row as { slot_date?: unknown };
+    const slotYmd =
+      rowSlot.slot_date != null && String(rowSlot.slot_date).trim() !== ""
+        ? String(rowSlot.slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const diffUntil = calendarDaysFromTodayTaipeiToSlotDate(slotYmd);
+    const rw = rescheduleWindowFromDiff(diffUntil);
+    if (rw === "no_slot_date") {
+      return { success: false, error: COPY_RESCHEDULE_NO_SLOT };
+    }
+    if (rw === "blocked") {
+      return { success: false, error: COPY_RESCHEDULE_BLOCKED };
+    }
+
+    const classId = String((row as { class_id?: unknown }).class_id ?? "").trim();
+    if (!classId) return { success: false, error: "訂單資料不完整" };
+
+    const slotRes = await getSlotRemainingCounts(classId);
+    if (!slotRes.success) return { success: false, error: slotRes.error };
+
+    const curRaw = row as { slot_date?: unknown; slot_time?: unknown };
+    const currentDate =
+      curRaw.slot_date != null && String(curRaw.slot_date).trim() !== ""
+        ? String(curRaw.slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const currentTime =
+      curRaw.slot_time != null && String(curRaw.slot_time).trim() !== ""
+        ? normalizeBookingSlotTimeHHMM(curRaw.slot_time)
+        : null;
+
+    const scheduledSlots = slotRes.slots.map((s) => ({ date: s.date, time: s.time }));
+    const capacityEnforced = st === "paid";
+
+    let hasOtherSlotOption = false;
+    if (scheduledSlots.length === 0) {
+      hasOtherSlotOption = false;
+    } else {
+      const k0 = currentDate && currentTime ? `${currentDate}|${currentTime}` : "";
+      for (const s of slotRes.slots) {
+        const k1 = `${s.date}|${normalizeSlotTime(s.time)}`;
+        if (k0 && k1 === k0) continue;
+        if (!slotNotPastForMember(s.date, s.time)) continue;
+        if (capacityEnforced) {
+          if (s.remaining >= 1) {
+            hasOtherSlotOption = true;
+            break;
+          }
+        } else {
+          hasOtherSlotOption = true;
+          break;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      classId,
+      currentDate,
+      currentTime,
+      slotRemainingList: slotRes.slots,
+      scheduledSlots,
+      status: st,
+      hasOtherSlotOption,
+      capacityEnforced,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "讀取改期資料失敗";
+    if (msg === "Unauthorized admin access") {
+      return { success: false, error: "未授權：請先登入後台" };
+    }
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * 後台訂單管理：改期（規則與 {@link rescheduleMyBooking} 相同，改以管理員權限與店家範圍驗證）。
+ */
+export async function rescheduleBookingAsAdmin(params: {
+  bookingId: string;
+  newSlotDate: string;
+  newSlotTime: string;
+}): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const bookingId = (params.bookingId ?? "").trim();
+    const newSlotDate = (params.newSlotDate ?? "").trim().replace(/T.*$/, "").slice(0, 10);
+    const newSlotTime = normalizeSlotTime(params.newSlotTime ?? "");
+    if (!bookingId) return { success: false, error: "缺少訂單編號" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newSlotDate)) return { success: false, error: "日期格式不正確" };
+    if (!/^\d{2}:\d{2}$/.test(newSlotTime)) return { success: false, error: "時間格式不正確" };
+
+    const supabase = createServerSupabase();
+    const access = await getAdminBookingsAccessFilter(supabase);
+    if (!access) return { success: false, error: "未設定店家" };
+
+    const { data: row, error: fetchErr } = await applyAdminBookingsAccess(
+      supabase
+        .from("bookings")
+        .select("id, status, class_id, slot_date, slot_time, merchant_id")
+        .eq("id", bookingId),
+      access
+    ).maybeSingle();
+
+    if (fetchErr || !row) return { success: false, error: fetchErr?.message ?? "找不到訂單" };
+
+    const st = String((row as { status?: unknown }).status ?? "").toLowerCase();
+    if (!bookingStatusAllowsReschedule(st)) {
+      return { success: false, error: "此訂單狀態無法改期" };
+    }
+
+    const rowSlotRes = row as { slot_date?: unknown };
+    const slotYmdRes =
+      rowSlotRes.slot_date != null && String(rowSlotRes.slot_date).trim() !== ""
+        ? String(rowSlotRes.slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const diffRes = calendarDaysFromTodayTaipeiToSlotDate(slotYmdRes);
+    const rwRes = rescheduleWindowFromDiff(diffRes);
+    if (rwRes === "no_slot_date") {
+      return { success: false, error: COPY_RESCHEDULE_NO_SLOT };
+    }
+    if (rwRes === "blocked") {
+      return { success: false, error: COPY_RESCHEDULE_BLOCKED };
+    }
+
+    const classId = String((row as { class_id?: unknown }).class_id ?? "").trim();
+    const bookingOwnerMid = String((row as { merchant_id?: unknown }).merchant_id ?? "").trim();
+    const curDate =
+      (row as { slot_date?: unknown }).slot_date != null &&
+      String((row as { slot_date: unknown }).slot_date).trim() !== ""
+        ? String((row as { slot_date: unknown }).slot_date).replace(/T.*$/, "").slice(0, 10)
+        : null;
+    const curTimeRaw = (row as { slot_time?: unknown }).slot_time;
+    const curTime =
+      curTimeRaw != null && String(curTimeRaw).trim() !== ""
+        ? normalizeBookingSlotTimeHHMM(curTimeRaw)
+        : null;
+
+    if (curDate === newSlotDate && curTime === newSlotTime) {
+      return { success: true };
+    }
+
+    const slotList = await getSlotRemainingCounts(classId);
+    if (!slotList.success) return { success: false, error: slotList.error };
+    if (slotList.slots.length === 0) {
+      return { success: false, error: "此課程無可改期場次" };
+    }
+
+    if (!bookingOwnerMid) return { success: false, error: "訂單資料不完整" };
+    const allowed = await isSlotAllowed(supabase, bookingOwnerMid, classId, newSlotDate, newSlotTime);
+    if (!allowed.allowed) {
+      return { success: false, error: allowed.error ?? "所選場次不可預約" };
+    }
+
+    if (!slotNotPastForMember(newSlotDate, newSlotTime)) {
+      return { success: false, error: "不可改到已過的場次" };
+    }
+
+    const capacityEnforced = st === "paid";
+    if (capacityEnforced) {
+      const selMin = timeStrToMinutesBooking(newSlotTime);
+      const hit = slotList.slots.find((s) => {
+        if (s.date !== newSlotDate) return false;
+        if (selMin != null) {
+          const sm = timeStrToMinutesBooking(s.time);
+          if (sm != null) return sm === selMin;
+        }
+        return normalizeBookingSlotTimeHHMM(s.time) === newSlotTime;
+      });
+      if (!hit || hit.remaining < 1) {
+        return { success: false, error: "該場次名額已滿，請選擇其他時段" };
+      }
+    }
+
+    const { error: updErr } = await applyAdminBookingsAccess(
+      supabase.from("bookings").update({ slot_date: newSlotDate, slot_time: newSlotTime }).eq("id", bookingId),
+      access
+    );
+
+    if (updErr) return { success: false, error: updErr.message };
+
+    revalidatePath("/admin/bookings");
+    return { success: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "改期失敗";
+    if (msg === "Unauthorized admin access") {
+      return { success: false, error: "未授權：請先登入後台" };
+    }
     return { success: false, error: msg };
   }
 }

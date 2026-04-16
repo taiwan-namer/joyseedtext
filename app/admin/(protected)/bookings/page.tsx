@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Loader2, CheckCircle, Trash2, Filter, CheckCheck, Banknote, RotateCcw } from "lucide-react";
+import {
+  ChevronLeft,
+  Loader2,
+  CheckCircle,
+  Trash2,
+  Filter,
+  CheckCheck,
+  Banknote,
+  RotateCcw,
+  CalendarClock,
+} from "lucide-react";
 import {
   getAdminBookings,
   getAdminPendingPayments,
@@ -16,6 +26,7 @@ import {
   type AdminPendingPaymentRow,
 } from "@/app/actions/bookingActions";
 import { processBookingRefund } from "@/app/actions/refundActions";
+import AdminRescheduleModal from "@/app/admin/(protected)/bookings/AdminRescheduleModal";
 
 function formatDate(iso: string) {
   try {
@@ -114,6 +125,7 @@ export default function AdminBookingsPage() {
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterCourseId, setFilterCourseId] = useState<string>("");
   const [filterStartDate, setFilterStartDate] = useState<string>("");
@@ -533,6 +545,17 @@ export default function AdminBookingsPage() {
                             已付款
                           </button>
                         )}
+                        {(row.status === "unpaid" || row.status === "upcoming" || row.status === "paid") && (
+                          <button
+                            type="button"
+                            onClick={() => setRescheduleBookingId(row.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-600/80 text-amber-900 text-xs font-medium hover:bg-amber-50 transition-colors"
+                            title="改至同課程其他場次"
+                          >
+                            <CalendarClock className="w-3.5 h-3.5" />
+                            課程改期
+                          </button>
+                        )}
                         {row.status === "paid" && (
                           <button
                             type="button"
@@ -602,6 +625,12 @@ export default function AdminBookingsPage() {
           )}
         </div>
       </div>
+      <AdminRescheduleModal
+        bookingId={rescheduleBookingId}
+        open={rescheduleBookingId !== null}
+        onClose={() => setRescheduleBookingId(null)}
+        onSuccess={() => void fetchList()}
+      />
     </div>
   );
 }
