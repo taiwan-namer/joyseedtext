@@ -85,6 +85,7 @@ export type ReconciliationLine = {
 export function buildReconciliationLines(
   rows: ReconciliationBookingRow[],
   commissionByMerchant: Map<string, number>,
+  branchSiteRateByMerchant: Map<string, number>,
   labelByMerchant: Map<string, string>,
   branchMerchantId: string
 ): ReconciliationLine[] {
@@ -104,11 +105,14 @@ export function buildReconciliationLines(
     const courseAmount =
       parsed.baseAmount != null ? parsed.baseAmount : Math.max(0, orderTotal - peace);
 
-    const rate = parseCommissionRate(commissionByMerchant.get(supplierMid) ?? 0);
+    const purchase_channel = classifyPurchaseChannelForBranchAdmin(branchMerchantId, r);
+    const rawRate =
+      purchase_channel === "hq"
+        ? commissionByMerchant.get(supplierMid) ?? 0
+        : branchSiteRateByMerchant.get(supplierMid) ?? 0;
+    const rate = parseCommissionRate(rawRate);
     const commissionAmt = commissionFromCourseAmount(courseAmount, rate);
     const courseNet = Math.max(0, courseAmount - commissionAmt);
-
-    const purchase_channel = classifyPurchaseChannelForBranchAdmin(branchMerchantId, r);
 
     out.push({
       booking_id: r.id,

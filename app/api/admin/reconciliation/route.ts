@@ -48,11 +48,17 @@ export async function GET(request: NextRequest) {
 
     const { data: rateRows } = await supabase
       .from("store_settings")
-      .select("merchant_id, commission_rate_percent, site_name");
+      .select("merchant_id, commission_rate_percent, branch_site_rate_percent, site_name");
     const commissionByMerchant = new Map<string, number>();
+    const branchSiteRateByMerchant = new Map<string, number>();
     const labelByMerchant = new Map<string, string>();
     for (const r of rateRows ?? []) {
-      const row = r as { merchant_id?: string; commission_rate_percent?: unknown; site_name?: string | null };
+      const row = r as {
+        merchant_id?: string;
+        commission_rate_percent?: unknown;
+        branch_site_rate_percent?: unknown;
+        site_name?: string | null;
+      };
       const mid = String(row.merchant_id ?? "").trim();
       if (!mid) continue;
       const rate =
@@ -60,6 +66,11 @@ export async function GET(request: NextRequest) {
           ? row.commission_rate_percent
           : Number(row.commission_rate_percent);
       commissionByMerchant.set(mid, Number.isFinite(rate) ? rate : 0);
+      const branchRate =
+        typeof row.branch_site_rate_percent === "number"
+          ? row.branch_site_rate_percent
+          : Number(row.branch_site_rate_percent);
+      branchSiteRateByMerchant.set(mid, Number.isFinite(branchRate) ? branchRate : 0);
       labelByMerchant.set(mid, String(row.site_name ?? "").trim() || mid);
     }
 
@@ -82,7 +93,13 @@ export async function GET(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const rows = normalizeReconciliationBookingRows(rawRows ?? []);
-    const lines = buildReconciliationLines(rows, commissionByMerchant, labelByMerchant, branchMerchantId);
+    const lines = buildReconciliationLines(
+      rows,
+      commissionByMerchant,
+      branchSiteRateByMerchant,
+      labelByMerchant,
+      branchMerchantId
+    );
 
     const linesHq = lines.filter((l) => l.purchase_channel === "hq");
     const linesLocal = lines.filter((l) => l.purchase_channel === "local");
