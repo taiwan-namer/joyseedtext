@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   type HeroFloatingIcon,
   effectiveFloatingCoords,
@@ -25,7 +25,8 @@ type Props = {
 
 function useNarrowMaxMd(): boolean {
   const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
+  /** 必須在繪製前同步（useLayoutEffect），否則未傳 coordinateViewport 時會先以桌機座標／縮放畫一幀，再跳到手機，造成「裝飾圖先跑掉」。 */
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const mql = window.matchMedia("(max-width: 767px)");
     const apply = () => setNarrow(mql.matches);
@@ -60,7 +61,8 @@ export default function HeroFloatingIconsLayer({
   const iconScale = Math.max(0.2, hostWidth / scaleBase);
   const useAboutRules = resolvedMode === "desktop" && (centerSet.length > 0 || rowGroups.length > 0);
 
-  useEffect(() => {
+  /** 初始 hostWidth 用設計欄寬；實際容器寬度須在繪製前以 ResizeObserver 寫入，否則 iconScale 先為 1 再變小，裝飾圖會先錯位／錯尺寸。 */
+  useLayoutEffect(() => {
     const el = hostRef.current;
     if (!el) return;
     const apply = () => {
