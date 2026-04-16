@@ -8,45 +8,15 @@ import {
   getRollcallSessionsInMonth,
   getBookingsForSession,
   type RollcallSession,
-  type BookingWithMember,
   type SessionBookingsResult,
 } from "@/app/actions/bookingActions";
 import { updateSessionCapacity } from "@/app/actions/productActions";
-import { metadataHasPeaceForDisplay } from "@/lib/bookingAdminAmounts";
-
-const PEACE_ADDON_NAME_RE = /安心包/;
-
-function hasPeaceAddonPurchase(
-  row: BookingWithMember,
-  classAddonPrices: { name: string; price: number }[] | null
-): boolean {
-  if (metadataHasPeaceForDisplay(row.metadata)) return true;
-  if (!classAddonPrices || !Array.isArray(row.addon_indices)) return false;
-  for (const i of row.addon_indices) {
-    const addon = classAddonPrices[i];
-    if (addon && PEACE_ADDON_NAME_RE.test(String(addon.name ?? ""))) return true;
-  }
-  return false;
-}
-
-/** 加購與課程金額皆冠以 NT$，便於直欄對齊 */
-function buildAddonOptionDisplay(
-  row: BookingWithMember,
-  classBasePrice: number,
-  classAddonPrices: { name: string; price: number }[] | null
-): string {
-  const parts: string[] = [`課程 NT$ ${classBasePrice.toLocaleString()}`];
-  if (classAddonPrices && Array.isArray(row.addon_indices) && row.addon_indices.length > 0) {
-    for (const i of row.addon_indices) {
-      const addon = classAddonPrices[i];
-      if (addon) {
-        const p = Number(addon.price);
-        parts.push(`${addon.name} NT$ ${Number.isFinite(p) ? p.toLocaleString() : String(addon.price)}`);
-      }
-    }
-  }
-  return parts.join(" + ");
-}
+import {
+  buildBookingCourseAddonsOnlyDisplay,
+  buildVendorEnrollmentCsv,
+  hasPeaceAddonInBooking,
+} from "@/lib/buildVendorEnrollmentCsv";
+import { VendorAttendancePrintSheet } from "./VendorAttendancePrintSheet";
 
 const todayStr = () => {
   const d = new Date();
@@ -113,6 +83,18 @@ function statusBadgeClass(s: string): string {
     default:
       return "bg-gray-100 text-gray-700";
   }
+}
+
+function downloadCsvWithBom(filename: string, csv: string): void {
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /** 可編輯名額：失焦或 Enter 時儲存 */
@@ -196,6 +178,12 @@ function SessionAccordion({
     }
   };
 
+  const handleExportCsv = () => {
+    if (!sessionData) return;
+    const { filename, csv } = buildVendorEnrollmentCsv(session, sessionData);
+    downloadCsvWithBom(filename, csv);
+  };
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <button
@@ -231,65 +219,84 @@ function SessionAccordion({
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
             </div>
-          ) : sessionData && sessionData.bookings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-gray-500">
-              <Users className="w-12 h-12 text-gray-300 mb-3" />
-              <p className="text-sm font-medium">目前尚無消費者報名此課程</p>
-            </div>
           ) : sessionData ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-sm">
-                <thead>
-                  <tr className="bg-gray-100/80 border-b border-gray-200">
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">家長姓名</th>
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友暱稱</th>
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友年齡</th>
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">有無過敏或特殊疾病</th>
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">聯絡電話</th>
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 hidden sm:table-cell">加購選項</th>
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 w-[4.5rem]">安心包</th>
-                    <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">訂單狀態</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessionData.bookings.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="border-b border-gray-100 last:border-0 hover:bg-white/60 transition-colors"
-                    >
-                      <td className="py-3 px-3 sm:px-4 text-gray-900">{row.parent_name || "—"}</td>
-                      <td className="py-3 px-3 sm:px-4 text-gray-700">{row.kid_name || "—"}</td>
-                      <td className="py-3 px-3 sm:px-4 text-gray-700">{row.kid_age || "—"}</td>
-                      <td className="py-3 px-3 sm:px-4 text-gray-700">{row.allergy_or_special_note || "—"}</td>
-                      <td className="py-3 px-3 sm:px-4 text-gray-700">{row.contact_phone || "—"}</td>
-                      <td className="py-3 px-3 sm:px-4 text-gray-700 hidden sm:table-cell text-left tabular-nums">
-                        {buildAddonOptionDisplay(row, sessionData.classBasePrice, sessionData.classAddonPrices)}
-                      </td>
-                      <td className="py-3 px-3 sm:px-4 align-middle">
-                        {hasPeaceAddonPurchase(row, sessionData.classAddonPrices) ? (
-                          <span
-                            className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900"
-                            title="已加購安心包"
-                          >
-                            已購
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 sm:px-4">
-                        <span
-                          className={`inline-flex px-2.5 py-1 rounded-md text-xs font-medium ${statusBadgeClass(
-                            row.status
-                          )}`}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-3 sm:px-4">
+                <VendorAttendancePrintSheet session={session} sessionData={sessionData} />
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
+                >
+                  匯出 CSV
+                </button>
+              </div>
+
+              {sessionData.bookings.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-gray-500">
+                  <Users className="w-12 h-12 text-gray-300 mb-3" />
+                  <p className="text-sm font-medium">目前尚無消費者報名此課程</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead>
+                      <tr className="bg-gray-100/80 border-b border-gray-200">
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">家長姓名</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友暱稱</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友年齡</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">有無過敏或特殊疾病</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">聯絡電話</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 hidden sm:table-cell">加購選項</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 w-[4.5rem]">安心包</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">訂單狀態</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessionData.bookings.map((row) => (
+                        <tr
+                          key={row.id}
+                          className="border-b border-gray-100 last:border-0 hover:bg-white/60 transition-colors"
                         >
-                          {statusLabel(row.status)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          <td className="py-3 px-3 sm:px-4 text-gray-900">{row.parent_name || "—"}</td>
+                          <td className="py-3 px-3 sm:px-4 text-gray-700">{row.kid_name || "—"}</td>
+                          <td className="py-3 px-3 sm:px-4 text-gray-700">{row.kid_age || "—"}</td>
+                          <td className="py-3 px-3 sm:px-4 text-gray-700">{row.allergy_or_special_note || "—"}</td>
+                          <td className="py-3 px-3 sm:px-4 text-gray-700">{row.contact_phone || "—"}</td>
+                          <td className="py-3 px-3 sm:px-4 text-gray-700 hidden sm:table-cell text-left tabular-nums">
+                            {buildBookingCourseAddonsOnlyDisplay(row, sessionData.classAddonPrices)}
+                          </td>
+                          <td className="py-3 px-3 sm:px-4 align-middle">
+                            {hasPeaceAddonInBooking(row, sessionData.classAddonPrices) ? (
+                              <span
+                                className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900"
+                                title="已加購安心包"
+                              >
+                                已購
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 sm:px-4">
+                            <span
+                              className={`inline-flex px-2.5 py-1 rounded-md text-xs font-medium ${statusBadgeClass(
+                                row.status
+                              )}`}
+                            >
+                              {statusLabel(row.status)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="border-t border-gray-200 bg-white px-3 py-3 sm:px-4">
+                <VendorAttendancePrintSheet session={session} sessionData={sessionData} />
+              </div>
             </div>
           ) : null}
         </div>
