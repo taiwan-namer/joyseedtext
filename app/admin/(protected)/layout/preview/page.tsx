@@ -8,7 +8,9 @@ import {
   LAYOUT_PREVIEW_FLOATING_ICONS,
   LAYOUT_PREVIEW_SELECT_BLOCK,
   LAYOUT_PREVIEW_SELECT_FLOATING_ICON,
+  LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON,
   LAYOUT_PREVIEW_SYNC_TYPE,
+  LAYOUT_PREVIEW_VIEWPORT_FLOATING_ICONS,
   type LayoutPreviewSyncPayload,
 } from "../layoutPreviewSync";
 import type { HeroFloatingIcon } from "@/app/lib/frontendSettingsShared";
@@ -58,6 +60,14 @@ export default function AdminLayoutMobilePreviewPage() {
 
   const onSelectFloatingIcon = useCallback((blockId: string, iconId: string) => {
     postToParent({ type: LAYOUT_PREVIEW_SELECT_FLOATING_ICON, blockId, iconId });
+  }, []);
+
+  const onViewportFloatingIconsChange = useCallback((next: HeroFloatingIcon[]) => {
+    postToParent({ type: LAYOUT_PREVIEW_VIEWPORT_FLOATING_ICONS, icons: next });
+  }, []);
+
+  const onSelectViewportFloatingIcon = useCallback((id: string | null) => {
+    postToParent({ type: LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON, id });
   }, []);
 
   if (!payload) {
@@ -113,6 +123,10 @@ export default function AdminLayoutMobilePreviewPage() {
         homeNewCoursesIconUrl={payload.homeNewCoursesIconUrl}
         aboutPageUrl={payload.aboutPageUrl}
         onBlockFloatingIconsChange={onBlockFloatingIconsChange}
+        viewportFloatingIcons={payload.viewportFloatingIcons ?? []}
+        onViewportFloatingIconsChange={onViewportFloatingIconsChange}
+        viewportSelectedFloatingIconId={payload.viewportSelectedFloatingIconId ?? null}
+        onSelectViewportFloatingIcon={onSelectViewportFloatingIcon}
       />
     </div>
   );

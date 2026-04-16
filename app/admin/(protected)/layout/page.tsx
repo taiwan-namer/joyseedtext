@@ -51,7 +51,9 @@ import {
   LAYOUT_PREVIEW_FLOATING_ICONS,
   LAYOUT_PREVIEW_SELECT_BLOCK,
   LAYOUT_PREVIEW_SELECT_FLOATING_ICON,
+  LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON,
   LAYOUT_PREVIEW_SYNC_TYPE,
+  LAYOUT_PREVIEW_VIEWPORT_FLOATING_ICONS,
   type LayoutPreviewSyncPayload,
 } from "./layoutPreviewSync";
 
@@ -712,6 +714,21 @@ export default function AdminLayoutPage() {
             b.id === blockId ? { ...b, heightPx: heightPx && heightPx > 0 ? heightPx : null } : b
           )
         );
+        return;
+      }
+      if (d.type === LAYOUT_PREVIEW_VIEWPORT_FLOATING_ICONS) {
+        setFloatingEditViewport("mobile");
+        setViewportFloatingIcons(d.icons as HeroFloatingIcon[]);
+        return;
+      }
+      if (d.type === LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON) {
+        setCanvasViewportMode("mobile");
+        setViewportSelectedFloatingIconId(
+          d.id == null || d.id === "" ? null : String(d.id)
+        );
+        setSelectedBlockId(null);
+        setSelectedFloatingIconId(null);
+        return;
       }
     };
     window.addEventListener("message", onMsg);
@@ -1466,6 +1483,8 @@ export default function AdminLayoutPage() {
       homeCoursesBlockBackgroundMobileUrl,
       homeNewCoursesIconUrl,
       aboutPageUrl,
+      viewportFloatingIcons,
+      viewportSelectedFloatingIconId,
     }),
     [
       blocks,
@@ -1504,6 +1523,8 @@ export default function AdminLayoutPage() {
       homeCoursesBlockBackgroundMobileUrl,
       homeNewCoursesIconUrl,
       aboutPageUrl,
+      viewportFloatingIcons,
+      viewportSelectedFloatingIconId,
     ]
   );
 
@@ -1759,7 +1780,7 @@ export default function AdminLayoutPage() {
 
         {/* 中間：畫布（保留左側空間；右側浮窗改覆蓋不壓縮畫布） */}
         <div className="flex-1 min-w-0 flex flex-col items-start overflow-x-hidden">
-          <div className="w-full shrink-0 mb-3 flex flex-wrap items-center gap-2">
+          <div className="w-full shrink-0 mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="text-sm font-semibold text-gray-800">編輯畫布</span>
             <div
               className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5 shadow-sm"
@@ -1787,6 +1808,42 @@ export default function AdminLayoutPage() {
                 }`}
               >
                 手機版
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-l border-gray-200 pl-2 sm:pl-3">
+              <button
+                type="button"
+                onClick={() => viewportFloatFileRef.current?.click()}
+                disabled={viewportFloatUploading}
+                className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {viewportFloatUploading ? "上傳中…" : "上傳裝飾圖"}
+              </button>
+              <select
+                value={viewportDeletePick}
+                onChange={(e) => setViewportDeletePick(e.target.value)}
+                className="max-w-[min(100%,200px)] rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-800"
+                aria-label="選擇要刪除的全螢幕裝飾圖"
+              >
+                <option value="">選擇編號…</option>
+                {viewportFloatingIcons.map((ic, idx) => (
+                  <option key={ic.id} value={ic.id}>
+                    編號 {idx + 1}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!viewportDeletePick}
+                onClick={() => {
+                  if (!viewportDeletePick) return;
+                  setViewportFloatingIcons((prev) => prev.filter((x) => x.id !== viewportDeletePick));
+                  setViewportSelectedFloatingIconId((cur) => (cur === viewportDeletePick ? null : cur));
+                  setViewportDeletePick("");
+                }}
+                className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+              >
+                刪除選取
               </button>
             </div>
           </div>
@@ -1876,49 +1933,6 @@ export default function AdminLayoutPage() {
                   }
                 }}
               />
-            </div>
-            <div className="border-t border-gray-200 bg-white px-3 py-2.5 sm:px-4">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="text-xs font-medium text-gray-700 shrink-0">全螢幕裝飾</span>
-                <button
-                  type="button"
-                  onClick={() => viewportFloatFileRef.current?.click()}
-                  disabled={viewportFloatUploading}
-                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                >
-                  {viewportFloatUploading ? "上傳中…" : "上傳裝飾圖"}
-                </button>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:justify-end">
-                  <label className="flex min-w-0 items-center gap-1.5 text-xs text-gray-600">
-                    <span className="shrink-0">刪除</span>
-                    <select
-                      value={viewportDeletePick}
-                      onChange={(e) => setViewportDeletePick(e.target.value)}
-                      className="max-w-[min(100%,220px)] rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800"
-                    >
-                      <option value="">選擇編號…</option>
-                      {viewportFloatingIcons.map((ic, idx) => (
-                        <option key={ic.id} value={ic.id}>
-                          編號 {idx + 1}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!viewportDeletePick}
-                    onClick={() => {
-                      if (!viewportDeletePick) return;
-                      setViewportFloatingIcons((prev) => prev.filter((x) => x.id !== viewportDeletePick));
-                      setViewportSelectedFloatingIconId((cur) => (cur === viewportDeletePick ? null : cur));
-                      setViewportDeletePick("");
-                    }}
-                    className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
-                  >
-                    刪除選取
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
           ) : null}

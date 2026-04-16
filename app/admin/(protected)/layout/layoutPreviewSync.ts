@@ -2,6 +2,7 @@ import type { Activity } from "@/app/lib/homeSectionTypes";
 import type {
   CarouselItem,
   FeaturedCategory,
+  HeroFloatingIcon,
   LayoutBlock,
 } from "@/app/lib/frontendSettingsShared";
 
@@ -16,6 +17,11 @@ export const LAYOUT_PREVIEW_SELECT_FLOATING_ICON = "layout-preview-select-floati
 export const LAYOUT_PREVIEW_FLOATING_ICONS = "layout-preview-floating-icons" as const;
 /** iframe → 父頁：區塊高度 */
 export const LAYOUT_PREVIEW_BLOCK_HEIGHT = "layout-preview-block-height" as const;
+/** iframe → 父頁：全螢幕裝飾圖列表變更 */
+export const LAYOUT_PREVIEW_VIEWPORT_FLOATING_ICONS = "layout-preview-viewport-floating-icons" as const;
+/** iframe → 父頁：選取全螢幕裝飾圖 */
+export const LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON =
+  "layout-preview-select-viewport-floating-icon" as const;
 
 /** 手機預覽 iframe 內 LayoutCanvas 的設計寬度（與常見手機 CSS 寬度一致，使 md: 以下斷點生效） */
 export const LAYOUT_MOBILE_PREVIEW_WIDTH_PX = 390;
@@ -61,4 +67,7 @@ export type LayoutPreviewSyncPayload = {
   homeCoursesBlockBackgroundMobileUrl: string | null;
   homeNewCoursesIconUrl: string | null;
   aboutPageUrl: string;
+  /** 與桌機畫布共用：全螢幕裝飾圖 */
+  viewportFloatingIcons: HeroFloatingIcon[];
+  viewportSelectedFloatingIconId: string | null;
 };
