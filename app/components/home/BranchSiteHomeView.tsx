@@ -131,7 +131,7 @@ export type BranchSiteHomeViewProps = {
    * 後台畫布預覽勿傳，以維持由父層餵入的 activities。
    */
   serverHomeCourses?: { courses: CourseForPublic[]; error: string | null };
-  /** 訪客首頁：全螢幕裝飾層（瀏覽器視窗座標）；後台畫布勿傳 */
+  /** 訪客首頁：全頁裝飾層（相對本頁根容器寬高之百分比，與畫布一致、隨捲動）；後台畫布勿傳 */
   viewportFloatingIcons?: HeroFloatingIcon[] | null;
 };
 
@@ -951,7 +951,7 @@ export default function BranchSiteHomeView({
 
   return (
     <div
-      className="min-h-screen bg-page flex flex-col"
+      className="relative min-h-screen bg-page flex flex-col"
       {...(isAdminCanvas
         ? {
             onClickCapture: suppressCanvasLinkNavigation,
@@ -960,7 +960,7 @@ export default function BranchSiteHomeView({
         : {})}
     >
       {!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-[32]" aria-hidden>
+        <div className="pointer-events-none absolute inset-0 z-[32]" aria-hidden>
           <HeroFloatingIconsLayer
             icons={viewportFloatingIcons ?? undefined}
             coordinateViewport={coordMode}
@@ -971,7 +971,7 @@ export default function BranchSiteHomeView({
       {isAdminCanvas &&
       admin?.onViewportFloatingIconsChange &&
       (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-[32]">
+        <div className="pointer-events-none absolute inset-0 z-[32]">
           <HeroFloatingIconsLayer
             icons={admin.viewportFloatingIcons}
             coordinateViewport={coordMode}

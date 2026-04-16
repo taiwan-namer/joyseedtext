@@ -13,7 +13,7 @@ export type AdminLayoutCanvasConfig = {
   /** 桌機畫布目前縮放（0.25–1）；區塊高度拖曳與顯示依此換算為前台設計 px */
   canvasPreviewScale?: number;
   /**
-   * 全螢幕裝飾圖（瀏覽器視窗百分比座標，與區塊內裝飾圖分開）；
+   * 全頁裝飾圖（相對整頁根容器寬高之百分比，與區塊內裝飾圖分開）；
    * 在 {@link BranchSiteHomeView} 與首頁區塊同一畫布上疊加預覽／編輯。
    */
   viewportFloatingIcons?: HeroFloatingIcon[];

@@ -18,7 +18,7 @@ type Props = {
   underContent?: boolean;
   wrapperClassName?: string;
   /**
-   * 裝飾圖寬度縮放基準（px）。區塊內預設 1280（與 max-w-7xl 一致）；全螢幕層請傳 1920（與模擬視窗寬一致）。
+   * 裝飾圖寬度縮放基準（px）。區塊內預設 1280（與 max-w-7xl 一致）；全頁裝飾層請傳 1920（與後台模擬視窗寬一致）。
    */
   scaleReferenceWidthPx?: number;
 };

@@ -15,7 +15,7 @@ export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
 export const LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX = 1920 as const;
 
 /**
- * 後台「全螢幕裝飾」編輯區參考高度（px，常見 1920×1080）；前台以實際 layout viewport 高度為準。
+ * 後台「全頁裝飾」說明用參考高度（px，常見 1920×1080）；實際座標為相對整頁根容器高度之百分比。
  */
 export const LAYOUT_VIEWPORT_REFERENCE_HEIGHT_PX = 1080 as const;
 
@@ -180,8 +180,8 @@ export type FrontendSettings = {
   /** 畫布區塊（含順序、高度、背景圖）；有值時前台依此渲染，否則用 layoutOrder */
   layoutBlocks: LayoutBlock[];
   /**
-   * 全螢幕裝飾層（相對瀏覽器 layout viewport 的百分比座標，中心錨點）；
-   * 可置於主內容欄（max-w-7xl）兩側留白，與各區塊內裝飾圖分開。
+   * 全頁裝飾層（相對首頁根容器寬高之百分比座標，中心錨點；隨頁面捲動，與後台畫布對齊）；
+   * 與各區塊內裝飾圖分開。
    */
   viewportFloatingIcons: HeroFloatingIcon[];
   /** 精選課程分館列表（後台可編輯） */
