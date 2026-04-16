@@ -52,11 +52,16 @@ function openPrintWindow(session: RollcallSession, sessionData: SessionBookingsR
   const rows = buildAttendanceSheetFromSession(sessionData);
   const title = session.title ?? "未命名課程";
   const dateLabel = formatRollcallSlotDateLabel(session.slotDate);
+  const printedAt = new Date();
+  const printedAtText = `${printedAt.getFullYear()}/${String(printedAt.getMonth() + 1).padStart(2, "0")}/${String(
+    printedAt.getDate()
+  ).padStart(2, "0")} ${String(printedAt.getHours()).padStart(2, "0")}:${String(printedAt.getMinutes()).padStart(2, "0")}`;
 
   const trs = rows
     .map(
       (r) => `
       <tr>
+        <td class="cell-check">□</td>
         <td>${r.seq}</td>
         <td>${escapeHtml(r.kidName)}</td>
         <td>${escapeHtml(r.kidAge)}</td>
@@ -76,28 +81,53 @@ function openPrintWindow(session: RollcallSession, sessionData: SessionBookingsR
       <meta charset="utf-8" />
       <title>報到表 - ${escapeHtml(title)}</title>
       <style>
-        @page { size: A4 landscape; margin: 12mm; }
+        @page { size: A4 landscape; margin: 11mm; }
         body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; color:#111; }
-        .meta { margin-bottom: 10px; font-size: 14px; display:flex; gap: 12px; flex-wrap: wrap; }
-        h1 { margin: 0 0 8px; font-size: 18px; }
-        table { width:100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid #999; padding: 6px 8px; vertical-align: top; }
-        th { background: #f3f4f6; text-align: left; }
+        .topline {
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          font-size:12px;
+          margin-bottom:16px;
+          color:#222;
+        }
+        .center-title { text-align:center; font-weight:600; }
+        .brand-title {
+          font-size:25px;
+          margin:0 0 8px;
+          font-weight:800;
+        }
+        .helper {
+          font-size:14px;
+          margin:0 0 14px;
+          color:#333;
+          line-height:1.45;
+        }
+        .meta { margin-bottom:8px; font-size:20px; line-height:1.6; }
+        table { width:100%; border-collapse: collapse; font-size:16px; }
+        th, td { border: 1px solid #333; padding: 8px 10px; vertical-align: middle; }
+        th { background: #f3f4f6; text-align: left; font-weight:700; }
+        .cell-check { text-align:center; width:48px; }
       </style>
     </head>
     <body>
-      <h1>課程報到表</h1>
+      <div class="topline">
+        <span>${escapeHtml(printedAtText)}</span>
+        <span class="center-title">${escapeHtml(`報到表 - ${title}`)}</span>
+        <span></span>
+      </div>
+      <h1 class="brand-title">【童趣島 WonderVoyage－官方合作夥伴專屬報到表】</h1>
+      <p class="helper">感謝您提供優質的親子體驗！為維護課程品質，請於現場核對以下學員報到狀態。</p>
       <div class="meta">
-        <span><strong>課程：</strong>${escapeHtml(title)}</span>
-        <span><strong>日期：</strong>${escapeHtml(dateLabel)}</span>
-        <span><strong>時段：</strong>${escapeHtml(session.time)}</span>
-        <span><strong>名額：</strong>${session.capacity}</span>
-        <span><strong>已報名：</strong>${session.enrolledCount}</span>
+        <div>課程名稱：${escapeHtml(title)}</div>
+        <div>開課日期：${escapeHtml(dateLabel)}　場次時間：${escapeHtml(session.time)}</div>
+        <div>報名進度：${session.enrolledCount} / ${session.capacity} 人　列印日期：${escapeHtml(printedAtText.slice(0, 10))}</div>
       </div>
       <table>
         <thead>
           <tr>
-            <th style="width:40px;">序</th>
+            <th style="width:48px;">報到</th>
+            <th style="width:52px;">序號</th>
             <th>小朋友暱稱</th>
             <th>年齡</th>
             <th>家長姓名</th>
@@ -105,7 +135,7 @@ function openPrintWindow(session: RollcallSession, sessionData: SessionBookingsR
             <th>過敏/特殊疾病</th>
             <th>加購選項</th>
             <th style="width:60px;">安心包</th>
-            <th style="width:70px;">簽到</th>
+            <th style="width:130px;">現場備註/家長簽名</th>
           </tr>
         </thead>
         <tbody>
