@@ -295,7 +295,14 @@ export default function AdminLayoutPage() {
   const [viewportFloatingIcons, setViewportFloatingIcons] = useState<HeroFloatingIcon[]>([]);
   const [viewportSelectedFloatingIconId, setViewportSelectedFloatingIconId] = useState<string | null>(null);
   const [viewportFloatUploading, setViewportFloatUploading] = useState(false);
+  /** 全螢幕裝飾：下拉選擇後按刪除 */
+  const [viewportDeletePick, setViewportDeletePick] = useState<string>("");
   const mobileCanvasSectionRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (viewportDeletePick && !viewportFloatingIcons.some((x) => x.id === viewportDeletePick)) {
+      setViewportDeletePick("");
+    }
+  }, [viewportFloatingIcons, viewportDeletePick]);
   useEffect(() => {
     setFloatingEditViewport(canvasViewportMode === "mobile" ? "mobile" : "desktop");
   }, [canvasViewportMode]);
@@ -743,7 +750,7 @@ export default function AdminLayoutPage() {
         ]);
         setViewportSelectedFloatingIconId(id);
         setSelectedBlockId(null);
-        setMessage({ type: "success", text: "全螢幕裝飾圖已上傳，請在下方預覽拖曳定位後按「儲存版面」。" });
+        setMessage({ type: "success", text: "全螢幕裝飾圖已上傳，請在畫布拖曳定位後按「儲存版面」。" });
       } else {
         setMessage({ type: "error", text: r.error });
       }
@@ -1870,6 +1877,49 @@ export default function AdminLayoutPage() {
                 }}
               />
             </div>
+            <div className="border-t border-gray-200 bg-white px-3 py-2.5 sm:px-4">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="text-xs font-medium text-gray-700 shrink-0">全螢幕裝飾</span>
+                <button
+                  type="button"
+                  onClick={() => viewportFloatFileRef.current?.click()}
+                  disabled={viewportFloatUploading}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {viewportFloatUploading ? "上傳中…" : "上傳裝飾圖"}
+                </button>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:justify-end">
+                  <label className="flex min-w-0 items-center gap-1.5 text-xs text-gray-600">
+                    <span className="shrink-0">刪除</span>
+                    <select
+                      value={viewportDeletePick}
+                      onChange={(e) => setViewportDeletePick(e.target.value)}
+                      className="max-w-[min(100%,220px)] rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800"
+                    >
+                      <option value="">選擇編號…</option>
+                      {viewportFloatingIcons.map((ic, idx) => (
+                        <option key={ic.id} value={ic.id}>
+                          編號 {idx + 1}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!viewportDeletePick}
+                    onClick={() => {
+                      if (!viewportDeletePick) return;
+                      setViewportFloatingIcons((prev) => prev.filter((x) => x.id !== viewportDeletePick));
+                      setViewportSelectedFloatingIconId((cur) => (cur === viewportDeletePick ? null : cur));
+                      setViewportDeletePick("");
+                    }}
+                    className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+                  >
+                    刪除選取
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
           ) : null}
 
@@ -1912,62 +1962,6 @@ export default function AdminLayoutPage() {
             </div>
           </div>
           ) : null}
-
-          <div className="space-y-3 rounded-xl border border-amber-200/80 bg-white/90 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-800">全螢幕裝飾圖</h2>
-                <p className="text-xs text-gray-600 mt-1 leading-relaxed max-w-xl">
-                  疊在上方桌機畫布預覽上（與首頁大圖、輪播同一畫面），座標為瀏覽器視窗百分比，可放在主內容欄兩側留白；與各區塊內裝飾圖分開。
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => viewportFloatFileRef.current?.click()}
-                disabled={viewportFloatUploading}
-                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-              >
-                {viewportFloatUploading ? "上傳中…" : "新增裝飾圖"}
-              </button>
-            </div>
-            {viewportFloatingIcons.length > 0 ? (
-              <ul className="space-y-1.5 text-xs text-gray-700">
-                {viewportFloatingIcons.map((ic, idx) => (
-                  <li
-                    key={ic.id}
-                    className="flex items-center justify-between gap-2 rounded border border-gray-200/80 bg-white px-2 py-1.5"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setViewportSelectedFloatingIconId(ic.id);
-                        setSelectedBlockId(null);
-                        setSelectedFloatingIconId(null);
-                      }}
-                      className={`min-w-0 flex-1 text-left truncate ${
-                        viewportSelectedFloatingIconId === ic.id ? "text-amber-800 font-medium" : ""
-                      }`}
-                    >
-                      編號 {idx + 1}
-                      {viewportSelectedFloatingIconId === ic.id ? "（已選）" : ""}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setViewportFloatingIcons((prev) => prev.filter((x) => x.id !== ic.id));
-                        setViewportSelectedFloatingIconId((cur) => (cur === ic.id ? null : cur));
-                      }}
-                      className="shrink-0 text-red-600 hover:underline"
-                    >
-                      移除
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-gray-500">尚無全螢幕裝飾圖；上傳後請在上方畫布拖曳定位，再按「儲存版面」。</p>
-            )}
-          </div>
 
           <div className="mt-4 flex items-center gap-3 shrink-0 pb-4">
             <button

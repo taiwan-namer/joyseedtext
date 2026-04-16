@@ -986,6 +986,13 @@ export default function BranchSiteHomeView({
               selectedIconId={admin.selectedViewportFloatingIconId ?? null}
               onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
               scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+              viewportInlineToolbar
+              canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+              onRemoveIcon={(id) => {
+                const next = (admin.viewportFloatingIcons ?? []).filter((x) => x.id !== id);
+                admin.onViewportFloatingIconsChange!(next);
+                admin.onSelectViewportFloatingIcon?.(null);
+              }}
             />
           </div>
         </div>
