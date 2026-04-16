@@ -961,6 +961,59 @@ export async function updateAboutPage(formData: FormData): Promise<
   }
 }
 
+/** 基本資料頁：僅更新導覽列文字與會員圖示（其餘 `frontend_settings` 欄位沿用現值） */
+export async function updateNavMemberFrontendSettings(payload: {
+  navCoursesLabel: string;
+  navBookingLabel: string;
+  navFaqLabel: string;
+  memberIconGallery: string[];
+  memberIconSelectedIndex: number;
+}): Promise<{ success: true; message?: string } | { success: false; error: string }> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const navCoursesLabel = (payload.navCoursesLabel ?? "").trim() || DEFAULT_NAV.courses;
+    const navBookingLabel = (payload.navBookingLabel ?? "").trim() || DEFAULT_NAV.booking;
+    const navFaqLabel = (payload.navFaqLabel ?? "").trim() || DEFAULT_NAV.faq;
+    let memberIconGallery =
+      Array.isArray(payload.memberIconGallery) && payload.memberIconGallery.length > 0
+        ? payload.memberIconGallery.filter((u): u is string => typeof u === "string")
+        : DEFAULT_MEMBER_ICON_URLS;
+    if (memberIconGallery.length === 0) memberIconGallery = [...DEFAULT_MEMBER_ICON_URLS];
+    const memberIconSelectedIndex = Math.min(
+      Math.max(0, payload.memberIconSelectedIndex ?? 0),
+      Math.max(0, memberIconGallery.length - 1)
+    );
+    const merged: FrontendSettings = {
+      ...existing,
+      navCoursesLabel,
+      navBookingLabel,
+      navFaqLabel,
+      memberIconGallery,
+      memberIconSelectedIndex,
+    };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: persistFrontendSettingsBase(merged),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "導覽列與會員圖示已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
 /** SEO 設定：供後台 SEO 頁與 layout metadata 使用 */
 export async function getSeoSettings(): Promise<{
   seoTitle: string | null;

@@ -19,6 +19,7 @@ import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adminLayoutCanvasTypes";
 import type { CarouselItem, LayoutBlock } from "@/app/lib/frontendSettingsShared";
 import { LAYOUT_SECTION_LABELS } from "@/app/lib/frontendSettingsShared";
+import FullWidthImageSection from "@/app/components/home/FullWidthImageSection";
 
 const CAROUSEL_INTERVAL_MS = 4000;
 
@@ -28,6 +29,8 @@ const BRANCH_LAYOUT_ID_LIST = [
   "hero",
   "hero_carousel",
   "carousel",
+  /** 畫布「單張大圖」：與 frontend_settings.fullWidthImageUrl 對應 */
+  "full_width_image",
   "featured_categories",
   /** 舊版面 id，仍須可渲染（與 courses_grid 相同內容） */
   "courses",
@@ -188,6 +191,16 @@ export default function BranchSiteHomeView({
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
 
   const isAdminCanvas = admin != null;
+
+  /** 後台畫布：攔截預覽區內所有連結，避免點擊跳到前台／另開分頁；不阻擋區塊選取與裝飾圖編輯 */
+  const suppressCanvasLinkNavigation = (e: React.MouseEvent) => {
+    if (!isAdminCanvas) return;
+    const el = e.target;
+    if (!(el instanceof Element)) return;
+    if (el.closest("[data-resize-handle]")) return;
+    if (el.closest("[data-floating-icon-editor]")) return;
+    if (el.closest("a[href]")) e.preventDefault();
+  };
   const [homeCoursesRaw, setHomeCoursesRaw] = useState<CourseForPublic[]>([]);
   const [homeFetchLoading, setHomeFetchLoading] = useState(!isAdminCanvas);
   const [homeFetchError, setHomeFetchError] = useState<string | null>(null);
@@ -270,7 +283,10 @@ export default function BranchSiteHomeView({
   const previewDesktopBg = deskBg || mobBg;
 
   const headerInner = (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm relative overflow-hidden">
+    <header
+      className="sticky top-0 z-50 border-b border-gray-100 shadow-sm relative overflow-hidden"
+      style={{ backgroundColor: aboutSectionBackgroundColor }}
+    >
       {hasPreviewHeaderBg && previewMobileBg && previewDesktopBg && previewMobileBg !== previewDesktopBg ? (
         <>
           <div
@@ -791,39 +807,54 @@ export default function BranchSiteHomeView({
           "後台畫布預覽區。可調整高度、背景圖、裝飾圖；總站首頁輪播牆 2 於前台設定；分站訪客畫面是否顯示依版型而定。"
         );
       case "full_width_image": {
-        if (!admin) return null;
         const b = getBlock("full_width_image");
+        if (admin) {
+          const inner = (
+            <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+              <div className="relative w-full max-w-7xl mx-auto px-4 py-8 min-h-[120px]">
+                {fullWidthImageUrl ? (
+                  <div className="relative w-full max-h-[220px] rounded-lg overflow-hidden bg-gray-100 border border-amber-200/60">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={fullWidthImageUrl} alt="" className="w-full h-full max-h-[220px] object-cover" />
+                  </div>
+                ) : null}
+                <p className="text-sm font-semibold text-center text-amber-950 mt-4">{LAYOUT_SECTION_LABELS.full_width_image}</p>
+                <p className="text-xs text-gray-600 text-center mt-2 max-w-lg mx-auto leading-relaxed">
+                  後台畫布預覽；於此區上傳圖後按「儲存版面」寫入前台。可調整高度、背景圖、裝飾圖。
+                </p>
+                {(b?.floatingIcons?.length ?? 0) > 0 ? (
+                  <div className="pointer-events-none absolute inset-0 z-[15]">
+                    <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
+                    {admin.selectedBlockId === "full_width_image" ? (
+                      <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+                        <HeroFloatingIconsEditor
+                          overlayMode
+                          coordinateMode={coordMode}
+                          icons={b!.floatingIcons!}
+                          onChange={(next) => admin.onBlockFloatingIconsChange("full_width_image", next)}
+                          selectedIconId={admin.selectedFloatingIconId ?? null}
+                          onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("full_width_image", id)}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          );
+          return wrap("full_width_image", inner);
+        }
+        if (!fullWidthImageUrl?.trim()) return null;
         const inner = (
-          <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
-            <div className="relative w-full max-w-7xl mx-auto px-4 py-8 min-h-[120px]">
-              {fullWidthImageUrl ? (
-                <div className="relative w-full max-h-[220px] rounded-lg overflow-hidden bg-gray-100 border border-amber-200/60">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={fullWidthImageUrl} alt="" className="w-full h-full max-h-[220px] object-cover" />
-                </div>
-              ) : null}
-              <p className="text-sm font-semibold text-center text-amber-950 mt-4">{LAYOUT_SECTION_LABELS.full_width_image}</p>
-              <p className="text-xs text-gray-600 text-center mt-2 max-w-lg mx-auto leading-relaxed">
-                後台畫布預覽；圖檔於「前台設定」上傳。可調整高度、背景圖、裝飾圖；分站訪客是否顯示依版型而定。
-              </p>
-              {(b?.floatingIcons?.length ?? 0) > 0 ? (
-                <div className="pointer-events-none absolute inset-0 z-[15]">
+          <section className="relative w-full" style={getBlockStyle("full_width_image")}>
+            <FullWidthImageSection imageUrl={fullWidthImageUrl} />
+            {(b?.floatingIcons?.length ?? 0) > 0 ? (
+              <div className="pointer-events-none absolute inset-0 z-[30] flex justify-center px-4">
+                <div className="relative h-full w-full max-w-7xl">
                   <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
-                  {admin.selectedBlockId === "full_width_image" ? (
-                    <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
-                      <HeroFloatingIconsEditor
-                        overlayMode
-                        coordinateMode={coordMode}
-                        icons={b!.floatingIcons!}
-                        onChange={(next) => admin.onBlockFloatingIconsChange("full_width_image", next)}
-                        selectedIconId={admin.selectedFloatingIconId ?? null}
-                        onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("full_width_image", id)}
-                      />
-                    </div>
-                  ) : null}
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </section>
         );
         return wrap("full_width_image", inner);
@@ -838,7 +869,15 @@ export default function BranchSiteHomeView({
   };
 
   return (
-    <div className="min-h-screen bg-page flex flex-col">
+    <div
+      className="min-h-screen bg-page flex flex-col"
+      {...(isAdminCanvas
+        ? {
+            onClickCapture: suppressCanvasLinkNavigation,
+            onAuxClickCapture: suppressCanvasLinkNavigation,
+          }
+        : {})}
+    >
       {orderedSectionIds.map((id) => {
         const node = renderSectionById(id);
         if (node == null) return null;

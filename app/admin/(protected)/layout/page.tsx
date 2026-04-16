@@ -83,14 +83,14 @@ const ALL_ADDABLE_BLOCK_IDS = [...ACTIVE_HOME_BLOCK_IDS, ...OPTIONAL_LAYOUT_BLOC
 
 /** 依 block id 對應到「編輯內容」的後台頁面 */
 const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
-  featured_categories: { href: "/admin/frontend-settings", label: "前台設定" },
+  featured_categories: { href: "/admin/layout", label: "首頁版面" },
   courses: { href: "/admin", label: "商品管理（課程）" },
   new_courses: { href: "/admin", label: "商品管理（課程）" },
   popular_experiences: { href: "/admin", label: "商品管理（課程）" },
   about: { href: "/admin/about", label: "關於我們" },
   faq: { href: "/admin/faq", label: "常見問題" },
   contact: { href: "/admin/settings", label: "基本資料（聯絡資訊）" },
-  footer: { href: "/admin/frontend-settings", label: "前台設定（頁尾內容）" },
+  footer: { href: "/admin/layout", label: "首頁版面（頁尾內容）" },
   courses_grid: { href: "/admin", label: "商品管理（課程）" },
   courses_list: { href: "/admin", label: "商品管理（課程）" },
 };

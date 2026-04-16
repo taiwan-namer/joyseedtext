@@ -3,6 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStoreSettings, updateStoreSettings } from "@/app/actions/storeSettingsActions";
+import { getFrontendSettings, updateNavMemberFrontendSettings } from "@/app/actions/frontendSettingsActions";
+import { DEFAULT_MEMBER_ICON_URLS } from "@/app/lib/frontendSettingsShared";
 import { updateAdminPassword } from "@/app/actions/adminAuthActions";
 import { Loader2, Check } from "lucide-react";
 
@@ -30,6 +32,14 @@ const SOFT_BACKGROUND_PALETTE = [
   "#f8fafc",
 ] as const;
 
+function toMemberIconArray(value: unknown): string[] {
+  if (Array.isArray(value) && value.length > 0) {
+    const filtered = value.filter((u): u is string => typeof u === "string");
+    return filtered.length > 0 ? filtered : [...DEFAULT_MEMBER_ICON_URLS];
+  }
+  return [...DEFAULT_MEMBER_ICON_URLS];
+}
+
 export default function AdminSettingsPage() {
   const router = useRouter();
   const [siteName, setSiteName] = useState("");
@@ -45,6 +55,11 @@ export default function AdminSettingsPage() {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [contactAddress, setContactAddress] = useState("");
+  const [navCoursesLabel, setNavCoursesLabel] = useState("課程介紹");
+  const [navBookingLabel, setNavBookingLabel] = useState("課程預約");
+  const [navFaqLabel, setNavFaqLabel] = useState("常見問題");
+  const [memberIconGallery, setMemberIconGallery] = useState<string[]>(() => [...DEFAULT_MEMBER_ICON_URLS]);
+  const [memberIconSelectedIndex, setMemberIconSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -55,25 +70,38 @@ export default function AdminSettingsPage() {
   const [passwordPending, setPasswordPending] = useState(false);
 
   useEffect(() => {
-    getStoreSettings().then((s) => {
-      setSiteName(s.siteName);
-      setPrimaryColor(s.primaryColor);
-      setBackgroundColor(s.backgroundColor ?? "#fafaf9");
-      setAboutSectionBackgroundColor(s.aboutSectionBackgroundColor ?? "#ffffff");
-      const fb = (s.socialFbUrl ?? "").trim();
-      const ig = (s.socialIgUrl ?? "").trim();
-      const line = (s.socialLineUrl ?? "").trim();
-      setSocialFbUrl(fb);
-      setSocialIgUrl(ig);
-      setSocialLineUrl(line);
-      setSocialFbOn(!!fb);
-      setSocialIgOn(!!ig);
-      setSocialLineOn(!!line);
-      setContactEmail(s.contactEmail ?? "");
-      setContactPhone(s.contactPhone ?? "");
-      setContactAddress(s.contactAddress ?? "");
-      setLoading(false);
-    });
+    getStoreSettings()
+      .then((s) => {
+        setSiteName(s.siteName);
+        setPrimaryColor(s.primaryColor);
+        setBackgroundColor(s.backgroundColor ?? "#fafaf9");
+        setAboutSectionBackgroundColor(s.aboutSectionBackgroundColor ?? "#ffffff");
+        const fb = (s.socialFbUrl ?? "").trim();
+        const ig = (s.socialIgUrl ?? "").trim();
+        const line = (s.socialLineUrl ?? "").trim();
+        setSocialFbUrl(fb);
+        setSocialIgUrl(ig);
+        setSocialLineUrl(line);
+        setSocialFbOn(!!fb);
+        setSocialIgOn(!!ig);
+        setSocialLineOn(!!line);
+        setContactEmail(s.contactEmail ?? "");
+        setContactPhone(s.contactPhone ?? "");
+        setContactAddress(s.contactAddress ?? "");
+      })
+      .then(() => getFrontendSettings())
+      .then((f) => {
+        setNavCoursesLabel(f.navCoursesLabel ?? "課程介紹");
+        setNavBookingLabel(f.navBookingLabel ?? "課程預約");
+        setNavFaqLabel(f.navFaqLabel ?? "常見問題");
+        const gallery = toMemberIconArray(f.memberIconGallery);
+        setMemberIconGallery(gallery);
+        setMemberIconSelectedIndex(Math.min(f.memberIconSelectedIndex ?? 0, Math.max(0, gallery.length - 1)));
+      })
+      .catch((err) => {
+        setMessage({ type: "error", text: err?.message ?? "無法載入設定" });
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -92,12 +120,27 @@ export default function AdminSettingsPage() {
         contactPhone,
         contactAddress
       );
-      if (result.success) {
-        setMessage({ type: "success", text: result.message ?? "已儲存" });
-        router.refresh();
-      } else {
+      if (!result.success) {
         setMessage({ type: "error", text: result.error });
+        return;
       }
+      const navResult = await updateNavMemberFrontendSettings({
+        navCoursesLabel,
+        navBookingLabel,
+        navFaqLabel,
+        memberIconGallery: toMemberIconArray(memberIconGallery),
+        memberIconSelectedIndex,
+      });
+      if (!navResult.success) {
+        setMessage({
+          type: "error",
+          text: `基本資料已儲存，但導覽列／會員圖示未寫入：${navResult.error}`,
+        });
+        router.refresh();
+        return;
+      }
+      setMessage({ type: "success", text: "基本資料、導覽列與會員圖示已儲存" });
+      router.refresh();
     });
   };
 
@@ -131,7 +174,7 @@ export default function AdminSettingsPage() {
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-xl font-bold text-gray-900">基本資料</h1>
       <p className="text-sm text-gray-600">
-        設定網站名稱、主色系與背景色，前台會依此顯示。下方示範區可先預覽再儲存，無須反覆至前台查看。
+        設定網站名稱、主色系、背景色、頁首導覽文字與會員圖示；前台會依此顯示。下方示範區可先預覽再儲存。
       </p>
 
       {/* 整合示範區 + 上下配色：一區塊體驗三種配色（頁面底色、關於我們區塊底色、主色） */}
@@ -145,11 +188,11 @@ export default function AdminSettingsPage() {
           >
             <span className="text-xs text-gray-500 mr-2">關於我們區塊底色</span>
             <span className="text-sm font-bold" style={{ color: primaryColor }}>{siteName || "童趣島"}</span>
-            <div className="flex gap-2 text-xs">
+            <div className="flex gap-2 text-xs flex-wrap justify-end">
               <span style={{ color: primaryColor }}>關於我們</span>
-              <span className="text-gray-500">課程介紹</span>
-              <span className="text-gray-500">課程預約</span>
-              <span className="text-gray-500">常見問題</span>
+              <span className="text-gray-500">{navCoursesLabel || "課程介紹"}</span>
+              <span className="text-gray-500">{navBookingLabel || "課程預約"}</span>
+              <span className="text-gray-500">{navFaqLabel || "常見問題"}</span>
             </div>
           </div>
           {/* 下方區塊：對應「頁面背景色」設定 */}
@@ -325,6 +368,75 @@ export default function AdminSettingsPage() {
                 ) : null}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 pt-6">
+          <h2 className="text-sm font-semibold text-gray-900 mb-2">導覽列與會員圖示</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            前台頁首右上角連結文字與會員按鈕圖示。「關於我們」文案請至 介紹項 → 關於我們 設定。
+          </p>
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">會員圖示（擇一）</p>
+              <p className="mb-3 text-xs text-gray-500">顯示於前台右上角會員按鈕；建議顯示尺寸 48×48。</p>
+              <div className="flex flex-wrap gap-3">
+                {toMemberIconArray(memberIconGallery).map((url, i) => (
+                  <button
+                    key={`${url}-${i}`}
+                    type="button"
+                    onClick={() => setMemberIconSelectedIndex(i)}
+                    className={`flex items-center justify-center w-14 h-14 rounded-full overflow-hidden border-2 transition-colors shrink-0 bg-gray-50 ${
+                      memberIconSelectedIndex === i ? "border-amber-500 ring-2 ring-amber-200" : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="w-10 h-10 object-contain" />
+                  </button>
+                ))}
+              </div>
+              {memberIconSelectedIndex >= 0 && memberIconSelectedIndex < toMemberIconArray(memberIconGallery).length ? (
+                <p className="mt-2 text-xs text-amber-700">已選第 {memberIconSelectedIndex + 1} 個圖示</p>
+              ) : null}
+            </div>
+            <div className="pt-2 border-t border-gray-100">
+              <p className="mb-3 text-sm font-medium text-gray-700">導覽列文字（頁首連結）</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-0.5 block text-xs font-medium text-gray-600">課程介紹</label>
+                  <input
+                    type="text"
+                    value={navCoursesLabel}
+                    onChange={(e) => setNavCoursesLabel(e.target.value)}
+                    placeholder="課程介紹"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    disabled={isPending}
+                  />
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-xs font-medium text-gray-600">課程預約</label>
+                  <input
+                    type="text"
+                    value={navBookingLabel}
+                    onChange={(e) => setNavBookingLabel(e.target.value)}
+                    placeholder="課程預約"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    disabled={isPending}
+                  />
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-xs font-medium text-gray-600">常見問題</label>
+                  <input
+                    type="text"
+                    value={navFaqLabel}
+                    onChange={(e) => setNavFaqLabel(e.target.value)}
+                    placeholder="常見問題"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    disabled={isPending}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

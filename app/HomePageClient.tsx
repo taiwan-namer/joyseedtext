@@ -40,6 +40,7 @@ import { isValidImageUrl } from "@/lib/safeMedia";
 import { isAbsoluteHttpUrl, normalizeUserFacingHref } from "@/lib/normalizeUserFacingHref";
 import { googleMapsEmbedSrcFromAddress } from "@/lib/googleMapsEmbed";
 import EntryPopupAd from "./components/home/EntryPopupAd";
+import FullWidthImageSection from "./components/home/FullWidthImageSection";
 import { TrainIcon } from "@/components/icons/TrainIcon";
 import BlockWrapper from "@/app/admin/(protected)/layout/BlockWrapper";
 import HeroFloatingIconsEditor from "@/app/admin/(protected)/layout/HeroFloatingIconsEditor";
@@ -1865,8 +1866,21 @@ export default function WonderVoyageHomePage({
             </div>
           </section>
         );
-      case "full_width_image":
-        return null; // 由 getFrontendSettings.fullWidthImageUrl 控制，可之後補上
+      case "full_width_image": {
+        const url = initialFrontendSettings.fullWidthImageUrl?.trim() || null;
+        if (!url) return null;
+        return (
+          <section className="relative w-full" style={getBlockStyle(block.id)}>
+            <FullWidthImageSection imageUrl={url} />
+            <div className="pointer-events-none absolute inset-0 z-[30] flex justify-center px-4">
+              <div className="relative h-full w-full max-w-7xl">
+                <HeroFloatingIconsLayer coordinateViewport={floatingLayerViewport} icons={block.floatingIcons} />
+                {renderFloatingIconsEditor(block)}
+              </div>
+            </div>
+          </section>
+        );
+      }
       default:
         return null;
     }
@@ -1892,7 +1906,10 @@ export default function WonderVoyageHomePage({
           if (content == null) return null;
           /** 輪播＋橫幅需全寬，勿包在 max-w-7xl：否則內層 w-screen 的 breakout 會相對錯誤寬度，兩側出現白邊 */
           const isFullWidth =
-            block.id === "hero" || block.id === "carousel" || block.id === "carousel_2";
+            block.id === "hero" ||
+            block.id === "carousel" ||
+            block.id === "carousel_2" ||
+            block.id === "full_width_image";
           const isCarouselStripBlock = block.id === "carousel" || block.id === "carousel_2";
           const isCoursesBlock = block.id === "courses" || block.id === "new_courses";
 

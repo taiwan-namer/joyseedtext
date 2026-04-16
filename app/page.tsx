@@ -17,11 +17,13 @@ export default function WonderVoyageHomePage() {
   const [navFaqLabel, setNavFaqLabel] = useState("常見問題");
   const [aboutContent, setAboutContent] = useState<string | null>(null);
   const [layoutBlocks, setLayoutBlocks] = useState<LayoutBlock[]>(getDefaultLayoutBlocks());
+  const [fullWidthImageUrl, setFullWidthImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     getFrontendSettings().then((s) => {
       setHeroSettingsLoaded(true);
       setHeroImageUrl(s.heroImageUrl);
+      setFullWidthImageUrl(s.fullWidthImageUrl ?? null);
       setCarouselItems(
         s.carouselItems.length > 0
           ? s.carouselItems
@@ -45,6 +47,7 @@ export default function WonderVoyageHomePage() {
       layoutBlocks={layoutBlocks}
       heroSettingsLoaded={heroSettingsLoaded}
       heroImageUrl={heroImageUrl}
+      fullWidthImageUrl={fullWidthImageUrl}
       carouselItems={carouselItems}
       aboutContent={aboutContent}
       navAboutLabel={navAboutLabel}

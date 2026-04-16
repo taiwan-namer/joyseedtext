@@ -51,7 +51,7 @@ export default function Header({
   const desktopBg = desk || mob;
 
   return (
-    <header className="w-full shrink-0 h-[100px] box-border py-2 relative z-[100] shadow-sm overflow-visible bg-[#FDFCF8]">
+    <header className="w-full shrink-0 h-[100px] box-border py-2 relative z-[100] shadow-sm overflow-visible bg-[var(--color-about-section-bg)]">
       {hasHeaderBg && mob && desk ? (
         <>
           <div
