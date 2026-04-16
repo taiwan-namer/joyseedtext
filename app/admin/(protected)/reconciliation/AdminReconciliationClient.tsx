@@ -108,18 +108,14 @@ function TotalsCards({ totals, title }: { totals: Totals | null; title: string }
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">客付總額</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.order_total.toLocaleString()}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">總金額（課程，不含安心包）</p>
+          <p className="text-sm text-gray-500">總金額（課程）</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.course_amount.toLocaleString()}</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">安心包（不抽成）</p>
-          <p className="mt-1 text-lg font-bold text-gray-700">NT$ {totals.peace_addon.toLocaleString()}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">傭金</p>
@@ -205,13 +201,6 @@ export default function AdminReconciliationClient() {
     <div className="space-y-8">
       <div>
         <h1 className="text-xl font-bold text-gray-900">對帳明細</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          僅列出已付款／已完成訂單，且與「訂單管理」相同可見範圍。依{" "}
-          <code className="rounded bg-gray-100 px-1 text-xs">sold_via_merchant_id</code>{" "}
-          區分：<strong>總站購買</strong>（總站 marketplace 結帳）與<strong>本站購買</strong>
-          （本分站結帳；舊資料未填時依訂單歸屬推定）。課程抽成依該課程所屬店家之{" "}
-          <code className="rounded bg-gray-100 px-1 text-xs">store_settings.commission_rate_percent</code>。
-        </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -255,7 +244,7 @@ export default function AdminReconciliationClient() {
       {totalsAll ? <TotalsCards totals={totalsAll} title="全站合計（本篩選區間）" /> : null}
 
       <section className="space-y-4 rounded-xl border border-amber-200/80 bg-amber-50/30 p-4 sm:p-5">
-        <h2 className="text-lg font-semibold text-gray-900">總站訂單（於總站 marketplace 結帳）</h2>
+        <h2 className="text-lg font-semibold text-gray-900">總站訂單</h2>
         {totalsHq ? <TotalsCards totals={totalsHq} title="小計" /> : null}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto min-h-[120px]">
@@ -269,7 +258,7 @@ export default function AdminReconciliationClient() {
       </section>
 
       <section className="space-y-4 rounded-xl border border-sky-200/80 bg-sky-50/30 p-4 sm:p-5">
-        <h2 className="text-lg font-semibold text-gray-900">本站訂單（於本分站結帳）</h2>
+        <h2 className="text-lg font-semibold text-gray-900">本站訂單</h2>
         {totalsLocal ? <TotalsCards totals={totalsLocal} title="小計" /> : null}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto min-h-[120px]">
