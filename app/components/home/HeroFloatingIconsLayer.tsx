@@ -5,6 +5,7 @@ import {
   type HeroFloatingIcon,
   effectiveFloatingCoords,
   floatingIconDisplayHeight,
+  LAYOUT_DESIGN_CANVAS_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
 import { getAboutFloatingIconComputedPct } from "@/app/about/aboutFloatingLayout";
 
@@ -17,8 +18,6 @@ type Props = {
   underContent?: boolean;
   wrapperClassName?: string;
 };
-
-const FLOATING_CANVAS_BASE_WIDTH_PX = 1280;
 
 function useNarrowMaxMd(): boolean {
   const [narrow, setNarrow] = useState(false);
@@ -43,7 +42,7 @@ export default function HeroFloatingIconsLayer({
   wrapperClassName = "",
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const [hostWidth, setHostWidth] = useState<number>(FLOATING_CANVAS_BASE_WIDTH_PX);
+  const [hostWidth, setHostWidth] = useState<number>(LAYOUT_DESIGN_CANVAS_WIDTH_PX);
   const narrowAuto = useNarrowMaxMd();
   const resolvedMode: "desktop" | "mobile" =
     coordinateViewport === "mobile" ? "mobile" : coordinateViewport === "desktop" ? "desktop" : narrowAuto ? "mobile" : "desktop";
@@ -52,14 +51,14 @@ export default function HeroFloatingIconsLayer({
   const centerSet = horizontalCenterSlots1Based ?? [];
   const rowGroups = horizontalRowGroups1Based ?? [];
   const nudgeMap = verticalNudgePxBySlot1Based ?? {};
-  const iconScale = Math.max(0.2, hostWidth / FLOATING_CANVAS_BASE_WIDTH_PX);
+  const iconScale = Math.max(0.2, hostWidth / LAYOUT_DESIGN_CANVAS_WIDTH_PX);
   const useAboutRules = resolvedMode === "desktop" && (centerSet.length > 0 || rowGroups.length > 0);
 
   useEffect(() => {
     const el = hostRef.current;
     if (!el) return;
     const apply = () => {
-      const w = Math.max(1, el.clientWidth || FLOATING_CANVAS_BASE_WIDTH_PX);
+      const w = Math.max(1, el.clientWidth || LAYOUT_DESIGN_CANVAS_WIDTH_PX);
       setHostWidth((prev) => (prev === w ? prev : w));
     };
     apply();

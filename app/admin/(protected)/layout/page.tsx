@@ -39,6 +39,7 @@ import {
   type HeroFloatingIcon,
   type LayoutBlock,
   formatFloatingIconSlotLabel,
+  LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
 import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
 import type { Activity } from "@/app/lib/homeSectionTypes";
@@ -53,9 +54,6 @@ import {
   LAYOUT_PREVIEW_SYNC_TYPE,
   type LayoutPreviewSyncPayload,
 } from "./layoutPreviewSync";
-
-/** 後台畫布預覽上限寬度（維持桌機版預覽比例） */
-const CANVAS_MAX_WIDTH_PX = 1280;
 
 /** 分站訪客首頁會顯示的區塊（與 `BranchSiteHomeView` 前台一致） */
 const BRANCH_HOME_CANVAS_BLOCK_IDS: string[] = [
@@ -1764,7 +1762,7 @@ export default function AdminLayoutPage() {
                   setSelectedFloatingIconId(iconId);
                   handleSelectBlock(blockId, { scrollCanvasIntoView: false });
                 }}
-                designWidthPx={CANVAS_MAX_WIDTH_PX}
+                designWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
                 zoomPercent={canvasZoomPct}
                 heroImageUrl={displayHeroImageUrl}
                 carouselItems={displayCarouselItems}

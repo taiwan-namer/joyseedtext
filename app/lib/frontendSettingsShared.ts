@@ -1,5 +1,19 @@
 /** 前台設定共用型別與常數（供 actions 與 client 使用，不可放在 "use server" 檔案） */
 
+/**
+ * 首頁版面編輯畫布、裝飾圖顯示／拖曳縮放共用之「設計欄寬」(px)。
+ * 須與前台主內容 `max-w-7xl`（Tailwind 預設 80rem＝1280px）一致，否則後台座標與前台會偏移。
+ * 一般桌面站常見「內容區」寬度約 1140–1280px；本站採 1280 與 Tailwind 預設對齊。
+ */
+export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
+
+/**
+ * 後台「首頁版面」畫布模擬的瀏覽器視窗寬度（px）。
+ * 須大於 {@link LAYOUT_DESIGN_CANVAS_WIDTH_PX}，畫布內才會出現與前台寬螢幕相同的兩側留白；主內容仍由 `max-w-7xl` 置中。
+ * 裝飾圖座標仍為「主圖／區塊框內」百分比，與視窗外側留白無關。
+ */
+export const LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX = 1920 as const;
+
 export type CarouselItem = {
   id: string;
   title: string;

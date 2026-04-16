@@ -2,8 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import BranchSiteHomeView from "@/app/components/home/BranchSiteHomeView";
-import type { HeroFloatingIcon, LayoutBlock, FeaturedCategory } from "@/app/lib/frontendSettingsShared";
-import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
+import type { CarouselItem, FeaturedCategory, HeroFloatingIcon, LayoutBlock } from "@/app/lib/frontendSettingsShared";
 import CanvasPageBackground from "./CanvasPageBackground";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 
@@ -12,6 +11,7 @@ type LayoutCanvasProps = {
   selectedBlockId: string | null;
   onSelectBlock: (id: string) => void;
   onBlockResizeHeight: (blockId: string, heightPx: number | null) => void;
+  /** 模擬瀏覽器視窗寬度（建議 LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX＝1920），非主內容欄寬 */
   designWidthPx: number;
   /** 預覽縮放 1–100（例如 50 表示視覺縮為一半，方便一覽整頁） */
   zoomPercent: number;
@@ -62,6 +62,7 @@ const DEFAULT_CAROUSEL = [
 /**
  * 後台畫布：與分站首頁（`BranchSiteHomeView`／`app/page.tsx`）同一套版面與區塊，
  * 外加 `CanvasPageBackground` 與縮放外框。
+ * 內層寬度為「模擬瀏覽器視窗」（預設 1920px），主內容仍由 max-w-7xl 置中，與前台寬螢幕兩側留白一致。
  */
 export default function LayoutCanvas(props: LayoutCanvasProps) {
   const {

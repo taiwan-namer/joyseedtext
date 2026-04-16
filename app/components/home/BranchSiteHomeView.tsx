@@ -297,7 +297,7 @@ export default function BranchSiteHomeView({
   /**
    * 訪客與後台皆顯示裝飾圖層；僅後台且選取該積木時顯示編輯器。
    * 座標與首頁大圖一致：百分比相對「mx-auto max-w-7xl px-4」內之寬高（見 hero 主圖外層），
-   * 勿以全螢幕寬 section 為基準，否則與後台畫布 1280 欄位對不齊。
+   * 勿以全螢幕寬 section 為基準，否則與後台／前台共用之 LAYOUT_DESIGN_CANVAS_WIDTH_PX（max-w-7xl）欄位對不齊。
    */
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
     const b = getBlock(blockId);

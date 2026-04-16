@@ -6,6 +6,7 @@ import {
   effectiveFloatingCoords,
   floatingIconDisplayHeight,
   formatFloatingIconSlotLabel,
+  LAYOUT_DESIGN_CANVAS_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
 import {
   findRowGroupContainingSlot1Based,
@@ -35,8 +36,6 @@ type Props = {
   onIconPointerDown?: (id: string) => void;
 };
 
-const FLOATING_CANVAS_BASE_WIDTH_PX = 1280;
-
 function clampPct(n: number): number {
   return Math.min(100, Math.max(0, n));
 }
@@ -55,14 +54,14 @@ export default function HeroFloatingIconsEditor({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [hostWidth, setHostWidth] = useState<number>(FLOATING_CANVAS_BASE_WIDTH_PX);
-  const iconScale = Math.max(0.2, hostWidth / FLOATING_CANVAS_BASE_WIDTH_PX);
+  const [hostWidth, setHostWidth] = useState<number>(LAYOUT_DESIGN_CANVAS_WIDTH_PX);
+  const iconScale = Math.max(0.2, hostWidth / LAYOUT_DESIGN_CANVAS_WIDTH_PX);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const apply = () => {
-      const w = Math.max(1, el.clientWidth || FLOATING_CANVAS_BASE_WIDTH_PX);
+      const w = Math.max(1, el.clientWidth || LAYOUT_DESIGN_CANVAS_WIDTH_PX);
       setHostWidth((prev) => (prev === w ? prev : w));
     };
     apply();
