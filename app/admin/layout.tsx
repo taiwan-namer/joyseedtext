@@ -79,7 +79,7 @@ const SIDEBAR_MENU = [
     open: false,
     children: [
       { label: "訂單管理", href: "/admin/bookings" },
-      { label: "訂單金額管理", href: "/admin/revenue" },
+      { label: "對帳明細", href: "/admin/reconciliation" },
       { label: "報名進度查詢", href: "/admin/enrollment" },
     ],
   },
