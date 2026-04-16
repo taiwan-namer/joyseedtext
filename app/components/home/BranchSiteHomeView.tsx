@@ -294,25 +294,31 @@ export default function BranchSiteHomeView({
     );
   };
 
-  /** 訪客與後台皆顯示裝飾圖層；僅後台且選取該積木時顯示編輯器 */
+  /**
+   * 訪客與後台皆顯示裝飾圖層；僅後台且選取該積木時顯示編輯器。
+   * 座標與首頁大圖一致：百分比相對「mx-auto max-w-7xl px-4」內之寬高（見 hero 主圖外層），
+   * 勿以全螢幕寬 section 為基準，否則與後台畫布 1280 欄位對不齊。
+   */
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
     const b = getBlock(blockId);
     if (!b?.floatingIcons?.length) return null;
     return (
-      <div className="pointer-events-none absolute inset-0 z-[15]">
-        <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b.floatingIcons} />
-        {admin && admin.selectedBlockId === blockId ? (
-          <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
-            <HeroFloatingIconsEditor
-              overlayMode
-              coordinateMode={coordMode}
-              icons={b.floatingIcons}
-              onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
-              selectedIconId={admin.selectedFloatingIconId ?? null}
-              onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
-            />
-          </div>
-        ) : null}
+      <div className="pointer-events-none absolute inset-0 z-[15] flex justify-center">
+        <div className="relative h-full w-full max-w-7xl px-4 sm:px-4 min-h-0">
+          <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b.floatingIcons} />
+          {admin && admin.selectedBlockId === blockId ? (
+            <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
+              <HeroFloatingIconsEditor
+                overlayMode
+                coordinateMode={coordMode}
+                icons={b.floatingIcons}
+                onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
+                selectedIconId={admin.selectedFloatingIconId ?? null}
+                onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   };
@@ -572,14 +578,14 @@ export default function BranchSiteHomeView({
     aboutContent != null && aboutContent.trim() !== "" ? (
       <section
         id="about"
-        className="relative py-12 px-4 scroll-mt-20 border-t border-gray-100"
+        className="relative py-12 scroll-mt-20 border-t border-gray-100"
         style={
           admin
             ? { backgroundColor: aboutSectionBackgroundColor }
             : { backgroundColor: aboutSectionBackgroundColor, ...getBlockStyle("about") }
         }
       >
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-7xl px-4 sm:px-4">
           <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">{navAboutLabel || "關於我們"}</h2>
           <div
             className="prose prose-gray max-w-none text-gray-700"
@@ -593,10 +599,10 @@ export default function BranchSiteHomeView({
   const faqInner = (
     <section
       id="faq"
-      className="relative bg-white py-12 px-4 scroll-mt-20"
+      className="relative bg-white py-12 scroll-mt-20"
       style={admin ? {} : getBlockStyle("faq")}
     >
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-7xl px-4 sm:px-4">
         <h2 className="text-xl font-bold text-gray-900 mb-8 text-center">常見問題</h2>
         <FAQ />
       </div>
@@ -606,10 +612,10 @@ export default function BranchSiteHomeView({
 
   const contactInner = (
     <section
-      className="relative bg-page border-t border-gray-100 py-12 px-4"
+      className="relative bg-page border-t border-gray-100 py-12"
       style={admin ? {} : getBlockStyle("contact")}
     >
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-7xl px-4 sm:px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
           <div className="space-y-6">
             {(hasContact || hasSocialLinks) && (
