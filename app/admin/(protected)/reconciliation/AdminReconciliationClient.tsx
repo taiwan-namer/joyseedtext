@@ -103,6 +103,69 @@ function ReconciliationTable({
   );
 }
 
+function PayoutClaimSection({
+  totalsHq,
+  totalsLocal,
+}: {
+  totalsHq: Totals;
+  totalsLocal: Totals;
+}) {
+  const hqNet = totalsHq.net;
+  const localCommission = totalsLocal.commission;
+  const claimAmount = hqNet - localCommission;
+  const isNegative = claimAmount < 0;
+
+  return (
+    <section className="space-y-3 rounded-xl border border-violet-200/90 bg-violet-50/40 p-4 sm:p-5">
+      <h2 className="text-lg font-semibold text-gray-900">請款項目</h2>
+      <p className="text-sm text-gray-500 lg:hidden">
+        總站淨額 − 本站傭金 = 請款金額
+      </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-stretch lg:gap-3">
+        <div className="flex flex-1 flex-col justify-center rounded-xl border border-white/80 bg-white p-4 shadow-sm">
+          <p className="text-sm text-gray-500">總站淨額</p>
+          <p className="mt-1 text-xs text-gray-400">總站訂單「扣除傭金後（課程淨額）」小計</p>
+          <p className="mt-2 text-xl font-bold text-gray-900">NT$ {hqNet.toLocaleString()}</p>
+        </div>
+        <div className="hidden items-center justify-center text-2xl font-light text-gray-400 lg:flex" aria-hidden>
+          −
+        </div>
+        <div className="flex flex-1 flex-col justify-center rounded-xl border border-white/80 bg-white p-4 shadow-sm">
+          <p className="text-sm text-gray-500">本站傭金</p>
+          <p className="mt-1 text-xs text-gray-400">本站訂單傭金小計</p>
+          <p className="mt-2 text-xl font-bold text-gray-900">NT$ {localCommission.toLocaleString()}</p>
+        </div>
+        <div className="hidden items-center justify-center text-2xl font-light text-gray-400 lg:flex" aria-hidden>
+          =
+        </div>
+        <div
+          className={`flex flex-1 flex-col justify-center rounded-xl border p-4 shadow-sm ${
+            isNegative
+              ? "border-red-200 bg-red-50/80"
+              : "border-amber-200/90 bg-amber-50/50"
+          }`}
+        >
+          <p className="text-sm text-gray-600">請款金額</p>
+          <p className="mt-1 text-xs text-gray-500">總站淨額 − 本站傭金</p>
+          <p
+            className={`mt-2 text-2xl font-bold tabular-nums ${
+              isNegative ? "text-red-800" : "text-amber-900"
+            }`}
+          >
+            NT$ {claimAmount.toLocaleString()}
+          </p>
+        </div>
+      </div>
+      <p className="rounded-lg border border-dashed border-violet-200/80 bg-white/60 px-3 py-2 text-sm leading-relaxed text-gray-600">
+        <span className="font-medium text-gray-800">備註：</span>
+        正數為本站可向總站請款之參考金額；若為
+        <strong className="text-red-800">負數</strong>
+        ，表示總站向本站請款之金額（您應付給總站），實際仍以雙方約定為準。
+      </p>
+    </section>
+  );
+}
+
 function TotalsCards({ totals, title }: { totals: Totals | null; title: string }) {
   if (!totals) return null;
   return (
@@ -270,6 +333,8 @@ export default function AdminReconciliationClient() {
           </div>
         </div>
       </section>
+
+      {totalsHq && totalsLocal ? <PayoutClaimSection totalsHq={totalsHq} totalsLocal={totalsLocal} /> : null}
     </div>
   );
 }
