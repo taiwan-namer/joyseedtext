@@ -82,30 +82,39 @@ function openPrintWindow(session: RollcallSession, sessionData: SessionBookingsR
       <title>報到表 - ${escapeHtml(title)}</title>
       <style>
         @page { size: A4 landscape; margin: 11mm; }
-        body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; color:#111; }
+        body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; color:#111; font-size: 12px; }
         .topline {
           display:flex;
           justify-content:space-between;
           align-items:center;
-          font-size:12px;
-          margin-bottom:16px;
+          font-size:11px;
+          margin-bottom:8px;
           color:#222;
         }
         .center-title { text-align:center; font-weight:600; }
         .brand-title {
-          font-size:25px;
+          font-size:18px;
           margin:0 0 8px;
           font-weight:800;
+          text-align:center;
         }
         .helper {
-          font-size:14px;
+          font-size:11px;
           margin:0 0 14px;
           color:#333;
           line-height:1.45;
         }
-        .meta { margin-bottom:8px; font-size:20px; line-height:1.6; }
-        table { width:100%; border-collapse: collapse; font-size:16px; }
-        th, td { border: 1px solid #333; padding: 8px 10px; vertical-align: middle; }
+        .meta {
+          margin-bottom:10px;
+          font-size:33px;
+          line-height:1.3;
+          font-weight:700;
+          white-space: nowrap;
+          letter-spacing: -0.6px;
+          word-spacing: -2px;
+        }
+        table { width:100%; border-collapse: collapse; font-size:13px; }
+        th, td { border: 1px solid #333; padding: 6px 8px; vertical-align: middle; }
         th { background: #f3f4f6; text-align: left; font-weight:700; }
         .cell-check { text-align:center; width:48px; }
       </style>
@@ -113,16 +122,16 @@ function openPrintWindow(session: RollcallSession, sessionData: SessionBookingsR
     <body>
       <div class="topline">
         <span>${escapeHtml(printedAtText)}</span>
-        <span class="center-title">${escapeHtml(`報到表 - ${title}`)}</span>
+        <span class="center-title"></span>
         <span></span>
       </div>
       <h1 class="brand-title">【童趣島 WonderVoyage－官方合作夥伴專屬報到表】</h1>
       <p class="helper">感謝您提供優質的親子體驗！為維護課程品質，請於現場核對以下學員報到狀態。</p>
-      <div class="meta">
-        <div>課程名稱：${escapeHtml(title)}</div>
-        <div>開課日期：${escapeHtml(dateLabel)}　場次時間：${escapeHtml(session.time)}</div>
-        <div>報名進度：${session.enrolledCount} / ${session.capacity} 人　列印日期：${escapeHtml(printedAtText.slice(0, 10))}</div>
-      </div>
+      <div class="meta">課程名稱：${escapeHtml(title)}　開課日期：${escapeHtml(
+    dateLabel
+  )}　場次時間：${escapeHtml(session.time)}　報名進度：${session.enrolledCount} / ${session.capacity} 人　列印日期：${escapeHtml(
+    printedAtText.slice(0, 10)
+  )}</div>
       <table>
         <thead>
           <tr>
