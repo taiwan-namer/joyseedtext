@@ -224,43 +224,57 @@ export type FrontendSettings = {
   entryPopupLinkUrl?: string | null;
 };
 
+function pickFirstNonEmptyString(o: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function pickFirstFiniteNumber(o: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return undefined;
+}
+
+function clampPct(n: number): number {
+  return Math.min(100, Math.max(0, n));
+}
+
+/** 讀取 DB／舊版 JSON：同時接受 camelCase 與 snake_case，避免解析失敗後被其他儲存流程覆寫成空陣列 */
 export function parseHeroFloatingIcons(raw: unknown): HeroFloatingIcon[] {
   if (!Array.isArray(raw)) return [];
   const out: HeroFloatingIcon[] = [];
   for (const item of raw) {
     const o = item as Record<string, unknown>;
     if (typeof o.id !== "string" || !o.id.trim()) continue;
-    if (typeof o.imageUrl !== "string" || !o.imageUrl.trim()) continue;
-    const leftPct =
-      typeof o.leftPct === "number" && Number.isFinite(o.leftPct)
-        ? Math.min(100, Math.max(0, o.leftPct))
-        : 50;
-    const topPct =
-      typeof o.topPct === "number" && Number.isFinite(o.topPct)
-        ? Math.min(100, Math.max(0, o.topPct))
-        : 50;
-    const rawW = typeof o.widthPx === "number" && Number.isFinite(o.widthPx) ? o.widthPx : NaN;
+    const imageUrl = pickFirstNonEmptyString(o, "imageUrl", "image_url");
+    if (!imageUrl) continue;
+    const leftPctRaw = pickFirstFiniteNumber(o, "leftPct", "left_pct");
+    const topPctRaw = pickFirstFiniteNumber(o, "topPct", "top_pct");
+    const leftPct = leftPctRaw != null ? clampPct(leftPctRaw) : 50;
+    const topPct = topPctRaw != null ? clampPct(topPctRaw) : 50;
+    const rawW = pickFirstFiniteNumber(o, "widthPx", "width_px") ?? NaN;
     const widthPx = Number.isFinite(rawW) && rawW >= 16 ? Math.round(rawW) : 64;
-    const rawH = typeof o.heightPx === "number" && Number.isFinite(o.heightPx) ? o.heightPx : NaN;
+    const rawH = pickFirstFiniteNumber(o, "heightPx", "height_px") ?? NaN;
     const heightPx = Number.isFinite(rawH) && rawH >= 16 ? Math.round(rawH) : undefined;
-    const zIndex =
-      typeof o.zIndex === "number" && Number.isFinite(o.zIndex) ? Math.round(o.zIndex) : 0;
+    const zIndexRaw = pickFirstFiniteNumber(o, "zIndex", "z_index");
+    const zIndex = zIndexRaw != null ? Math.round(zIndexRaw) : 0;
     const enabled = o.enabled === false ? false : true;
-    const leftPctMobile =
-      typeof o.leftPctMobile === "number" && Number.isFinite(o.leftPctMobile)
-        ? Math.min(100, Math.max(0, o.leftPctMobile))
-        : undefined;
-    const topPctMobile =
-      typeof o.topPctMobile === "number" && Number.isFinite(o.topPctMobile)
-        ? Math.min(100, Math.max(0, o.topPctMobile))
-        : undefined;
-    const rawWm = typeof o.widthPxMobile === "number" && Number.isFinite(o.widthPxMobile) ? o.widthPxMobile : NaN;
+    const lpm = pickFirstFiniteNumber(o, "leftPctMobile", "left_pct_mobile");
+    const leftPctMobile = lpm != null ? clampPct(lpm) : undefined;
+    const tpm = pickFirstFiniteNumber(o, "topPctMobile", "top_pct_mobile");
+    const topPctMobile = tpm != null ? clampPct(tpm) : undefined;
+    const rawWm = pickFirstFiniteNumber(o, "widthPxMobile", "width_px_mobile") ?? NaN;
     const widthPxMobile = Number.isFinite(rawWm) && rawWm >= 16 ? Math.round(rawWm) : undefined;
-    const rawHm = typeof o.heightPxMobile === "number" && Number.isFinite(o.heightPxMobile) ? o.heightPxMobile : NaN;
+    const rawHm = pickFirstFiniteNumber(o, "heightPxMobile", "height_px_mobile") ?? NaN;
     const heightPxMobile = Number.isFinite(rawHm) && rawHm >= 16 ? Math.round(rawHm) : undefined;
     out.push({
       id: o.id.trim(),
-      imageUrl: o.imageUrl.trim(),
+      imageUrl,
       leftPct,
       topPct,
       widthPx,

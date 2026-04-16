@@ -89,11 +89,14 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
     const o = raw[i] as Record<string, unknown> | null;
     if (!o || typeof o.id !== "string") continue;
     const order = typeof o.order === "number" ? o.order : i;
-    const heightPx = typeof o.heightPx === "number" && o.heightPx > 0 ? o.heightPx : null;
-    const backgroundImageUrl = typeof o.backgroundImageUrl === "string" ? o.backgroundImageUrl : null;
+    const heightRaw = o.heightPx ?? o.height_px;
+    const heightPx = typeof heightRaw === "number" && heightRaw > 0 ? heightRaw : null;
+    const bgRaw = o.backgroundImageUrl ?? o.background_image_url;
+    const backgroundImageUrl = typeof bgRaw === "string" && bgRaw.trim() ? bgRaw.trim() : null;
     const enabled = o.enabled === false ? false : true;
     const title = o.title != null && typeof o.title === "string" ? o.title : (LAYOUT_SECTION_LABELS[o.id] ?? null);
-    const floatingIcons = parseHeroFloatingIcons(o.floatingIcons);
+    const floatingRaw = o.floatingIcons ?? o.floating_icons;
+    const floatingIcons = parseHeroFloatingIcons(floatingRaw);
     blocks.push({
       id: o.id,
       order,
@@ -112,7 +115,7 @@ function applyLegacyHeroFloatingIconsToBlocks(
   blocks: LayoutBlock[],
   raw: Record<string, unknown>
 ): LayoutBlock[] {
-  const legacy = parseHeroFloatingIcons(raw.heroFloatingIcons);
+  const legacy = parseHeroFloatingIcons(raw.heroFloatingIcons ?? raw.hero_floating_icons);
   if (legacy.length === 0) return blocks;
   return blocks.map((b) => {
     if (b.id !== "hero") return b;
@@ -273,7 +276,10 @@ async function readFrontendSettingsUncached(): Promise<FrontendSettings> {
         ? (raw.layout_order as unknown[]).filter((x): x is string => typeof x === "string")
         : DEFAULT_LAYOUT_ORDER,
       fullWidthImageUrl: typeof raw.fullWidthImageUrl === "string" ? raw.fullWidthImageUrl : null,
-      layoutBlocks: applyLegacyHeroFloatingIconsToBlocks(parseLayoutBlocks(raw.layout_blocks), raw),
+      layoutBlocks: applyLegacyHeroFloatingIconsToBlocks(
+        parseLayoutBlocks(raw.layout_blocks ?? raw.layoutBlocks),
+        raw
+      ),
       featuredCategories: parseFeaturedCategories(raw.featured_categories),
       featuredSectionIconUrl: normalizeUploadedAssetUrl(
         typeof raw.featuredSectionIconUrl === "string" ? raw.featuredSectionIconUrl : null,
