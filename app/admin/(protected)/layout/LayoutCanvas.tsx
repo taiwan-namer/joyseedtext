@@ -90,6 +90,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     floatingIconsCoordinateMode = "desktop",
     selectedFloatingIconId = null,
     onSelectFloatingIcon,
+    aboutPageUrl,
   } = props;
   const coordMode = floatingIconsCoordinateMode;
   const carouselList = (carouselItems.length > 0 ? carouselItems : DEFAULT_CAROUSEL).filter(
@@ -166,6 +167,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
             navCoursesLabel={navCoursesLabel}
             navBookingLabel={navBookingLabel}
             navFaqLabel={navFaqLabel}
+            aboutPageUrl={aboutPageUrl}
             adminLayout={{
               selectedBlockId,
               onSelectBlock,

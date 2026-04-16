@@ -18,7 +18,11 @@ import HeroFloatingIconsEditor from "@/app/admin/(protected)/layout/HeroFloating
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adminLayoutCanvasTypes";
 import type { CarouselItem, LayoutBlock } from "@/app/lib/frontendSettingsShared";
-import { LAYOUT_SECTION_LABELS } from "@/app/lib/frontendSettingsShared";
+import {
+  DEFAULT_ABOUT_PAGE_URL,
+  LAYOUT_SECTION_LABELS,
+  normalizeAboutPageUrl,
+} from "@/app/lib/frontendSettingsShared";
 import FullWidthImageSection from "@/app/components/home/FullWidthImageSection";
 
 const CAROUSEL_INTERVAL_MS = 4000;
@@ -111,6 +115,8 @@ export type BranchSiteHomeViewProps = {
   navCoursesLabel: string;
   navBookingLabel: string;
   navFaqLabel: string;
+  /** 導覽列「關於我們」連結（預設 `/about`）；可為站內路徑或 http(s) 外部網址 */
+  aboutPageUrl?: string;
   /** 後台畫布：區塊選取、高度、裝飾圖編輯 */
   adminLayout?: AdminLayoutCanvasConfig | null;
   /** 後台畫布：與編輯頁同一批課程列表；訪客首頁會自行向 API 載入 */
@@ -129,6 +135,7 @@ export default function BranchSiteHomeView({
   navCoursesLabel,
   navBookingLabel,
   navFaqLabel,
+  aboutPageUrl = DEFAULT_ABOUT_PAGE_URL,
   adminLayout = null,
   activities: activitiesFromParent,
 }: BranchSiteHomeViewProps) {
@@ -282,6 +289,9 @@ export default function BranchSiteHomeView({
   const previewMobileBg = mobBg || deskBg;
   const previewDesktopBg = deskBg || mobBg;
 
+  const aboutNavHref = normalizeAboutPageUrl(aboutPageUrl);
+  const aboutNavIsExternal = /^https?:\/\//i.test(aboutNavHref);
+
   const headerInner = (
     <header
       className="sticky top-0 z-50 border-b border-gray-100 shadow-sm relative overflow-hidden"
@@ -321,9 +331,20 @@ export default function BranchSiteHomeView({
           <h1 className="text-xl font-bold text-brand shrink-0">{siteName}</h1>
         )}
         <div className="flex items-center gap-2 sm:gap-3 shrink min-w-0 overflow-x-auto scrollbar-hide">
-          <a href="#about" className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">
-            {navAboutLabel || "關於我們"}
-          </a>
+          {aboutNavIsExternal ? (
+            <a
+              href={aboutNavHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-600 hover:text-brand text-sm whitespace-nowrap"
+            >
+              {navAboutLabel || "關於我們"}
+            </a>
+          ) : (
+            <Link href={aboutNavHref} className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">
+              {navAboutLabel || "關於我們"}
+            </Link>
+          )}
           <Link href="/courses" className="text-gray-600 hover:text-brand text-sm whitespace-nowrap">
             {navCoursesLabel || "課程介紹"}
           </Link>

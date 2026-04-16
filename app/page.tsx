@@ -3,7 +3,11 @@
 import { useState, useEffect } from "react";
 import { getFrontendSettings } from "./actions/frontendSettingsActions";
 import type { CarouselItem } from "./lib/frontendSettingsShared";
-import { getDefaultLayoutBlocks, type LayoutBlock } from "./lib/frontendSettingsShared";
+import {
+  getDefaultLayoutBlocks,
+  type LayoutBlock,
+  DEFAULT_ABOUT_PAGE_URL,
+} from "./lib/frontendSettingsShared";
 import BranchSiteHomeView from "./components/home/BranchSiteHomeView";
 
 export default function WonderVoyageHomePage() {
@@ -18,6 +22,7 @@ export default function WonderVoyageHomePage() {
   const [aboutContent, setAboutContent] = useState<string | null>(null);
   const [layoutBlocks, setLayoutBlocks] = useState<LayoutBlock[]>(getDefaultLayoutBlocks());
   const [fullWidthImageUrl, setFullWidthImageUrl] = useState<string | null>(null);
+  const [aboutPageUrl, setAboutPageUrl] = useState(DEFAULT_ABOUT_PAGE_URL);
 
   useEffect(() => {
     getFrontendSettings().then((s) => {
@@ -39,6 +44,7 @@ export default function WonderVoyageHomePage() {
       setNavFaqLabel(s.navFaqLabel || "常見問題");
       setAboutContent(s.aboutContent ?? null);
       setLayoutBlocks(s.layoutBlocks && s.layoutBlocks.length > 0 ? s.layoutBlocks : getDefaultLayoutBlocks());
+      setAboutPageUrl(s.aboutPageUrl ?? DEFAULT_ABOUT_PAGE_URL);
     });
   }, []);
 
@@ -54,6 +60,7 @@ export default function WonderVoyageHomePage() {
       navCoursesLabel={navCoursesLabel}
       navBookingLabel={navBookingLabel}
       navFaqLabel={navFaqLabel}
+      aboutPageUrl={aboutPageUrl}
     />
   );
 }
