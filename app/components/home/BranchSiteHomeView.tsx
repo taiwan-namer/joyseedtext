@@ -960,12 +960,34 @@ export default function BranchSiteHomeView({
         : {})}
     >
       {!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-[24]" aria-hidden>
+        <div className="pointer-events-none fixed inset-0 z-[32]" aria-hidden>
           <HeroFloatingIconsLayer
             icons={viewportFloatingIcons ?? undefined}
             coordinateViewport={coordMode}
             scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
           />
+        </div>
+      ) : null}
+      {isAdminCanvas &&
+      admin?.onViewportFloatingIconsChange &&
+      (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
+        <div className="pointer-events-none fixed inset-0 z-[32]">
+          <HeroFloatingIconsLayer
+            icons={admin.viewportFloatingIcons}
+            coordinateViewport={coordMode}
+            scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+          />
+          <div className="absolute inset-0 z-[33]" data-floating-icon-editor>
+            <HeroFloatingIconsEditor
+              overlayMode
+              coordinateMode={coordMode}
+              icons={admin.viewportFloatingIcons!}
+              onChange={admin.onViewportFloatingIconsChange}
+              selectedIconId={admin.selectedViewportFloatingIconId ?? null}
+              onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
+              scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+            />
+          </div>
         </div>
       ) : null}
       {orderedSectionIds.map((id) => {

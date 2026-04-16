@@ -51,6 +51,11 @@ type LayoutCanvasProps = {
   floatingIconsCoordinateMode?: "desktop" | "mobile";
   selectedFloatingIconId?: string | null;
   onSelectFloatingIcon?: (blockId: string, iconId: string) => void;
+  /** 全螢幕裝飾圖（與首頁畫布同一預覽層） */
+  viewportFloatingIcons?: HeroFloatingIcon[];
+  onViewportFloatingIconsChange?: (next: HeroFloatingIcon[]) => void;
+  viewportSelectedFloatingIconId?: string | null;
+  onSelectViewportFloatingIcon?: (id: string | null) => void;
 };
 
 const DEFAULT_CAROUSEL = [
@@ -92,6 +97,10 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     selectedFloatingIconId = null,
     onSelectFloatingIcon,
     aboutPageUrl,
+    viewportFloatingIcons = [],
+    onViewportFloatingIconsChange,
+    viewportSelectedFloatingIconId = null,
+    onSelectViewportFloatingIcon,
   } = props;
   const coordMode = floatingIconsCoordinateMode;
   const carouselList = (carouselItems.length > 0 ? carouselItems : DEFAULT_CAROUSEL).filter(
@@ -178,6 +187,10 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
               selectedFloatingIconId,
               onSelectFloatingIcon,
               canvasPreviewScale: scale,
+              viewportFloatingIcons,
+              onViewportFloatingIconsChange,
+              selectedViewportFloatingIconId: viewportSelectedFloatingIconId,
+              onSelectViewportFloatingIcon,
             }}
           />
         </CanvasPageBackground>

@@ -45,7 +45,6 @@ import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 import { readImageNaturalSizeFromFile } from "@/lib/readImageNaturalSizeFromFile";
 import LayoutCanvas from "./LayoutCanvas";
-import ViewportFloatingIconsEditorPanel from "./ViewportFloatingIconsEditorPanel";
 import {
   LAYOUT_MOBILE_PREVIEW_WIDTH_PX,
   LAYOUT_PREVIEW_BLOCK_HEIGHT,
@@ -1859,6 +1858,16 @@ export default function AdminLayoutPage() {
                 onBlockFloatingIconsChange={(blockId, next) =>
                   setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, floatingIcons: next } : b)))
                 }
+                viewportFloatingIcons={viewportFloatingIcons}
+                onViewportFloatingIconsChange={setViewportFloatingIcons}
+                viewportSelectedFloatingIconId={viewportSelectedFloatingIconId}
+                onSelectViewportFloatingIcon={(id) => {
+                  setViewportSelectedFloatingIconId(id);
+                  if (id !== null) {
+                    setSelectedBlockId(null);
+                    setSelectedFloatingIconId(null);
+                  }
+                }}
               />
             </div>
           </div>
@@ -1904,25 +1913,61 @@ export default function AdminLayoutPage() {
           </div>
           ) : null}
 
-          <ViewportFloatingIconsEditorPanel
-            icons={viewportFloatingIcons}
-            onChange={setViewportFloatingIcons}
-            coordinateMode="desktop"
-            selectedFloatingIconId={viewportSelectedFloatingIconId}
-            onSelectFloatingIcon={(id) => {
-              setViewportSelectedFloatingIconId(id);
-              if (id !== null) {
-                setSelectedBlockId(null);
-                setSelectedFloatingIconId(null);
-              }
-            }}
-            onRemoveIcon={(id) => {
-              setViewportFloatingIcons((prev) => prev.filter((ic) => ic.id !== id));
-              setViewportSelectedFloatingIconId((cur) => (cur === id ? null : cur));
-            }}
-            uploading={viewportFloatUploading}
-            onRequestUpload={() => viewportFloatFileRef.current?.click()}
-          />
+          <div className="space-y-3 rounded-xl border border-amber-200/80 bg-white/90 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800">全螢幕裝飾圖</h2>
+                <p className="text-xs text-gray-600 mt-1 leading-relaxed max-w-xl">
+                  疊在上方桌機畫布預覽上（與首頁大圖、輪播同一畫面），座標為瀏覽器視窗百分比，可放在主內容欄兩側留白；與各區塊內裝飾圖分開。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => viewportFloatFileRef.current?.click()}
+                disabled={viewportFloatUploading}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {viewportFloatUploading ? "上傳中…" : "新增裝飾圖"}
+              </button>
+            </div>
+            {viewportFloatingIcons.length > 0 ? (
+              <ul className="space-y-1.5 text-xs text-gray-700">
+                {viewportFloatingIcons.map((ic, idx) => (
+                  <li
+                    key={ic.id}
+                    className="flex items-center justify-between gap-2 rounded border border-gray-200/80 bg-white px-2 py-1.5"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewportSelectedFloatingIconId(ic.id);
+                        setSelectedBlockId(null);
+                        setSelectedFloatingIconId(null);
+                      }}
+                      className={`min-w-0 flex-1 text-left truncate ${
+                        viewportSelectedFloatingIconId === ic.id ? "text-amber-800 font-medium" : ""
+                      }`}
+                    >
+                      編號 {idx + 1}
+                      {viewportSelectedFloatingIconId === ic.id ? "（已選）" : ""}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewportFloatingIcons((prev) => prev.filter((x) => x.id !== ic.id));
+                        setViewportSelectedFloatingIconId((cur) => (cur === ic.id ? null : cur));
+                      }}
+                      className="shrink-0 text-red-600 hover:underline"
+                    >
+                      移除
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-gray-500">尚無全螢幕裝飾圖；上傳後請在上方畫布拖曳定位，再按「儲存版面」。</p>
+            )}
+          </div>
 
           <div className="mt-4 flex items-center gap-3 shrink-0 pb-4">
             <button

@@ -12,4 +12,12 @@ export type AdminLayoutCanvasConfig = {
   onSelectFloatingIcon?: (blockId: string, iconId: string) => void;
   /** 桌機畫布目前縮放（0.25–1）；區塊高度拖曳與顯示依此換算為前台設計 px */
   canvasPreviewScale?: number;
+  /**
+   * 全螢幕裝飾圖（瀏覽器視窗百分比座標，與區塊內裝飾圖分開）；
+   * 在 {@link BranchSiteHomeView} 與首頁區塊同一畫布上疊加預覽／編輯。
+   */
+  viewportFloatingIcons?: HeroFloatingIcon[];
+  onViewportFloatingIconsChange?: (next: HeroFloatingIcon[]) => void;
+  selectedViewportFloatingIconId?: string | null;
+  onSelectViewportFloatingIcon?: (id: string | null) => void;
 };
