@@ -398,8 +398,14 @@ export default function BranchSiteHomeView({
 
   const heroBlock = getBlock("hero");
   const heroCarouselBlock = getBlock("hero_carousel");
-  /** 主圖區僅顯示「首頁大圖」積木的裝飾圖；若僅有 hero_carousel 則用其裝飾圖。兩者並存時主圖只顯示 hero 的裝飾圖，hero_carousel 另列一條可選區。 */
-  const iconsForMainHeroSection = heroBlock != null ? heroBlock.floatingIcons : heroCarouselBlock?.floatingIcons;
+  /**
+   * 主圖合併槽：優先使用「首頁大圖」(hero) 的裝飾圖；若 hero 存在但尚未掛圖、圖在「首頁大圖（輪播）」(hero_carousel)，則改顯示後者。
+   * 舊邏輯在兩區塊並存時只讀 hero，常導致前台完全沒有裝飾圖請求。
+   */
+  const iconsForMainHeroSection =
+    (heroBlock?.floatingIcons?.length ?? 0) > 0
+      ? heroBlock!.floatingIcons
+      : heroCarouselBlock?.floatingIcons;
   const heroEditBlockId =
     admin?.selectedBlockId === "hero" || admin?.selectedBlockId === "hero_carousel"
       ? admin.selectedBlockId

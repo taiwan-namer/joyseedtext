@@ -6,6 +6,7 @@
  */
 
 import { cache } from "react";
+import { revalidatePath, unstable_noStore } from "next/cache";
 import { uploadOneToR2, uploadOneToR2WithPrefix } from "@/app/actions/productActions";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import {
@@ -87,18 +88,21 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
   const blocks: LayoutBlock[] = [];
   for (let i = 0; i < raw.length; i++) {
     const o = raw[i] as Record<string, unknown> | null;
-    if (!o || typeof o.id !== "string") continue;
+    if (!o) continue;
+    const idRaw = o.id;
+    const id = typeof idRaw === "string" ? idRaw.trim() : typeof idRaw === "number" ? String(idRaw) : "";
+    if (!id) continue;
     const order = typeof o.order === "number" ? o.order : i;
     const heightRaw = o.heightPx ?? o.height_px;
     const heightPx = typeof heightRaw === "number" && heightRaw > 0 ? heightRaw : null;
     const bgRaw = o.backgroundImageUrl ?? o.background_image_url;
     const backgroundImageUrl = typeof bgRaw === "string" && bgRaw.trim() ? bgRaw.trim() : null;
     const enabled = o.enabled === false ? false : true;
-    const title = o.title != null && typeof o.title === "string" ? o.title : (LAYOUT_SECTION_LABELS[o.id] ?? null);
+    const title = o.title != null && typeof o.title === "string" ? o.title : (LAYOUT_SECTION_LABELS[id] ?? null);
     const floatingRaw = o.floatingIcons ?? o.floating_icons;
     const floatingIcons = parseHeroFloatingIcons(floatingRaw);
     blocks.push({
-      id: o.id,
+      id,
       order,
       heightPx,
       backgroundImageUrl,
@@ -193,6 +197,7 @@ function defaultFrontendSettingsWhenMissing(): FrontendSettings {
 }
 
 async function readFrontendSettingsUncached(): Promise<FrontendSettings> {
+  unstable_noStore();
   try {
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     const { createServerSupabase } = await import("@/lib/supabase/server");
@@ -423,6 +428,7 @@ export async function updateLayoutBlocks(blocks: LayoutBlock[]): Promise<
         { onConflict: "merchant_id" }
       );
     if (error) return { success: false, error: error.message };
+    revalidatePath("/");
     return { success: true, message: "版面已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";
