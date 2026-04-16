@@ -294,9 +294,6 @@ function SessionAccordion({
                 </div>
               )}
 
-              <div className="border-t border-gray-200 bg-white px-3 py-3 sm:px-4">
-                <VendorAttendancePrintSheet session={session} sessionData={sessionData} />
-              </div>
             </div>
           ) : null}
         </div>

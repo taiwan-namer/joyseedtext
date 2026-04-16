@@ -85,7 +85,7 @@ function openPrintWindow(session: RollcallSession, sessionData: SessionBookingsR
         @page { size: A4 landscape; margin: 11mm; }
         body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; color:#111; font-size: 12px; }
         .brand-title {
-          font-size:23px;
+          font-size:24px;
           margin:0 0 8px;
           font-weight:800;
           text-align:center;
@@ -98,14 +98,14 @@ function openPrintWindow(session: RollcallSession, sessionData: SessionBookingsR
         }
         .meta {
           margin-bottom:10px;
-          font-size:28px;
+          font-size:26px;
           line-height:1.3;
           font-weight:700;
           white-space: nowrap;
           letter-spacing: -0.6px;
           word-spacing: -2px;
         }
-        table { width:100%; border-collapse: collapse; font-size:17px; }
+        table { width:100%; border-collapse: collapse; font-size:15px; }
         th, td { border: 1px solid #333; padding: 6px 8px; vertical-align: middle; }
         th { background: #f3f4f6; text-align: left; font-weight:700; }
         .cell-check { text-align:center; width:48px; }
