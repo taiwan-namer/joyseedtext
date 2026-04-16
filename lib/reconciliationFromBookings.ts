@@ -1,6 +1,6 @@
 import { parseBookingAmountsForAdmin } from "@/lib/bookingAdminAmounts";
 import { commissionFromCourseAmount, parseCommissionRate } from "@/lib/commission";
-import { MARKETPLACE_MERCHANT_ID } from "@/lib/constants";
+import { classifyPurchaseChannelForBranchAdmin } from "@/lib/purchaseChannelForBranch";
 
 export type ReconciliationBookingRow = {
   id: string;
@@ -49,22 +49,6 @@ export function normalizeReconciliationBookingRows(raw: unknown[]): Reconciliati
     });
   }
   return out;
-}
-
-/** 總站 marketplace 結帳 vs 本分站（或舊資料未填 sold_via 且訂單歸本店） */
-export function classifyPurchaseChannelForBranchAdmin(
-  branchMerchantId: string,
-  row: Pick<ReconciliationBookingRow, "sold_via_merchant_id" | "merchant_id">
-): "hq" | "local" {
-  const hq = MARKETPLACE_MERCHANT_ID.trim();
-  const sold = (row.sold_via_merchant_id ?? "").trim();
-  const merchant = (row.merchant_id ?? "").trim();
-  if (sold === hq) return "hq";
-  if (sold === branchMerchantId) return "local";
-  if (!sold) {
-    return merchant === branchMerchantId ? "local" : "hq";
-  }
-  return "local";
 }
 
 export type ReconciliationLine = {

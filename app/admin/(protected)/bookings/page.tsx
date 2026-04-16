@@ -28,6 +28,7 @@ import {
 import { processBookingRefund } from "@/app/actions/refundActions";
 import AdminRescheduleModal from "@/app/admin/(protected)/bookings/AdminRescheduleModal";
 import { MARKETPLACE_MERCHANT_ID } from "@/lib/constants";
+import { classifyPurchaseChannelForBranchAdmin } from "@/lib/purchaseChannelForBranch";
 
 function formatDate(iso: string) {
   try {
@@ -74,19 +75,24 @@ function statusLabel(s: string) {
 }
 
 /**
- * 結帳來源：`sold_via_merchant_id` 為總站 {@link MARKETPLACE_MERCHANT_ID}（`model`）→「總站」；其餘（含未填、本分站 id）→「本站」。
- * 依賴結帳流程正確寫入 `sold_via_merchant_id`；未填時畫面上為「本站」，詳情見 tooltip。
+ * 結帳來源：與「對帳明細」相同規則（{@link classifyPurchaseChannelForBranchAdmin}）。
+ * 含 sold_via 未填時依庫存 merchant_id 是否為本站推斷，故與僅比對 sold===model 時可能不同。
  */
-function checkoutSourceCell(row: BookingWithClass): { text: string; title: string } {
+function checkoutSourceCell(row: BookingWithClass, branchMerchantId: string): { text: string; title: string } {
   const sold = row.sold_via_merchant_id?.trim();
   const inv = row.merchant_id?.trim();
+  const channel = classifyPurchaseChannelForBranchAdmin(branchMerchantId, {
+    sold_via_merchant_id: row.sold_via_merchant_id ?? null,
+    merchant_id: row.merchant_id ?? null,
+  });
+  const text = channel === "hq" ? "總站" : "本站";
   const title = [
-    `顯示：sold_via_merchant_id === "${MARKETPLACE_MERCHANT_ID}" → 總站；否則 → 本站`,
+    `與對帳明細相同：sold===「${MARKETPLACE_MERCHANT_ID}」→總站；sold===本站ID→本站；sold未填→依庫存merchant_id是否為本站`,
     `庫存歸屬 merchant_id：${inv ?? "—"}`,
     `結帳站 sold_via_merchant_id：${sold ?? "（未填）"}`,
     `開課快照 class_creator_merchant_id：${row.class_creator_merchant_id?.trim() ?? "—"}`,
+    `本分站 NEXT_PUBLIC_CLIENT_ID：${branchMerchantId || "（未設定）"}`,
   ].join("\n");
-  const text = sold === MARKETPLACE_MERCHANT_ID ? "總站" : "本站";
   return { text, title };
 }
 
@@ -135,6 +141,9 @@ export default function AdminBookingsPage() {
   const [filterEndDate, setFilterEndDate] = useState<string>("");
   const [batchPaidLoading, setBatchPaidLoading] = useState(false);
   const [batchCompleteLoading, setBatchCompleteLoading] = useState(false);
+
+  /** 與對帳明細相同：用於判斷 sold 未填時「總站／本站」 */
+  const branchMerchantId = (process.env.NEXT_PUBLIC_CLIENT_ID ?? "").trim();
 
   const filteredList = list.filter((row) => {
     if (filterStatus && row.status !== filterStatus) return false;
@@ -475,7 +484,7 @@ export default function AdminBookingsPage() {
                   <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[100px]">課程名稱</th>
                   <th
                     className="text-left py-2 px-3 font-medium text-gray-700 w-[7.5rem]"
-                    title={`sold_via_merchant_id 為總站「${MARKETPLACE_MERCHANT_ID}」顯示「總站」，其餘顯示「本站」；滑鼠移至儲存格可看原始 ID`}
+                    title="與對帳明細相同：sold 為 model→總站；sold 為本站 ID→本站；sold 未填則依庫存 merchant_id 推斷"
                   >
                     結帳來源
                   </th>
@@ -490,7 +499,7 @@ export default function AdminBookingsPage() {
               </thead>
               <tbody>
                 {filteredList.map((row) => {
-                  const src = checkoutSourceCell(row);
+                  const src = checkoutSourceCell(row, branchMerchantId);
                   return (
                   <tr
                     key={row.id}
