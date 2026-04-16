@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -15,15 +15,12 @@ import {
 } from "lucide-react";
 import {
   getAdminBookings,
-  getAdminPendingPayments,
-  createBookingFromPendingForAdmin,
   markBookingAsPaid,
   completeBooking,
   deleteBooking,
   batchMarkBookingsAsPaid,
   batchCompleteBookings,
   type BookingWithClass,
-  type AdminPendingPaymentRow,
 } from "@/app/actions/bookingActions";
 import { processBookingRefund } from "@/app/actions/refundActions";
 import AdminRescheduleModal from "@/app/admin/(protected)/bookings/AdminRescheduleModal";
@@ -42,19 +39,6 @@ function formatDate(iso: string) {
     });
   } catch {
     return iso;
-  }
-}
-
-function pendingPaymentMethodLabel(m: string) {
-  switch (m) {
-    case "linepay":
-      return "LINE Pay";
-    case "ecpay":
-      return "綠界";
-    case "newebpay":
-      return "藍新";
-    default:
-      return m || "—";
   }
 }
 
@@ -126,10 +110,8 @@ const STATUS_OPTIONS = [
 
 export default function AdminBookingsPage() {
   const [list, setList] = useState<BookingWithClass[]>([]);
-  const [pendingList, setPendingList] = useState<AdminPendingPaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pendingFinalizeId, setPendingFinalizeId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -164,38 +146,24 @@ export default function AdminBookingsPage() {
     .map((r) => r.id);
   const idsForBatchComplete = filteredList.filter((r) => r.status === "paid").map((r) => r.id);
 
+  /** 已入庫、ATM／未註記付款方式之未付款訂單（非線上金流 pending_payments） */
+  const atmUnpaidBookings = useMemo(
+    () =>
+      list.filter(
+        (r) =>
+          (r.status === "unpaid" || r.status === "upcoming") &&
+          (r.payment_method === "atm" || !r.payment_method)
+      ),
+    [list]
+  );
+
   const fetchList = async () => {
     setLoading(true);
     setError(null);
-    const [bookingsRes, pendingRes] = await Promise.all([getAdminBookings(), getAdminPendingPayments()]);
+    const bookingsRes = await getAdminBookings();
     if (bookingsRes.success) setList(bookingsRes.data);
     else setError(bookingsRes.error);
-    if (pendingRes.success) setPendingList(pendingRes.data);
-    else {
-      setError((prev) => (prev ? `${prev}；${pendingRes.error}` : pendingRes.error));
-    }
     setLoading(false);
-  };
-
-  const handleFinalizePending = async (pendingId: string) => {
-    if (
-      !confirm(
-        "請確認客戶已在金流（LINE Pay／綠界／藍新）端顯示付款成功，再建立訂單。誤操作可能導致重複名額或重複記帳。"
-      )
-    ) {
-      return;
-    }
-    setPendingFinalizeId(pendingId);
-    const res = await createBookingFromPendingForAdmin(pendingId);
-    setPendingFinalizeId(null);
-    if (res.success) {
-      setPendingList((prev) => prev.filter((p) => p.id !== pendingId));
-      const bookingsRes = await getAdminBookings();
-      if (bookingsRes.success) setList(bookingsRes.data);
-      alert(`已建立訂單：${res.bookingId.slice(0, 8)}…`);
-    } else {
-      alert(res.error);
-    }
   };
 
   useEffect(() => {
@@ -325,30 +293,33 @@ export default function AdminBookingsPage() {
       </div>
       <h1 className="text-xl font-bold text-gray-900">訂單管理</h1>
 
-      {pendingList.length > 0 && (
+      {atmUnpaidBookings.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm space-y-3">
           <div>
-            <h2 className="text-sm font-semibold text-amber-900">待付款紀錄（尚未寫入訂單）</h2>
+            <h2 className="text-sm font-semibold text-amber-900">ATM 待確認入帳</h2>
             <p className="text-xs text-amber-800/90 mt-1">
-              客戶若已於 LINE Pay／綠界／藍新付款成功，但後台沒有對應訂單，常見原因是 callback 未觸發。請向金流後台核對後，再按「建立已付款訂單」補單。
+              以下為 ATM 轉帳之未付款訂單；確認入帳後請按「標記已付款」，或使用下方「一鍵已付款」。
             </p>
           </div>
           <div className="overflow-x-auto rounded-lg border border-amber-200/80 bg-white">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="bg-amber-100/50 border-b border-amber-200">
                   <th className="text-left py-2 px-3 font-medium text-gray-800">建立時間</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-800">訂單編號</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-800">課程</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-800">信箱</th>
                   <th className="text-right py-2 px-3 font-medium text-gray-800">金額</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-800">管道</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-800 w-40">操作</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-800 w-32">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {pendingList.map((p) => (
+                {atmUnpaidBookings.map((p) => (
                   <tr key={p.id} className="border-b border-gray-100">
                     <td className="py-2 px-3 text-gray-600 text-xs whitespace-nowrap">{formatDate(p.created_at)}</td>
+                    <td className="py-2 px-3 text-gray-600 font-mono text-xs truncate align-middle" title={p.id}>
+                      {p.id.slice(0, 8)}…
+                    </td>
                     <td className="py-2 px-3 text-gray-900 truncate max-w-[200px]" title={p.class_title ?? p.class_id}>
                       {p.class_title || "—"}
                     </td>
@@ -356,18 +327,17 @@ export default function AdminBookingsPage() {
                       {p.member_email}
                     </td>
                     <td className="py-2 px-3 text-right font-medium">
-                      {p.order_amount != null ? `NT$ ${p.order_amount.toLocaleString()}` : "—"}
+                      {p.class_price != null ? `NT$ ${p.class_price.toLocaleString()}` : "—"}
                     </td>
-                    <td className="py-2 px-3 text-gray-700">{pendingPaymentMethodLabel(p.payment_method)}</td>
                     <td className="py-2 px-3">
                       <button
                         type="button"
-                        onClick={() => handleFinalizePending(p.id)}
-                        disabled={pendingFinalizeId === p.id}
+                        onClick={() => handleMarkAsPaid(p.id)}
+                        disabled={markingPaidId === p.id}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-60"
                       >
-                        {pendingFinalizeId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                        建立已付款訂單
+                        {markingPaidId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        標記已付款
                       </button>
                     </td>
                   </tr>
@@ -467,12 +437,8 @@ export default function AdminBookingsPage() {
             </div>
           ) : error ? (
             <p className="py-8 px-4 text-red-600 text-sm">{error}</p>
-          ) : list.length === 0 && pendingList.length === 0 ? (
-            <p className="py-8 px-4 text-gray-500 text-sm">尚無訂單</p>
           ) : list.length === 0 ? (
-            <p className="py-8 px-4 text-gray-500 text-sm">
-              尚無已入庫訂單。若客戶已線上付款，請查看頁面上方「待付款紀錄」是否需手動補單。
-            </p>
+            <p className="py-8 px-4 text-gray-500 text-sm">尚無訂單</p>
           ) : filteredList.length === 0 ? (
             <p className="py-8 px-4 text-gray-500 text-sm">篩選後無符合的訂單</p>
           ) : (
