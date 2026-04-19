@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-
-const HQ_MINT_URL =
-  "https://www.joyseedisland.com.tw/api/vendor/branch/mint-registration-link";
+import {
+  HQ_ADMIN_SESSION_KEY_ENV,
+  HQ_MINT_URL,
+} from "@/lib/hqBranchApi";
 
 /** 總站網域；mint 若回傳相對路徑，需補成絕對網址（NextResponse.redirect 只接受絕對 URL）。 */
 const HQ_ORIGIN = new URL(HQ_MINT_URL).origin;
-
-/** 與總站伺服器 `ADMIN_SESSION_KEY` 相同；勿與本分站後台 `ADMIN_SESSION_KEY` 混用。 */
-const HQ_BEARER_ENV = "HQ_ADMIN_SESSION_KEY";
 
 export const dynamic = "force-dynamic";
 
@@ -56,9 +54,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "未設定店家代碼（NEXT_PUBLIC_CLIENT_ID）" }, { status: 500 });
     }
 
-    const bearer = envTrim(HQ_BEARER_ENV);
+    const bearer = envTrim(HQ_ADMIN_SESSION_KEY_ENV);
     if (!bearer) {
-      console.error(`[branch/vendor-registration-link] ${HQ_BEARER_ENV} is not set`);
+      console.error(`[branch/vendor-registration-link] ${HQ_ADMIN_SESSION_KEY_ENV} is not set`);
       return NextResponse.json(
         { error: "分站尚未設定總站授權，請聯絡管理員" },
         { status: 503 }
