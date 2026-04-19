@@ -28,6 +28,7 @@
 
 | 變數名稱 | 說明 |
 |----------|------|
+| `HQ_ADMIN_SESSION_KEY` | 與**總站**環境變數 `ADMIN_SESSION_KEY` **完全相同**，供後端呼叫總站「分站供應商註冊連結」API 時當 `Authorization: Bearer`。勿與本分站後台用的 `ADMIN_SESSION_KEY` 混用；勿加入 `NEXT_PUBLIC_*`。 |
 | `R2_ACCOUNT_ID` | Cloudflare R2 Account ID（有上傳圖片才需） |
 | `R2_ACCESS_KEY_ID` | R2 Access Key |
 | `R2_SECRET_ACCESS_KEY` | R2 Secret Key |

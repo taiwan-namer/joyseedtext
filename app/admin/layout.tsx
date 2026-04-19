@@ -94,6 +94,11 @@ const SIDEBAR_MENU = [
     open: false,
     children: [
       { label: "金流／發票設定", href: "/admin/payment-settings" },
+      {
+        label: "分站供應商綁定",
+        href: "/api/admin/branch/vendor-registration-link",
+        useNativeAnchor: true,
+      },
     ],
   },
 ];
@@ -191,9 +196,26 @@ function Sidebar({
                 <div className="bg-slate-800/50">
                   {children.map((child) => {
                     const href = (child as { href?: string }).href ?? "/admin";
+                    const useNativeAnchor = Boolean(
+                      (child as { useNativeAnchor?: boolean }).useNativeAnchor
+                    );
                     const isActive = pathname === href || (child as { active?: boolean }).active;
+                    const itemClass = `flex items-center gap-2 py-2 pl-8 pr-4 text-sm transition-colors touch-manipulation ${
+                      isActive
+                        ? "bg-amber-600/20 text-amber-400 font-medium"
+                        : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
+                    }`;
                     return (
                     <div key={child.label}>
+                      {useNativeAnchor ? (
+                        <a
+                          href={href}
+                          className={itemClass}
+                          onClick={isMobile ? onClose : undefined}
+                        >
+                          <span>{(child as { label: string }).label}</span>
+                        </a>
+                      ) : (
                       <Link
                         href={href}
                         prefetch={
@@ -210,15 +232,12 @@ function Sidebar({
                           href === "/admin/enrollment" ||
                           href === "/admin/payment-settings"
                         }
-                        className={`flex items-center gap-2 py-2 pl-8 pr-4 text-sm transition-colors touch-manipulation ${
-                          isActive
-                            ? "bg-amber-600/20 text-amber-400 font-medium"
-                            : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
-                        }`}
+                        className={itemClass}
                         onClick={isMobile ? onClose : undefined}
                       >
                         <span>{(child as { label: string }).label}</span>
                       </Link>
+                      )}
                       {((child as { sub?: string[] }).sub?.length ?? 0) > 0 &&
                         (child as { sub?: string[] }).sub!.map((subLabel) => {
                           const subHref =

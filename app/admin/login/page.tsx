@@ -8,7 +8,10 @@ import { adminLogin } from "@/app/actions/adminAuthActions";
 export default function AdminLoginPage() {
   const searchParams = useSearchParams();
   const nextRaw = searchParams.get("next") ?? "/admin";
-  const next = nextRaw.startsWith("/admin") && !nextRaw.startsWith("//") ? nextRaw : "/admin";
+  const nextSafe =
+    (nextRaw.startsWith("/admin") && !nextRaw.startsWith("//")) ||
+    (nextRaw.startsWith("/api/admin/") && !nextRaw.startsWith("//"));
+  const next = nextSafe ? nextRaw : "/admin";
   const { siteName } = useStoreSettings();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
