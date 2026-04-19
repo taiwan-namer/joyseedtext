@@ -319,10 +319,17 @@ export default function AdminLayoutPage() {
   const storedPxFromPreview = (previewPx: number): number =>
     Math.max(16, Math.round(previewPx / Math.max(0.01, previewScaleForPanel)));
 
-  const blockHeightPreviewPx = (stored: number | null | undefined) =>
+  /** 畫布上視覺高度（螢幕 px）≈ 前台 heightPx × 預覽縮放，僅供說明用 */
+  const blockHeightCanvasPreviewPx = (stored: number | null | undefined) =>
     stored != null && stored > 0 ? Math.round(stored * layoutHeightScale) : null;
-  const blockHeightStoredFromPreviewInput = (previewPx: number) =>
-    Math.max(1, Math.round(previewPx / Math.max(0.01, layoutHeightScale)));
+  /** 與側欄「目前高度」文案一致：前台為主，附畫布約略值 */
+  const layoutBlockHeightStatusLine = (storedPx: number | null | undefined) => {
+    if (storedPx == null || storedPx <= 0) return "自動";
+    if (layoutHeightScale >= 0.999) return `前台 ${storedPx} px（與畫布 1:1）`;
+    const preview = blockHeightCanvasPreviewPx(storedPx) ?? 0;
+    const pct = Math.round(layoutHeightScale * 100);
+    return `前台 ${storedPx} px；畫布預覽約 ${preview} px（預覽縮放 ${pct}%）`;
+  };
 
   // 畫布用資料（與前台一致）
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
@@ -2103,23 +2110,18 @@ export default function AdminLayoutPage() {
 
               <div>
                 <p className="text-xs font-medium text-amber-700 mb-1">
-                  目前高度:{" "}
-                  {selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                    ? layoutHeightScale !== 1
-                      ? `畫布約 ${blockHeightPreviewPx(selectedBlock.heightPx)} px（前台 ${selectedBlock.heightPx} px）`
-                      : `${selectedBlock.heightPx} px`
-                    : "自動"}
+                  目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
                 </p>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  區塊高度（{layoutHeightScale < 1 ? "畫布預覽 px，儲存為前台 px" : "前台 px"}）
+                  區塊最小高度（前台 px，與訪客畫面一致）
                 </label>
                 <input
                   type="number"
                   min={0}
-                  step={layoutHeightScale < 1 ? 1 : 10}
+                  step={1}
                   value={
                     selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                      ? (blockHeightPreviewPx(selectedBlock.heightPx) ?? "")
+                      ? selectedBlock.heightPx
                       : ""
                   }
                   onChange={(e) => {
@@ -2130,10 +2132,7 @@ export default function AdminLayoutPage() {
                     }
                     const n = parseInt(v, 10);
                     if (!Number.isFinite(n) || n < 0) return;
-                    setBlockHeightByIndex(
-                      selectedIndex,
-                      n === 0 ? null : blockHeightStoredFromPreviewInput(n)
-                    );
+                    setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
                   }}
                   placeholder="自動"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -2273,23 +2272,18 @@ export default function AdminLayoutPage() {
 
             <div>
               <p className="text-xs font-medium text-amber-700 mb-1">
-                目前高度:{" "}
-                {selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                  ? layoutHeightScale !== 1
-                    ? `畫布約 ${blockHeightPreviewPx(selectedBlock.heightPx)} px（前台 ${selectedBlock.heightPx} px）`
-                    : `${selectedBlock.heightPx} px`
-                  : "自動"}
+                目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
               </p>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                區塊高度（{layoutHeightScale < 1 ? "畫布預覽 px，儲存為前台 px" : "前台 px"}）
+                區塊最小高度（前台 px，與訪客畫面一致）
               </label>
               <input
                 type="number"
                 min={0}
-                step={layoutHeightScale < 1 ? 1 : 10}
+                step={1}
                 value={
                   selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                    ? (blockHeightPreviewPx(selectedBlock.heightPx) ?? "")
+                    ? selectedBlock.heightPx
                     : ""
                 }
                 onChange={(e) => {
@@ -2300,10 +2294,7 @@ export default function AdminLayoutPage() {
                   }
                   const n = parseInt(v, 10);
                   if (!Number.isFinite(n) || n < 0) return;
-                  setBlockHeightByIndex(
-                    selectedIndex,
-                    n === 0 ? null : blockHeightStoredFromPreviewInput(n)
-                  );
+                  setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
                 }}
                 placeholder="自動"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"

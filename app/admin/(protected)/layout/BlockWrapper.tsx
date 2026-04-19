@@ -74,7 +74,7 @@ export default function BlockWrapper({
     rawH == null
       ? "自動"
       : scale !== 1
-        ? `畫布 ${canvasPreviewH} px（前台 ${rawH} px）`
+        ? `前台 ${rawH} px · 畫布約 ${canvasPreviewH} px`
         : `${rawH} px`;
 
   const blockStyle: React.CSSProperties = {
