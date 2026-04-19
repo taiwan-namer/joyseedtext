@@ -56,6 +56,8 @@ type LayoutCanvasProps = {
   onViewportFloatingIconsChange?: (next: HeroFloatingIcon[]) => void;
   viewportSelectedFloatingIconId?: string | null;
   onSelectViewportFloatingIcon?: (id: string | null) => void;
+  /** 畫布主圖區點擊選檔或更換（主編輯頁傳入；手機 iframe 預覽可不傳） */
+  onHeroImagePickRequest?: () => void;
 };
 
 const DEFAULT_CAROUSEL = [
@@ -101,6 +103,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     onViewportFloatingIconsChange,
     viewportSelectedFloatingIconId = null,
     onSelectViewportFloatingIcon,
+    onHeroImagePickRequest,
   } = props;
   const coordMode = floatingIconsCoordinateMode;
   const carouselList = (carouselItems.length > 0 ? carouselItems : DEFAULT_CAROUSEL).filter(
@@ -191,6 +194,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
               onViewportFloatingIconsChange,
               selectedViewportFloatingIconId: viewportSelectedFloatingIconId,
               onSelectViewportFloatingIcon,
+              onHeroImagePickRequest,
             }}
           />
         </CanvasPageBackground>

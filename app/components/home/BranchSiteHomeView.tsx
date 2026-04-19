@@ -444,10 +444,15 @@ export default function BranchSiteHomeView({
     ((heroEditBlockId === "hero" && (heroBlock?.floatingIcons?.length ?? 0) > 0) ||
       (heroEditBlockId === "hero_carousel" && !heroBlock && (heroCarouselBlock?.floatingIcons?.length ?? 0) > 0));
 
-  /** 有主圖或裝飾圖即顯示主圖區；僅裝飾、無主圖時仍畫出同比例底框，否則前台完全不渲染導致裝飾看不到 */
+  /**
+   * 有主圖或裝飾圖即顯示主圖區；僅裝飾、無主圖時仍畫出同比例底框。
+   * 後台畫布（admin）即使無圖、無裝飾亦顯示佔位，以便預覽版面並在畫布上選檔；訪客首頁無 admin 時無圖無裝飾則不渲染。
+   */
   const heroImageTrimmed = heroImageUrl?.trim() || null;
   const hasMainHeroVisual =
-    !!heroImageTrimmed || (iconsForMainHeroSection != null && iconsForMainHeroSection.length > 0);
+    !!heroImageTrimmed ||
+    (iconsForMainHeroSection != null && iconsForMainHeroSection.length > 0) ||
+    !!admin;
 
   const heroInner = hasMainHeroVisual ? (
     <section className="w-full pt-0 pb-4" style={admin ? {} : getBlockStyle("hero")}>
@@ -461,6 +466,32 @@ export default function BranchSiteHomeView({
           ) : (
             <div className="absolute inset-0 bg-amber-50" aria-hidden />
           )}
+          {admin && admin.onHeroImagePickRequest ? (
+            <button
+              type="button"
+              aria-label={heroImageTrimmed ? "更換首頁主圖" : "選擇首頁主圖"}
+              className="absolute inset-0 z-[12] flex flex-col border-0 bg-black/0 hover:bg-black/[0.06] active:bg-black/10 cursor-pointer p-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-inset"
+              onClick={(e) => {
+                e.stopPropagation();
+                admin.onHeroImagePickRequest?.();
+              }}
+            >
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-4">
+                {!heroImageTrimmed ? (
+                  <span className="pointer-events-none rounded-lg border-2 border-dashed border-amber-400/90 bg-white/90 px-4 py-3 text-sm font-medium text-amber-900 shadow-sm">
+                    選擇首頁主圖
+                  </span>
+                ) : null}
+              </div>
+              {heroImageTrimmed ? (
+                <div className="pointer-events-none flex shrink-0 justify-center pb-3 pt-1">
+                  <span className="rounded-full bg-black/55 px-3 py-1.5 text-center text-xs font-medium text-white shadow-md">
+                    點擊此區更換首頁主圖
+                  </span>
+                </div>
+              ) : null}
+            </button>
+          ) : null}
           {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
             <div className="absolute inset-0 z-[15]">
               <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={iconsForMainHeroSection!} />

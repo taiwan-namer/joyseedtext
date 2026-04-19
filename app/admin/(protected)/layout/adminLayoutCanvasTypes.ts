@@ -20,4 +20,6 @@ export type AdminLayoutCanvasConfig = {
   onViewportFloatingIconsChange?: (next: HeroFloatingIcon[]) => void;
   selectedViewportFloatingIconId?: string | null;
   onSelectViewportFloatingIcon?: (id: string | null) => void;
+  /** 於畫布主圖區觸發本機選檔／更換（與側欄上傳同一 input） */
+  onHeroImagePickRequest?: () => void;
 };

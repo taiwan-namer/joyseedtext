@@ -1941,6 +1941,10 @@ export default function AdminLayoutPage() {
                     setSelectedFloatingIconId(null);
                   }
                 }}
+                onHeroImagePickRequest={() => {
+                  handleSelectBlock("hero", { scrollCanvasIntoView: false });
+                  heroImageFileRef.current?.click();
+                }}
               />
             </div>
           </div>
