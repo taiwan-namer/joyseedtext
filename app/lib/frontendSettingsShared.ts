@@ -448,6 +448,34 @@ export function layoutBlockForCanvasWrapper(
   return { ...source, id: canonicalSectionId };
 }
 
+/**
+ * 未設定 `heightPx` 時，首頁該區在桌機、max-w-7xl 內建版型下的**概算**高度（px），供後台側欄對照。
+ * 與 {@link BranchSiteHomeView} 之 padding／輪播 12:5 等一致；實際會隨內容、視窗寬度略變。
+ */
+export function estimateIntrinsicMinHeightPxForBranchHomeBlock(blockId: string): number | null {
+  const padX = 32; // px-4 左右與 max-w-7xl 內欄一致
+  const innerW = Math.max(0, LAYOUT_DESIGN_CANVAS_WIDTH_PX - padX);
+  switch (blockId) {
+    case "carousel":
+    case "carousel_2": {
+      const slideBoxH = Math.round((innerW * 5) / 12);
+      return slideBoxH + 32; // section py-4
+    }
+    case "courses":
+    case "courses_grid":
+    case "courses_list":
+      // 標題 + 一列網格／列表示意之概算（課程多時會更高）
+      return 560;
+    case "new_courses":
+    case "popular_experiences":
+      return 220; // 後台佔位 py-8、min-h-[140px]、說明文案
+    case "contact":
+      return 480; // py-12、雙欄／地圖區概略
+    default:
+      return null;
+  }
+}
+
 /** 精選課程分類（首頁分館卡片，後台可編輯） */
 export type FeaturedCategory = {
   id: string;

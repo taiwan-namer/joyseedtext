@@ -33,6 +33,7 @@ import { getCoursesForHomepage } from "@/app/actions/productActions";
 import {
   LAYOUT_SECTION_LABELS,
   DEFAULT_ABOUT_PAGE_URL,
+  estimateIntrinsicMinHeightPxForBranchHomeBlock,
   getDefaultLayoutBlocks,
   normalizeAboutPageUrl,
   type FeaturedCategory,
@@ -344,13 +345,27 @@ export default function AdminLayoutPage() {
   /** 畫布上視覺高度（螢幕 px）≈ 前台 heightPx × 預覽縮放，僅供說明用 */
   const blockHeightCanvasPreviewPx = (stored: number | null | undefined) =>
     stored != null && stored > 0 ? Math.round(stored * layoutHeightScale) : null;
-  /** 與側欄「目前高度」文案一致：前台為主，附畫布約略值 */
-  const layoutBlockHeightStatusLine = (storedPx: number | null | undefined) => {
-    if (storedPx == null || storedPx <= 0) return "自動";
+  /** 與側欄「目前高度」文案一致：前台為主；未設定時附內建版型概算高度 */
+  const layoutBlockHeightStatusLine = (storedPx: number | null | undefined, blockId?: string | null) => {
+    const approx =
+      blockId != null && blockId !== ""
+        ? estimateIntrinsicMinHeightPxForBranchHomeBlock(blockId)
+        : null;
+    if (storedPx == null || storedPx <= 0) {
+      if (approx != null) {
+        return `自動（前台此區內建版面約 ${approx} px；須大於此值才會明顯加高）`;
+      }
+      return "自動";
+    }
     if (layoutHeightScale >= 0.999) return `前台 ${storedPx} px（與畫布 1:1）`;
     const preview = blockHeightCanvasPreviewPx(storedPx) ?? 0;
     const pct = Math.round(layoutHeightScale * 100);
     return `前台 ${storedPx} px；畫布預覽約 ${preview} px（預覽縮放 ${pct}%）`;
+  };
+
+  const layoutBlockHeightInputPlaceholder = (blockId: string) => {
+    const a = estimateIntrinsicMinHeightPxForBranchHomeBlock(blockId);
+    return a != null ? `留空＝自動（內建約 ${a} px）` : "自動";
   };
 
   // 畫布用資料（與前台一致）
@@ -2155,7 +2170,7 @@ export default function AdminLayoutPage() {
                 <>
                   <div>
                     <p className="text-xs font-medium text-amber-700 mb-1">
-                      目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
+                      目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx, selectedBlock.id)}
                     </p>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       區塊最小高度（前台 px，與訪客畫面一致）
@@ -2179,7 +2194,7 @@ export default function AdminLayoutPage() {
                         if (!Number.isFinite(n) || n < 0) return;
                         setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
                       }}
-                      placeholder="自動"
+                      placeholder={layoutBlockHeightInputPlaceholder(selectedBlock.id)}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
@@ -2345,7 +2360,7 @@ export default function AdminLayoutPage() {
               <>
                 <div>
                   <p className="text-xs font-medium text-amber-700 mb-1">
-                    目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
+                    目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx, selectedBlock.id)}
                   </p>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     區塊最小高度（前台 px，與訪客畫面一致）
@@ -2369,7 +2384,7 @@ export default function AdminLayoutPage() {
                       if (!Number.isFinite(n) || n < 0) return;
                       setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
                     }}
-                    placeholder="自動"
+                    placeholder={layoutBlockHeightInputPlaceholder(selectedBlock.id)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   />
                 </div>

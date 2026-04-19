@@ -1,7 +1,10 @@
 "use client";
 
 import { useRef, useCallback, useState, useEffect } from "react";
-import type { LayoutBlock } from "@/app/lib/frontendSettingsShared";
+import {
+  type LayoutBlock,
+  estimateIntrinsicMinHeightPxForBranchHomeBlock,
+} from "@/app/lib/frontendSettingsShared";
 
 type Props = {
   block: LayoutBlock;
@@ -32,15 +35,21 @@ export default function BlockWrapper({
   const startHeightRef = useRef(0);
   const scale = previewScale > 0 ? previewScale : 1;
 
+  const intrinsicH = estimateIntrinsicMinHeightPxForBranchHomeBlock(block.id);
+
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(true);
       startYRef.current = e.clientY;
-      startHeightRef.current = block.heightPx ?? 200;
+      const base =
+        block.heightPx != null && block.heightPx > 0
+          ? block.heightPx
+          : intrinsicH ?? 200;
+      startHeightRef.current = base;
     },
-    [block.heightPx]
+    [block.heightPx, block.id, intrinsicH]
   );
 
   const handleMouseMove = useCallback(
@@ -72,7 +81,9 @@ export default function BlockWrapper({
   const canvasPreviewH = rawH != null ? Math.round(rawH * scale) : null;
   const heightBadge =
     rawH == null
-      ? "自動"
+      ? intrinsicH != null
+        ? `自動（內建約 ${intrinsicH}px）`
+        : "自動"
       : scale !== 1
         ? `前台 ${rawH} px · 畫布約 ${canvasPreviewH} px`
         : `${rawH} px`;
