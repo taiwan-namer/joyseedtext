@@ -136,6 +136,13 @@ export async function resolveVendorBindingGate(): Promise<VendorBindingGate> {
   }
 
   const url = statusUrl();
+  let pathnameForHint = "";
+  try {
+    pathnameForHint = new URL(url).pathname;
+  } catch {
+    pathnameForHint = "";
+  }
+
   let res: Response;
   try {
     res = await fetch(url, {
@@ -152,10 +159,27 @@ export async function resolveVendorBindingGate(): Promise<VendorBindingGate> {
     return { kind: "error", message: "無法連線至總站，請稍後再試。" };
   }
 
-  if (res.status === 404 || res.status === 501) {
+  /**
+   * 僅在 HTTP 404／501 顯示「尚未提供」文案。
+   * 常見原因：總站路由與預設不一致（例：實作在別的路徑）、或僅部署了 mint 未部署 status。
+   * 若為 405 代表路徑存在但不接受 POST，與本站呼叫方式不一致。
+   */
+  if (res.status === 405) {
     return {
       kind: "error",
-      message: "總站尚未提供綁定狀態查詢，請聯絡管理員更新總站 API。",
+      message: `總站回傳 HTTP 405（路徑：${pathnameForHint || url}）。本站以 POST 呼叫；若總站只實作 GET，請對齊方法或調整總站路由。`,
+    };
+  }
+
+  if (res.status === 404 || res.status === 501) {
+    console.error(
+      "[resolveVendorBindingGate] HQ binding-status not found or not implemented",
+      res.status,
+      url
+    );
+    return {
+      kind: "error",
+      message: `總站回傳 HTTP ${res.status}（路徑：${pathnameForHint || url}）。代表此網址在總站上不存在或未實作。請確認總站已部署「綁定狀態」API，且路徑與預設 POST /api/vendor/branch/vendor-binding-status 一致；若總站使用不同路徑，請在分站設定 HQ_VENDOR_BINDING_STATUS_URL 為完整 URL。mint 連線成功不代表此路由已存在。`,
     };
   }
 

@@ -101,7 +101,7 @@ export default function VendorBindingGatePanel({ gate }: { gate: BlockedGate }) 
             <h1 className="mt-4 text-lg font-semibold text-gray-900">暫無法確認審核狀態</h1>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">{gate.message}</p>
             <p className="mt-3 text-xs text-gray-500">
-              若問題持續，請確認分站已設定 HQ_ADMIN_SESSION_KEY，且總站已部署綁定狀態查詢 API。
+              亦可檢查分站伺服器日誌（resolveVendorBindingGate）或總站是否已實作與 mint 不同的綁定狀態路由。
             </p>
           </>
         )}
