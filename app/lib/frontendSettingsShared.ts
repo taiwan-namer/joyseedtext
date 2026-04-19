@@ -413,6 +413,41 @@ export function serializeLayoutBlockForPersist(b: LayoutBlock): Record<string, u
   };
 }
 
+/**
+ * 讀取區塊最小高度／背景圖時，舊資料可能只存別名 id（例：`courses` 與 `courses_grid` 二擇一）。
+ * 優先使用與 sectionId 完全一致的那一筆，找不到再依序嘗試別名。
+ */
+const LAYOUT_BLOCK_STYLE_FALLBACK_IDS: Record<string, readonly string[]> = {
+  courses_grid: ["courses"],
+  courses: ["courses_grid"],
+  carousel: ["carousel_2"],
+  carousel_2: ["carousel"],
+};
+
+export function resolveLayoutBlockForStyle(
+  blocks: LayoutBlock[],
+  sectionId: string
+): LayoutBlock | undefined {
+  const candidates: string[] = [sectionId, ...(LAYOUT_BLOCK_STYLE_FALLBACK_IDS[sectionId] ?? [])];
+  for (const cid of candidates) {
+    const b = blocks.find((x) => x.id === cid);
+    if (b) return b;
+  }
+  return undefined;
+}
+
+/**
+ * 後台畫布 BlockWrapper：高度／背景來自可能為別名的那一筆，但 `block.id` 必須與畫布選取的 section id 一致（`data-block-id`、拖曳高度寫回）。
+ */
+export function layoutBlockForCanvasWrapper(
+  source: LayoutBlock | undefined,
+  canonicalSectionId: string
+): LayoutBlock | undefined {
+  if (!source) return undefined;
+  if (source.id === canonicalSectionId) return source;
+  return { ...source, id: canonicalSectionId };
+}
+
 /** 精選課程分類（首頁分館卡片，後台可編輯） */
 export type FeaturedCategory = {
   id: string;

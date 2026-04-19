@@ -21,7 +21,9 @@ import {
   DEFAULT_ABOUT_PAGE_URL,
   LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX,
   LAYOUT_SECTION_LABELS,
+  layoutBlockForCanvasWrapper,
   normalizeAboutPageUrl,
+  resolveLayoutBlockForStyle,
 } from "@/app/lib/frontendSettingsShared";
 import { JOYSEED_ISLAND_WEB_URL } from "@/lib/mainSiteCanonical";
 import FullWidthImageSection from "@/app/components/home/FullWidthImageSection";
@@ -199,7 +201,7 @@ export default function BranchSiteHomeView({
 
   const getBlock = (id: string) => layoutBlocks.find((b) => b.id === id);
   const getBlockStyle = (id: string): CSSProperties => {
-    const b = getBlock(id);
+    const b = resolveLayoutBlockForStyle(layoutBlocks, id);
     if (!b) return {};
     return {
       ...(b.heightPx != null && b.heightPx > 0 ? { minHeight: b.heightPx } : {}),
@@ -282,7 +284,8 @@ export default function BranchSiteHomeView({
     children: React.ReactNode,
     opts?: { skipBackgroundImage?: boolean; blockOverride?: LayoutBlock | null }
   ): React.ReactNode => {
-    const block = opts?.blockOverride ?? layoutBlocks.find((b) => b.id === adminId);
+    const base = opts?.blockOverride ?? resolveLayoutBlockForStyle(layoutBlocks, adminId);
+    const block = layoutBlockForCanvasWrapper(base, adminId);
     if (!admin || !block) return children;
     return (
       <BlockWrapper
@@ -555,15 +558,21 @@ export default function BranchSiteHomeView({
       </section>
     ) : null;
 
-  const carouselBlock = getBlock("carousel");
+  const carouselBlock = resolveLayoutBlockForStyle(layoutBlocks, "carousel");
+  const carouselMinH =
+    carouselBlock?.heightPx != null && carouselBlock.heightPx > 0 ? carouselBlock.heightPx : null;
   const carouselInner =
     carouselList.length > 0 ? (
       <section className="w-full px-4 sm:px-4 py-4 mx-auto max-w-7xl" style={getBlockStyle("carousel")}>
         <div
-          className="relative w-full aspect-[12/5] rounded-xl overflow-hidden"
+          className={`relative w-full rounded-xl overflow-hidden ${carouselMinH == null ? "aspect-[12/5]" : ""}`}
           style={
-            carouselBlock?.heightPx != null && carouselBlock.heightPx > 0
-              ? { minHeight: carouselBlock.heightPx }
+            carouselMinH != null
+              ? {
+                  aspectRatio: "12 / 5",
+                  minHeight: carouselMinH,
+                  width: "100%",
+                }
               : undefined
           }
         >
