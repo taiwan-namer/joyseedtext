@@ -81,11 +81,9 @@ const OPTIONAL_LAYOUT_BLOCK_IDS: string[] = [
 
 const ALL_ADDABLE_BLOCK_IDS = [...ACTIVE_HOME_BLOCK_IDS, ...OPTIONAL_LAYOUT_BLOCK_IDS];
 
-/** 後台圖檔建議（與前台主圖區寬螢幕／md 高度約 600px 對齊；數字皆指原檔像素） */
-const HERO_MAIN_IMAGE_SIZE_HINT =
-  "建議尺寸：寬 1920 px × 高 600 px 以上（與主視覺比例相符尤佳）。注意：該尺寸為原檔案的像素尺寸，請上傳原圖，勿先縮小尺寸或過度壓縮。";
-const BLOCK_BACKGROUND_IMAGE_SIZE_HINT =
-  "建議尺寸：寬 1920 px × 高 800 px 以上（依區塊覆蓋）。注意：該尺寸為原檔案的像素尺寸，請上傳原圖，勿先縮小尺寸或過度壓縮。";
+/** 首頁版面編輯：圖檔建議尺寸（給店家） */
+const HERO_MAIN_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 600 px";
+const BLOCK_BACKGROUND_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 800 px";
 
 /** 依 block id 對應到「編輯內容」的後台頁面 */
 const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
@@ -1220,7 +1218,7 @@ export default function AdminLayoutPage() {
     selectedBlockId === "hero" || selectedBlockId === "hero_carousel" ? (
       <div className="space-y-2 rounded-lg border border-amber-200/80 bg-white/90 p-3">
         <p className="text-xs text-gray-600 leading-relaxed">
-          首頁主圖：選檔後立即顯示於畫布；按「儲存版面」時再上傳至 R2。{HERO_MAIN_IMAGE_SIZE_HINT}
+          首頁主圖：選檔後立即顯示於畫布；按「儲存版面」時再上傳至 R2。{HERO_MAIN_IMAGE_SIZE_HINT}。
         </p>
         <button
           type="button"
@@ -2075,7 +2073,9 @@ export default function AdminLayoutPage() {
                 </Link>
               )}
 
-              {selectedBlock.id !== "hero" && selectedBlock.id !== "hero_carousel" ? (
+              {selectedBlock.id !== "hero" &&
+              selectedBlock.id !== "hero_carousel" &&
+              selectedBlock.id !== "featured_categories" ? (
                 <>
                   <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
                     <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
@@ -2248,7 +2248,9 @@ export default function AdminLayoutPage() {
               </Link>
             )}
 
-            {selectedBlock.id !== "hero" && selectedBlock.id !== "hero_carousel" ? (
+            {selectedBlock.id !== "hero" &&
+            selectedBlock.id !== "hero_carousel" &&
+            selectedBlock.id !== "featured_categories" ? (
               <>
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
                   <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
