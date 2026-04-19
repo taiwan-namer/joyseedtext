@@ -7,6 +7,9 @@
  */
 const DEFAULT_MAIN_SITE_ORIGIN = "https://www.joyseedisland.com.tw";
 
+/** 總站官網（頁尾連結等；與 {@link DEFAULT_MAIN_SITE_ORIGIN} 一致） */
+export const JOYSEED_ISLAND_WEB_URL = `${DEFAULT_MAIN_SITE_ORIGIN}/`;
+
 export function getMainSiteCanonicalOrigin(): URL {
   const raw =
     process.env.NEXT_PUBLIC_CANONICAL_ORIGIN?.trim() ||

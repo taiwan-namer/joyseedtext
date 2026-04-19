@@ -23,6 +23,7 @@ import {
   LAYOUT_SECTION_LABELS,
   normalizeAboutPageUrl,
 } from "@/app/lib/frontendSettingsShared";
+import { JOYSEED_ISLAND_WEB_URL } from "@/lib/mainSiteCanonical";
 import FullWidthImageSection from "@/app/components/home/FullWidthImageSection";
 
 const BlockWrapper = dynamic(() => import("@/app/admin/(protected)/layout/BlockWrapper"));
@@ -455,7 +456,7 @@ export default function BranchSiteHomeView({
     !!admin;
 
   const heroInner = hasMainHeroVisual ? (
-    <section className="w-full pt-0 pb-4" style={admin ? {} : getBlockStyle("hero")}>
+    <section className="w-full pt-0 pb-4" style={getBlockStyle("hero")}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
         <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
           {heroImageTrimmed ? (
@@ -516,7 +517,7 @@ export default function BranchSiteHomeView({
 
   /** 與 heroInner 同高度，主圖 URL 尚未載入時佔位，避免下方精選／輪播先排版再被主圖推擠 */
   const heroPlaceholderInner = (
-    <section className="w-full pt-0 pb-4" style={admin ? {} : getBlockStyle("hero")}>
+    <section className="w-full pt-0 pb-4" style={getBlockStyle("hero")}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
         <div
           className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50 animate-pulse"
@@ -557,8 +558,15 @@ export default function BranchSiteHomeView({
   const carouselBlock = getBlock("carousel");
   const carouselInner =
     carouselList.length > 0 ? (
-      <section className="w-full px-4 sm:px-4 py-4 mx-auto max-w-7xl" style={admin ? {} : getBlockStyle("carousel")}>
-        <div className="relative w-full aspect-[12/5] rounded-xl overflow-hidden">
+      <section className="w-full px-4 sm:px-4 py-4 mx-auto max-w-7xl" style={getBlockStyle("carousel")}>
+        <div
+          className="relative w-full aspect-[12/5] rounded-xl overflow-hidden"
+          style={
+            carouselBlock?.heightPx != null && carouselBlock.heightPx > 0
+              ? { minHeight: carouselBlock.heightPx }
+              : undefined
+          }
+        >
           {carouselList.map((item, i) => (
             <div
               key={item.id}
@@ -613,7 +621,7 @@ export default function BranchSiteHomeView({
   const featuredCoursesInner = (
     <div className="relative w-full">
       <HomeFeaturedCoursesOnePlusSix
-        blockStyle={admin ? {} : getBlockStyle("featured_categories")}
+        blockStyle={getBlockStyle("featured_categories")}
         prefetchedActivities={!isAdminCanvas ? featuredHomePageActivities : undefined}
         prefetchedLoading={!isAdminCanvas ? homeCoursesLoading : undefined}
       />
@@ -626,11 +634,7 @@ export default function BranchSiteHomeView({
       <section
         id="about"
         className="relative py-12 scroll-mt-20 border-t border-gray-100"
-        style={
-          admin
-            ? { backgroundColor: aboutSectionBackgroundColor }
-            : { backgroundColor: aboutSectionBackgroundColor, ...getBlockStyle("about") }
-        }
+        style={{ backgroundColor: aboutSectionBackgroundColor, ...getBlockStyle("about") }}
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-4">
           <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">{navAboutLabel || "關於我們"}</h2>
@@ -647,7 +651,7 @@ export default function BranchSiteHomeView({
     <section
       id="faq"
       className="relative bg-white py-12 scroll-mt-20"
-      style={admin ? {} : getBlockStyle("faq")}
+      style={getBlockStyle("faq")}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-4">
         <h2 className="text-xl font-bold text-gray-900 mb-8 text-center">常見問題</h2>
@@ -660,7 +664,7 @@ export default function BranchSiteHomeView({
   const contactInner = (
     <section
       className="relative bg-page border-t border-gray-100 py-12"
-      style={admin ? {} : getBlockStyle("contact")}
+      style={getBlockStyle("contact")}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -789,10 +793,20 @@ export default function BranchSiteHomeView({
   );
 
   const footerInner = (
-    <footer className="relative bg-white border-t border-gray-100 mt-auto" style={admin ? {} : getBlockStyle("footer")}>
+    <footer className="relative bg-white border-t border-gray-100 mt-auto" style={getBlockStyle("footer")}>
       <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="text-center text-gray-400 text-sm">
+        <div className="text-center text-gray-400 text-sm space-y-2">
           <p>© 2026 {siteName} WonderVoyage 版權所有</p>
+          <p>
+            <a
+              href={JOYSEED_ISLAND_WEB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-500 hover:text-brand hover:underline"
+            >
+              {JOYSEED_ISLAND_WEB_URL.replace(/\/$/, "")}
+            </a>
+          </p>
         </div>
       </div>
       {renderBlockFloatingIconsOverlay("footer")}
@@ -804,7 +818,7 @@ export default function BranchSiteHomeView({
   ): React.ReactNode => {
     const variant = blockId === "courses_list" ? "list" : "grid";
     const inner = (
-      <section className="relative w-full py-6 pb-8 bg-page" style={admin ? {} : getBlockStyle(blockId)}>
+      <section className="relative w-full py-6 pb-8 bg-page" style={getBlockStyle(blockId)}>
         {admin ? (
           <div className="max-w-7xl mx-auto px-4 mb-2">
             <p className="text-[11px] font-medium text-amber-900/90 bg-amber-100/60 border border-amber-200/80 rounded-lg px-2 py-1 inline-block">
@@ -842,7 +856,7 @@ export default function BranchSiteHomeView({
     if (!admin) return null;
     const b = getBlock(blockId);
     const inner = (
-      <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+      <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35" style={getBlockStyle(blockId)}>
         <div className="relative w-full max-w-7xl mx-auto px-4 py-8 min-h-[140px]">
           <p className="text-sm font-semibold text-center text-amber-950">{title}</p>
           <p className="text-xs text-gray-600 text-center mt-2 max-w-lg mx-auto leading-relaxed">{description}</p>

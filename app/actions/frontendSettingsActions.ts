@@ -95,7 +95,13 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
     if (!id) continue;
     const order = typeof o.order === "number" ? o.order : i;
     const heightRaw = o.heightPx ?? o.height_px;
-    const heightPx = typeof heightRaw === "number" && heightRaw > 0 ? heightRaw : null;
+    const heightNum =
+      typeof heightRaw === "number" && Number.isFinite(heightRaw)
+        ? heightRaw
+        : typeof heightRaw === "string" && /^\d+$/.test(heightRaw.trim())
+          ? parseInt(heightRaw.trim(), 10)
+          : NaN;
+    const heightPx = Number.isFinite(heightNum) && heightNum > 0 ? heightNum : null;
     const bgRaw = o.backgroundImageUrl ?? o.background_image_url;
     const backgroundImageUrl = typeof bgRaw === "string" && bgRaw.trim() ? bgRaw.trim() : null;
     const enabled = o.enabled === false ? false : true;

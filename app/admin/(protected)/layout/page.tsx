@@ -41,6 +41,7 @@ import {
   formatFloatingIconSlotLabel,
   LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
+import { JOYSEED_ISLAND_WEB_URL } from "@/lib/mainSiteCanonical";
 import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 import { readImageNaturalSizeFromFile } from "@/lib/readImageNaturalSizeFromFile";
@@ -84,6 +85,23 @@ const ALL_ADDABLE_BLOCK_IDS = [...ACTIVE_HOME_BLOCK_IDS, ...OPTIONAL_LAYOUT_BLOC
 /** 首頁版面編輯：圖檔建議尺寸（給店家） */
 const HERO_MAIN_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 600 px";
 const BLOCK_BACKGROUND_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 800 px";
+/** 與畫布輪播區 aspect 12/5 一致 */
+const CAROUSEL_SLIDE_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 800 px";
+
+/** 側欄不顯示「裝飾圖座標／上傳裝飾圖」的區塊（與全螢幕裝飾或固定版型一致） */
+const LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL = new Set<string>([
+  "hero",
+  "hero_carousel",
+  "featured_categories",
+  "carousel",
+  "carousel_2",
+  "courses_grid",
+  "new_courses",
+  "popular_experiences",
+  "faq",
+  "contact",
+  "footer",
+]);
 
 /** 依 block id 對應到「編輯內容」的後台頁面 */
 const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
@@ -1355,7 +1373,7 @@ export default function AdminLayoutPage() {
     selectedBlockId === "carousel" || selectedBlockId === "carousel_2" ? (
       <div className="space-y-3 rounded-lg border border-amber-200/80 bg-white/90 p-3">
         <p className="text-xs text-gray-600 leading-relaxed">
-          輪播圖：每一則可單獨選圖，預覽於畫布；按「儲存版面」時再上傳至 R2（與前台輪播設定相同資料）。
+          輪播圖：每一則可單獨選圖，預覽於畫布；{CAROUSEL_SLIDE_IMAGE_SIZE_HINT}。按「儲存版面」時再上傳至 R2。
         </p>
         <ul className="space-y-3 max-h-64 overflow-y-auto">
           {displayCarouselItems.map((item, index) => (
@@ -2026,35 +2044,52 @@ export default function AdminLayoutPage() {
                 {LAYOUT_SECTION_LABELS[selectedBlock.id] ?? selectedBlock.id}
               </p>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-700">啟用</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={selectedBlock.enabled !== false}
-                  onClick={() => setBlockEnabledByIndex(selectedIndex, selectedBlock.enabled === false)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border transition-colors ${
-                    selectedBlock.enabled !== false ? "bg-amber-500 border-amber-500" : "bg-gray-200 border-gray-300"
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
-                      selectedBlock.enabled !== false ? "translate-x-5" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
+              {selectedBlock.id !== "footer" ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-700">啟用</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={selectedBlock.enabled !== false}
+                      onClick={() => setBlockEnabledByIndex(selectedIndex, selectedBlock.enabled === false)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border transition-colors ${
+                        selectedBlock.enabled !== false ? "bg-amber-500 border-amber-500" : "bg-gray-200 border-gray-300"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
+                          selectedBlock.enabled !== false ? "translate-x-5" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">區塊標題（前台顯示）</label>
-                <input
-                  type="text"
-                  value={selectedBlock.title ?? ""}
-                  onChange={(e) => setBlockTitleByIndex(selectedIndex, e.target.value || null)}
-                  placeholder={LAYOUT_SECTION_LABELS[selectedBlock.id] ?? ""}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">區塊標題（前台顯示）</label>
+                    <input
+                      type="text"
+                      value={selectedBlock.title ?? ""}
+                      onChange={(e) => setBlockTitleByIndex(selectedIndex, e.target.value || null)}
+                      placeholder={LAYOUT_SECTION_LABELS[selectedBlock.id] ?? ""}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-gray-600 leading-relaxed rounded-lg border border-amber-100 bg-white/80 p-3">
+                  頁尾為固定版權區塊，無法變更啟用、標題、高度、背景或裝飾圖。前台版權列下方附有
+                  <a
+                    href={JOYSEED_ISLAND_WEB_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mx-0.5 font-medium text-amber-800 underline break-all"
+                  >
+                    童趣島官網
+                  </a>
+                  連結。
+                </p>
+              )}
 
               {fullWidthImageEditorBlock}
               {heroImageEditorBlock}
@@ -2073,9 +2108,7 @@ export default function AdminLayoutPage() {
                 </Link>
               )}
 
-              {selectedBlock.id !== "hero" &&
-              selectedBlock.id !== "hero_carousel" &&
-              selectedBlock.id !== "featured_categories" ? (
+              {!LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL.has(selectedBlock.id) ? (
                 <>
                   <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
                     <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
@@ -2118,60 +2151,60 @@ export default function AdminLayoutPage() {
                 </>
               ) : null}
 
-              <div>
-                <p className="text-xs font-medium text-amber-700 mb-1">
-                  目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
-                </p>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  區塊最小高度（前台 px，與訪客畫面一致）
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={
-                    selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                      ? selectedBlock.heightPx
-                      : ""
-                  }
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
-                    if (v === "") {
-                      setBlockHeightByIndex(selectedIndex, null);
-                      return;
-                    }
-                    const n = parseInt(v, 10);
-                    if (!Number.isFinite(n) || n < 0) return;
-                    setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
-                  }}
-                  placeholder="自動"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <div className="mb-1 flex flex-col gap-1">
-                  <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-                    <label className="text-xs font-medium text-gray-700">區塊背景圖</label>
-                    <span className="max-w-full text-[11px] leading-snug text-gray-500 text-right md:max-w-[58%]">
-                      {BLOCK_BACKGROUND_IMAGE_SIZE_HINT}
-                    </span>
+              {selectedBlock.id !== "footer" ? (
+                <>
+                  <div>
+                    <p className="text-xs font-medium text-amber-700 mb-1">
+                      目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
+                    </p>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      區塊最小高度（前台 px，與訪客畫面一致）
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={
+                        selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                          ? selectedBlock.heightPx
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value.trim();
+                        if (v === "") {
+                          setBlockHeightByIndex(selectedIndex, null);
+                          return;
+                        }
+                        const n = parseInt(v, 10);
+                        if (!Number.isFinite(n) || n < 0) return;
+                        setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
+                      }}
+                      placeholder="自動"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingBlockId === selectedBlockId}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  {uploadingBlockId === selectedBlockId ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ImageIcon className="h-4 w-4" />
-                  )}
-                  {selectedBlock.backgroundImageUrl ? "更換背景圖" : "上傳背景圖"}
-                </button>
-              </div>
+
+                  <div>
+                    <div className="mb-1 space-y-0.5">
+                      <label className="block text-xs font-medium text-gray-700">區塊背景圖</label>
+                      <p className="text-left text-[11px] leading-snug text-gray-500">{BLOCK_BACKGROUND_IMAGE_SIZE_HINT}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingBlockId === selectedBlockId}
+                      className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {uploadingBlockId === selectedBlockId ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="h-4 w-4" />
+                      )}
+                      {selectedBlock.backgroundImageUrl ? "更換背景圖" : "上傳背景圖"}
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </div>
           )}
         </aside>
@@ -2201,35 +2234,52 @@ export default function AdminLayoutPage() {
               {LAYOUT_SECTION_LABELS[selectedBlock.id] ?? selectedBlock.id}
             </p>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-700">啟用</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={selectedBlock.enabled !== false}
-                onClick={() => setBlockEnabledByIndex(selectedIndex, selectedBlock.enabled === false)}
-                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border transition-colors ${
-                  selectedBlock.enabled !== false ? "bg-amber-500 border-amber-500" : "bg-gray-200 border-gray-300"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
-                    selectedBlock.enabled !== false ? "translate-x-5" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </div>
+            {selectedBlock.id !== "footer" ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-700">啟用</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={selectedBlock.enabled !== false}
+                    onClick={() => setBlockEnabledByIndex(selectedIndex, selectedBlock.enabled === false)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border transition-colors ${
+                      selectedBlock.enabled !== false ? "bg-amber-500 border-amber-500" : "bg-gray-200 border-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
+                        selectedBlock.enabled !== false ? "translate-x-5" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">區塊標題（前台顯示）</label>
-              <input
-                type="text"
-                value={selectedBlock.title ?? ""}
-                onChange={(e) => setBlockTitleByIndex(selectedIndex, e.target.value || null)}
-                placeholder={LAYOUT_SECTION_LABELS[selectedBlock.id] ?? ""}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">區塊標題（前台顯示）</label>
+                  <input
+                    type="text"
+                    value={selectedBlock.title ?? ""}
+                    onChange={(e) => setBlockTitleByIndex(selectedIndex, e.target.value || null)}
+                    placeholder={LAYOUT_SECTION_LABELS[selectedBlock.id] ?? ""}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gray-600 leading-relaxed rounded-lg border border-amber-100 bg-white/80 p-3">
+                頁尾為固定版權區塊，無法變更啟用、標題、高度、背景或裝飾圖。前台版權列下方附有
+                <a
+                  href={JOYSEED_ISLAND_WEB_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mx-0.5 font-medium text-amber-800 underline break-all"
+                >
+                  童趣島官網
+                </a>
+                連結。
+              </p>
+            )}
 
             {fullWidthImageEditorBlock}
             {heroImageEditorBlock}
@@ -2248,9 +2298,7 @@ export default function AdminLayoutPage() {
               </Link>
             )}
 
-            {selectedBlock.id !== "hero" &&
-            selectedBlock.id !== "hero_carousel" &&
-            selectedBlock.id !== "featured_categories" ? (
+            {!LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL.has(selectedBlock.id) ? (
               <>
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
                   <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
@@ -2293,60 +2341,60 @@ export default function AdminLayoutPage() {
               </>
             ) : null}
 
-            <div>
-              <p className="text-xs font-medium text-amber-700 mb-1">
-                目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
-              </p>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                區塊最小高度（前台 px，與訪客畫面一致）
-              </label>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={
-                  selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                    ? selectedBlock.heightPx
-                    : ""
-                }
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  if (v === "") {
-                    setBlockHeightByIndex(selectedIndex, null);
-                    return;
-                  }
-                  const n = parseInt(v, 10);
-                  if (!Number.isFinite(n) || n < 0) return;
-                  setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
-                }}
-                placeholder="自動"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <div className="mb-1 flex flex-col gap-1">
-                <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-                  <label className="text-xs font-medium text-gray-700">區塊背景圖</label>
-                  <span className="max-w-full text-[11px] leading-snug text-gray-500 text-right md:max-w-[58%]">
-                    {BLOCK_BACKGROUND_IMAGE_SIZE_HINT}
-                  </span>
+            {selectedBlock.id !== "footer" ? (
+              <>
+                <div>
+                  <p className="text-xs font-medium text-amber-700 mb-1">
+                    目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx)}
+                  </p>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    區塊最小高度（前台 px，與訪客畫面一致）
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={
+                      selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                        ? selectedBlock.heightPx
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      if (v === "") {
+                        setBlockHeightByIndex(selectedIndex, null);
+                        return;
+                      }
+                      const n = parseInt(v, 10);
+                      if (!Number.isFinite(n) || n < 0) return;
+                      setBlockHeightByIndex(selectedIndex, n === 0 ? null : Math.max(1, n));
+                    }}
+                    placeholder="自動"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingBlockId === selectedBlockId}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                {uploadingBlockId === selectedBlockId ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ImageIcon className="h-4 w-4" />
-                )}
-                {selectedBlock.backgroundImageUrl ? "更換背景圖" : "上傳背景圖"}
-              </button>
-            </div>
+
+                <div>
+                  <div className="mb-1 space-y-0.5">
+                    <label className="block text-xs font-medium text-gray-700">區塊背景圖</label>
+                    <p className="text-left text-[11px] leading-snug text-gray-500">{BLOCK_BACKGROUND_IMAGE_SIZE_HINT}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingBlockId === selectedBlockId}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {uploadingBlockId === selectedBlockId ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-4 w-4" />
+                    )}
+                    {selectedBlock.backgroundImageUrl ? "更換背景圖" : "上傳背景圖"}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}
