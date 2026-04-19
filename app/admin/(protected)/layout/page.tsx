@@ -81,6 +81,12 @@ const OPTIONAL_LAYOUT_BLOCK_IDS: string[] = [
 
 const ALL_ADDABLE_BLOCK_IDS = [...ACTIVE_HOME_BLOCK_IDS, ...OPTIONAL_LAYOUT_BLOCK_IDS];
 
+/** 後台圖檔建議（與前台主圖區寬螢幕／md 高度約 600px 對齊；數字皆指原檔像素） */
+const HERO_MAIN_IMAGE_SIZE_HINT =
+  "建議尺寸：寬 1920 px × 高 600 px 以上（與主視覺比例相符尤佳）。注意：該尺寸為原檔案的像素尺寸，請上傳原圖，勿先縮小尺寸或過度壓縮。";
+const BLOCK_BACKGROUND_IMAGE_SIZE_HINT =
+  "建議尺寸：寬 1920 px × 高 800 px 以上（依區塊覆蓋）。注意：該尺寸為原檔案的像素尺寸，請上傳原圖，勿先縮小尺寸或過度壓縮。";
+
 /** 依 block id 對應到「編輯內容」的後台頁面 */
 const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
   featured_categories: { href: "/admin/layout", label: "首頁版面" },
@@ -1214,7 +1220,7 @@ export default function AdminLayoutPage() {
     selectedBlockId === "hero" || selectedBlockId === "hero_carousel" ? (
       <div className="space-y-2 rounded-lg border border-amber-200/80 bg-white/90 p-3">
         <p className="text-xs text-gray-600 leading-relaxed">
-          首頁主圖：選檔後立即顯示於畫布；按「儲存版面」時再上傳至 R2。
+          首頁主圖：選檔後立即顯示於畫布；按「儲存版面」時再上傳至 R2。{HERO_MAIN_IMAGE_SIZE_HINT}
         </p>
         <button
           type="button"
@@ -2069,44 +2075,48 @@ export default function AdminLayoutPage() {
                 </Link>
               )}
 
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
-                <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
-                <button
-                  type="button"
-                  onClick={() => setCanvasViewportMode("desktop")}
-                  className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                    canvasViewportMode === "desktop"
-                      ? "bg-amber-500 text-white"
-                      : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
-                  }`}
-                >
-                  桌機
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCanvasViewportMode("mobile")}
-                  className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                    canvasViewportMode === "mobile"
-                      ? "bg-amber-500 text-white"
-                      : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
-                  }`}
-                >
-                  手機
-                </button>
-              </div>
-              <BlockFloatingIconsPanel
-                block={selectedBlock}
-                heroFloatUploading={heroFloatUploading}
-                onUploadClick={() => heroFloatFileRef.current?.click()}
-                editViewport={floatingEditViewport}
-                previewPxFromStored={previewPxFromStored}
-                storedPxFromPreview={storedPxFromPreview}
-                onPatchIcon={(iconId, patch) => patchFloatingIcon(selectedBlock.id, iconId, patch)}
-                onRemoveIcon={(iconId) =>
-                  updateBlockFloatingIcons(selectedBlock.id, (p) => p.filter((x) => x.id !== iconId))
-                }
-                focusedIconId={selectedFloatingIconId}
-              />
+              {selectedBlock.id !== "hero" && selectedBlock.id !== "hero_carousel" ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
+                    <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
+                    <button
+                      type="button"
+                      onClick={() => setCanvasViewportMode("desktop")}
+                      className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                        canvasViewportMode === "desktop"
+                          ? "bg-amber-500 text-white"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
+                      }`}
+                    >
+                      桌機
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCanvasViewportMode("mobile")}
+                      className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                        canvasViewportMode === "mobile"
+                          ? "bg-amber-500 text-white"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
+                      }`}
+                    >
+                      手機
+                    </button>
+                  </div>
+                  <BlockFloatingIconsPanel
+                    block={selectedBlock}
+                    heroFloatUploading={heroFloatUploading}
+                    onUploadClick={() => heroFloatFileRef.current?.click()}
+                    editViewport={floatingEditViewport}
+                    previewPxFromStored={previewPxFromStored}
+                    storedPxFromPreview={storedPxFromPreview}
+                    onPatchIcon={(iconId, patch) => patchFloatingIcon(selectedBlock.id, iconId, patch)}
+                    onRemoveIcon={(iconId) =>
+                      updateBlockFloatingIcons(selectedBlock.id, (p) => p.filter((x) => x.id !== iconId))
+                    }
+                    focusedIconId={selectedFloatingIconId}
+                  />
+                </>
+              ) : null}
 
               <div>
                 <p className="text-xs font-medium text-amber-700 mb-1">
@@ -2140,7 +2150,14 @@ export default function AdminLayoutPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">區塊背景圖</label>
+                <div className="mb-1 flex flex-col gap-1">
+                  <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                    <label className="text-xs font-medium text-gray-700">區塊背景圖</label>
+                    <span className="max-w-full text-[11px] leading-snug text-gray-500 text-right md:max-w-[58%]">
+                      {BLOCK_BACKGROUND_IMAGE_SIZE_HINT}
+                    </span>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -2231,44 +2248,48 @@ export default function AdminLayoutPage() {
               </Link>
             )}
 
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
-              <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
-              <button
-                type="button"
-                onClick={() => setCanvasViewportMode("desktop")}
-                className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                  canvasViewportMode === "desktop"
-                    ? "bg-amber-500 text-white"
-                    : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
-                }`}
-              >
-                桌機
-              </button>
-              <button
-                type="button"
-                onClick={() => setCanvasViewportMode("mobile")}
-                className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                  canvasViewportMode === "mobile"
-                    ? "bg-amber-500 text-white"
-                    : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
-                }`}
-              >
-                手機
-              </button>
-            </div>
-            <BlockFloatingIconsPanel
-              block={selectedBlock}
-              heroFloatUploading={heroFloatUploading}
-              onUploadClick={() => heroFloatFileRef.current?.click()}
-              editViewport={floatingEditViewport}
-              previewPxFromStored={previewPxFromStored}
-              storedPxFromPreview={storedPxFromPreview}
-              onPatchIcon={(iconId, patch) => patchFloatingIcon(selectedBlock.id, iconId, patch)}
-              onRemoveIcon={(iconId) =>
-                updateBlockFloatingIcons(selectedBlock.id, (p) => p.filter((x) => x.id !== iconId))
-              }
-              focusedIconId={selectedFloatingIconId}
-            />
+            {selectedBlock.id !== "hero" && selectedBlock.id !== "hero_carousel" ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-white/90 p-2">
+                  <span className="text-xs font-medium text-gray-700">裝飾圖座標（與上方畫布開關同步）：</span>
+                  <button
+                    type="button"
+                    onClick={() => setCanvasViewportMode("desktop")}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      canvasViewportMode === "desktop"
+                        ? "bg-amber-500 text-white"
+                        : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
+                    }`}
+                  >
+                    桌機
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCanvasViewportMode("mobile")}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      canvasViewportMode === "mobile"
+                        ? "bg-amber-500 text-white"
+                        : "bg-white border border-gray-300 text-gray-700 hover:bg-amber-50"
+                    }`}
+                  >
+                    手機
+                  </button>
+                </div>
+                <BlockFloatingIconsPanel
+                  block={selectedBlock}
+                  heroFloatUploading={heroFloatUploading}
+                  onUploadClick={() => heroFloatFileRef.current?.click()}
+                  editViewport={floatingEditViewport}
+                  previewPxFromStored={previewPxFromStored}
+                  storedPxFromPreview={storedPxFromPreview}
+                  onPatchIcon={(iconId, patch) => patchFloatingIcon(selectedBlock.id, iconId, patch)}
+                  onRemoveIcon={(iconId) =>
+                    updateBlockFloatingIcons(selectedBlock.id, (p) => p.filter((x) => x.id !== iconId))
+                  }
+                  focusedIconId={selectedFloatingIconId}
+                />
+              </>
+            ) : null}
 
             <div>
               <p className="text-xs font-medium text-amber-700 mb-1">
@@ -2302,7 +2323,14 @@ export default function AdminLayoutPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">區塊背景圖</label>
+              <div className="mb-1 flex flex-col gap-1">
+                <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                  <label className="text-xs font-medium text-gray-700">區塊背景圖</label>
+                  <span className="max-w-full text-[11px] leading-snug text-gray-500 text-right md:max-w-[58%]">
+                    {BLOCK_BACKGROUND_IMAGE_SIZE_HINT}
+                  </span>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
