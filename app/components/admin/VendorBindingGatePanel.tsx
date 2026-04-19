@@ -8,16 +8,27 @@ type BlockedGate = Exclude<VendorBindingGate, { kind: "ok" }>;
 const bindButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600";
 
-export default function VendorBindingGatePanel({ gate }: { gate: BlockedGate }) {
+type Props = {
+  gate: BlockedGate;
+  /** 頂部返回連結，預設為商品列表 /admin */
+  backHref?: string;
+  backLabel?: string;
+};
+
+export default function VendorBindingGatePanel({
+  gate,
+  backHref = "/admin",
+  backLabel = "返回商品列表",
+}: Props) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link
-          href="/admin"
+          href={backHref}
           className="flex items-center gap-1 text-sm font-medium text-gray-600 transition hover:text-gray-900"
         >
           <ChevronLeft className="h-4 w-4" />
-          返回商品列表
+          {backLabel}
         </Link>
       </div>
 
@@ -29,7 +40,9 @@ export default function VendorBindingGatePanel({ gate }: { gate: BlockedGate }) 
             </div>
             <h1 className="mt-4 text-lg font-semibold text-gray-900">需先完成分站供應商綁定</h1>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              新增課程前，須先向總部申請<strong className="font-medium text-gray-800">分站供應商綁定</strong>
+              使用<strong className="font-medium text-gray-800">商品管理區</strong>與
+              <strong className="font-medium text-gray-800">新增課程</strong>
+              前，須先向總部申請<strong className="font-medium text-gray-800">分站供應商綁定</strong>
               ，並經總部審核通過後方可使用。請點選下方按鈕前往總站完成綁定申請。
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -47,7 +60,7 @@ export default function VendorBindingGatePanel({ gate }: { gate: BlockedGate }) 
             </div>
             <h1 className="mt-4 text-lg font-semibold text-gray-900">審核處理中</h1>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              您的分站供應商申請已由總部受理，目前正在審核中。審核完成後即可新增課程；無需重複送出申請，請稍待通知。
+              您的分站供應商申請已由總部受理，目前正在審核中。審核完成後即可使用商品管理與新增課程；無需重複送出申請，請稍待通知。
             </p>
           </>
         )}
@@ -60,7 +73,7 @@ export default function VendorBindingGatePanel({ gate }: { gate: BlockedGate }) 
             <h1 className="mt-4 text-lg font-semibold text-gray-900">審核未通過</h1>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
               總部已將您的分站供應商資格標示為<strong className="font-medium text-gray-800">未通過</strong>
-              ，目前無法新增課程。若需重新申請或洽詢原因，請透過下方連結前往總站與總部確認。
+              ，目前無法使用商品管理與新增課程。若需重新申請或洽詢原因，請透過下方連結前往總站與總部確認。
             </p>
             <div className="mt-6">
               <a href={vendorRegistrationLinkPath} className={bindButtonClass}>
@@ -101,7 +114,7 @@ export default function VendorBindingGatePanel({ gate }: { gate: BlockedGate }) 
             <h1 className="mt-4 text-lg font-semibold text-gray-900">暫無法確認審核狀態</h1>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">{gate.message}</p>
             <p className="mt-3 text-xs text-gray-500">
-              亦可檢查分站伺服器日誌（resolveVendorBindingGate）或總站是否已實作與 mint 不同的綁定狀態路由。
+              亦可檢查分站伺服器日誌（resolveVendorBindingGate）與 Supabase 是否已套用 vendor 綁定相關 migration、欄位是否與總站一致。
             </p>
           </>
         )}
