@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity as mapCourseToHomePageActivity } from "@/lib/homePageActivity";
 import FAQ from "@/app/components/FAQ";
@@ -177,6 +177,7 @@ export default function BranchSiteHomeView({
   const [wallIndex, setWallIndex] = useState(0);
   /** 前台全頁裝飾以整頁高度作百分比定位；待首屏資源載入後再顯示，避免初次高度改變造成「掉位」。 */
   const [viewportLayerReady, setViewportLayerReady] = useState(false);
+  const pageRootRef = useRef<HTMLDivElement | null>(null);
   const defaultCarousel: CarouselItem[] = useMemo(
     () => [
       { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
@@ -205,19 +206,37 @@ export default function BranchSiteHomeView({
       setViewportLayerReady(true);
       return;
     }
-    if (typeof window === "undefined") return;
-    const markReady = () => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => setViewportLayerReady(true));
-      });
+    const root = pageRootRef.current;
+    if (!root || typeof window === "undefined") return;
+
+    setViewportLayerReady(false);
+
+    let settleTimer: number | null = null;
+    const clearSettleTimer = () => {
+      if (settleTimer != null) {
+        window.clearTimeout(settleTimer);
+        settleTimer = null;
+      }
     };
-    if (document.readyState === "complete") {
-      markReady();
-      return;
-    }
-    const onLoad = () => markReady();
-    window.addEventListener("load", onLoad, { once: true });
-    return () => window.removeEventListener("load", onLoad);
+    const scheduleReadyAfterSettled = () => {
+      clearSettleTimer();
+      // 高度連續一段時間不再變化才顯示，避免 refresh 後再次掉位
+      settleTimer = window.setTimeout(() => {
+        setViewportLayerReady(true);
+      }, 500);
+    };
+
+    scheduleReadyAfterSettled();
+
+    const ro = new ResizeObserver(() => {
+      scheduleReadyAfterSettled();
+    });
+    ro.observe(root);
+
+    return () => {
+      clearSettleTimer();
+      ro.disconnect();
+    };
   }, [isAdminCanvas]);
 
   useEffect(() => {
@@ -1036,6 +1055,7 @@ export default function BranchSiteHomeView({
 
   return (
     <div
+      ref={pageRootRef}
       className="relative min-h-screen bg-page flex flex-col overflow-x-visible"
       {...(isAdminCanvas
         ? {
