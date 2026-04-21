@@ -244,10 +244,21 @@ export default function BranchSiteHomeView({
     };
     const ro = new ResizeObserver(queue);
     ro.observe(host);
+    const imgs = Array.from(host.querySelectorAll("img"));
+    const onImgDone = () => queue();
+    for (const img of imgs) {
+      if (img.complete) continue;
+      img.addEventListener("load", onImgDone, { once: true });
+      img.addEventListener("error", onImgDone, { once: true });
+    }
     queue();
     return () => {
       if (timer) clearTimeout(timer);
       ro.disconnect();
+      for (const img of imgs) {
+        img.removeEventListener("load", onImgDone);
+        img.removeEventListener("error", onImgDone);
+      }
     };
   }, [hasViewportFloatingIcons, layoutBlocks.length, carouselList.length]);
 
@@ -279,42 +290,25 @@ export default function BranchSiteHomeView({
     };
     const ro = new ResizeObserver(queue);
     ro.observe(host);
-    hardTimer = setTimeout(mark, 2200);
+    const imgs = Array.from(host.querySelectorAll("img"));
+    const onImgDone = () => queue();
+    for (const img of imgs) {
+      if (img.complete) continue;
+      img.addEventListener("load", onImgDone, { once: true });
+      img.addEventListener("error", onImgDone, { once: true });
+    }
+    hardTimer = setTimeout(mark, 2600);
     queue();
     return () => {
       if (timer) clearTimeout(timer);
       if (hardTimer) clearTimeout(hardTimer);
       ro.disconnect();
+      for (const img of imgs) {
+        img.removeEventListener("load", onImgDone);
+        img.removeEventListener("error", onImgDone);
+      }
     };
   }, [hasAdminViewportFloatingIcons, layoutBlocks.length, carouselList.length]);
-
-  useEffect(() => {
-    if (!hasViewportFloatingIcons || !viewportLayerReady) return;
-    const host = viewportRootRef.current;
-    if (!host) return;
-    const apply = () => {
-      const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
-      setViewportLayerHeightPx((prev) => (prev === h ? prev : h));
-    };
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, [hasViewportFloatingIcons, viewportLayerReady]);
-
-  useEffect(() => {
-    if (!hasAdminViewportFloatingIcons || !adminViewportLayerReady) return;
-    const host = viewportRootRef.current;
-    if (!host) return;
-    const apply = () => {
-      const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
-      setAdminViewportLayerHeightPx((prev) => (prev === h ? prev : h));
-    };
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, [hasAdminViewportFloatingIcons, adminViewportLayerReady]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
