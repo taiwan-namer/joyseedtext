@@ -1217,7 +1217,11 @@ export default function BranchSiteHomeView({
 
   return (
     <div
-      className="relative min-h-screen bg-page flex flex-col overflow-x-visible"
+      className={
+        isAdminCanvas
+          ? "relative min-h-min bg-page flex flex-col overflow-x-visible"
+          : "relative min-h-screen bg-page flex flex-col overflow-x-visible"
+      }
       {...(isAdminCanvas
         ? {
             onClickCapture: suppressCanvasLinkNavigation,
@@ -1227,9 +1231,7 @@ export default function BranchSiteHomeView({
     >
       <div
         ref={viewportRootRef}
-        className={
-          isAdminCanvas && hasAdminViewportFloatingIcons ? "relative min-h-screen min-w-0" : "relative"
-        }
+        className={isAdminCanvas && hasAdminViewportFloatingIcons ? "relative min-w-0" : "relative"}
       >
         {!isAdminCanvas && hasViewportFloatingIcons && viewportLayerReady ? (
           <div
