@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { User, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import LoginModal from "./LoginModal";
 import { getCurrentMemberName } from "@/app/actions/bookingActions";
 
@@ -12,7 +12,6 @@ import { getCurrentMemberName } from "@/app/actions/bookingActions";
  * 右上角會員區：未登入顯示「登入」（點擊開彈窗），已登入顯示消費者姓名（連結至會員中心）+ 「登出」按鈕
  */
 export function HeaderMember() {
-  const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [memberName, setMemberName] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -41,30 +40,16 @@ export function HeaderMember() {
     return () => { cancelled = true; };
   }, [isLoggedIn]);
 
-  // 網址 ?openLogin=email 或 ?openLogin=1 時自動開啟登入彈窗（例如從預約成功頁引導）
-  useEffect(() => {
-    const open = searchParams.get("openLogin");
-    if (open === "email" || open === "1") setLoginOpen(true);
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!loginOpen) return;
-    router.prefetch("/");
-    router.prefetch("/member");
-  }, [loginOpen, router]);
-
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/";
   };
 
-  const loginButtonClassName = [
-    "flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center sm:min-w-0 sm:justify-start p-2 rounded-full transition-colors touch-manipulation",
-    loginOpen
-      ? "bg-amber-100 text-amber-700"
-      : "text-gray-600 hover:bg-gray-100",
-  ].join(" ");
+  useEffect(() => {
+    const open = searchParams.get("openLogin");
+    if (open === "email" || open === "1") setLoginOpen(true);
+  }, [searchParams]);
 
   return (
     <>
@@ -96,7 +81,7 @@ export function HeaderMember() {
           <button
             type="button"
             onClick={() => setLoginOpen(true)}
-            className={loginButtonClassName}
+            className="flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center sm:min-w-0 sm:justify-start p-2 rounded-full text-gray-600 hover:bg-gray-100 transition-colors touch-manipulation"
             aria-label="登入"
           >
             <User size={22} />
@@ -104,7 +89,11 @@ export function HeaderMember() {
           </button>
         )}
       </div>
-      <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} initialStep={searchParams.get("openLogin") === "email" ? 2 : undefined} />
+      <LoginModal
+        isOpen={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        initialStep={searchParams.get("openLogin") === "email" ? 2 : undefined}
+      />
     </>
   );
 }
