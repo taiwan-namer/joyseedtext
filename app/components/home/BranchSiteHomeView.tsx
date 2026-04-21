@@ -214,6 +214,7 @@ export default function BranchSiteHomeView({
   const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
   const hasAdminViewportFloatingIcons = !!(isAdminCanvas && (admin?.viewportFloatingIcons?.length ?? 0) > 0);
   const [adminViewportLayerReady, setAdminViewportLayerReady] = useState(() => !hasAdminViewportFloatingIcons);
+  const [adminViewportLayerHeightPx, setAdminViewportLayerHeightPx] = useState<number | null>(null);
 
   useEffect(() => {
     const shouldWaitForStableLayout = !isAdminCanvas && hasViewportFloatingIcons;
@@ -284,9 +285,11 @@ export default function BranchSiteHomeView({
   useEffect(() => {
     if (!hasAdminViewportFloatingIcons) {
       setAdminViewportLayerReady(true);
+      setAdminViewportLayerHeightPx(null);
       return;
     }
     setAdminViewportLayerReady(false);
+    setAdminViewportLayerHeightPx(null);
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
     let cancelled = false;
@@ -309,6 +312,8 @@ export default function BranchSiteHomeView({
       if (cancelled || settled) return;
       settled = true;
       cleanup();
+      const lockedHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      setAdminViewportLayerHeightPx(lockedHeight > 0 ? lockedHeight : null);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (!cancelled) setAdminViewportLayerReady(true);
@@ -1244,6 +1249,7 @@ export default function BranchSiteHomeView({
           <div
             data-viewport-floating-shell
             className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+            style={adminViewportLayerHeightPx != null ? { height: adminViewportLayerHeightPx } : undefined}
           >
             <div className="relative h-full w-full">
               <HeroFloatingIconsLayer
