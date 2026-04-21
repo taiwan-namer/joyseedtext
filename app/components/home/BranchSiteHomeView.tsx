@@ -289,6 +289,34 @@ export default function BranchSiteHomeView({
   }, [hasAdminViewportFloatingIcons, layoutBlocks.length, carouselList.length]);
 
   useEffect(() => {
+    if (!hasViewportFloatingIcons || !viewportLayerReady) return;
+    const host = viewportRootRef.current;
+    if (!host) return;
+    const apply = () => {
+      const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
+      setViewportLayerHeightPx((prev) => (prev === h ? prev : h));
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [hasViewportFloatingIcons, viewportLayerReady]);
+
+  useEffect(() => {
+    if (!hasAdminViewportFloatingIcons || !adminViewportLayerReady) return;
+    const host = viewportRootRef.current;
+    if (!host) return;
+    const apply = () => {
+      const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
+      setAdminViewportLayerHeightPx((prev) => (prev === h ? prev : h));
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [hasAdminViewportFloatingIcons, adminViewportLayerReady]);
+
+  useEffect(() => {
     if (carouselList.length === 0) return;
     const timer = setInterval(() => {
       setWallIndex((i) => (i + 1) % carouselList.length);
@@ -1178,7 +1206,7 @@ export default function BranchSiteHomeView({
             style={viewportLayerHeightPx != null ? { height: viewportLayerHeightPx } : undefined}
             aria-hidden
           >
-            <div className="relative h-full w-full max-w-7xl px-4 sm:px-4">
+            <div className="relative h-full w-full max-w-7xl">
               <HeroFloatingIconsLayer
                 icons={viewportFloatingIcons ?? undefined}
                 coordinateViewport="desktop"
@@ -1196,7 +1224,7 @@ export default function BranchSiteHomeView({
             className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
             style={adminViewportLayerHeightPx != null ? { height: adminViewportLayerHeightPx } : undefined}
           >
-            <div className="relative h-full w-full max-w-7xl px-4 sm:px-4">
+            <div className="relative h-full w-full max-w-7xl">
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}
                 coordinateViewport="desktop"
