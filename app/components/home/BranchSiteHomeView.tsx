@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity as mapCourseToHomePageActivity } from "@/lib/homePageActivity";
 import FAQ from "@/app/components/FAQ";
@@ -186,6 +186,7 @@ export default function BranchSiteHomeView({
     : "";
 
   const [wallIndex, setWallIndex] = useState(0);
+  const pageRootRef = useRef<HTMLDivElement | null>(null);
   const defaultCarousel: CarouselItem[] = useMemo(
     () => [
       { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
@@ -211,6 +212,9 @@ export default function BranchSiteHomeView({
   }, [viewportFloatingIcons]);
   const [viewportLayerReady, setViewportLayerReady] = useState(() => !(!isAdminCanvas && hasViewportFloatingIcons));
   const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
+  const hasAdminViewportFloatingIcons = !!(isAdminCanvas && (admin?.viewportFloatingIcons?.length ?? 0) > 0);
+  const [adminViewportLayerReady, setAdminViewportLayerReady] = useState(() => !hasAdminViewportFloatingIcons);
+  const [adminViewportLayerHeightPx, setAdminViewportLayerHeightPx] = useState<number | null>(null);
 
   useEffect(() => {
     const shouldWaitForStableLayout = !isAdminCanvas && hasViewportFloatingIcons;
@@ -277,6 +281,57 @@ export default function BranchSiteHomeView({
       cleanupObservers();
     };
   }, [isAdminCanvas, hasViewportFloatingIcons]);
+
+  useEffect(() => {
+    if (!hasAdminViewportFloatingIcons) {
+      setAdminViewportLayerReady(true);
+      setAdminViewportLayerHeightPx(null);
+      return;
+    }
+    setAdminViewportLayerReady(false);
+    if (typeof window === "undefined") return;
+    const root = pageRootRef.current;
+    if (!root) return;
+
+    let cancelled = false;
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let ro: ResizeObserver | null = null;
+
+    const cleanup = () => {
+      if (ro) {
+        ro.disconnect();
+        ro = null;
+      }
+    };
+
+    const ready = () => {
+      if (cancelled || settled) return;
+      settled = true;
+      cleanup();
+      const h = Math.max(root.scrollHeight, root.clientHeight);
+      setAdminViewportLayerHeightPx(h > 0 ? h : null);
+      requestAnimationFrame(() => {
+        if (!cancelled) setAdminViewportLayerReady(true);
+      });
+    };
+
+    const schedule = () => {
+      if (settled) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(ready, 180);
+    };
+
+    ro = new ResizeObserver(schedule);
+    ro.observe(root);
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      cleanup();
+    };
+  }, [hasAdminViewportFloatingIcons]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -1124,6 +1179,7 @@ export default function BranchSiteHomeView({
 
   return (
     <div
+      ref={pageRootRef}
       className="relative min-h-screen bg-page flex flex-col overflow-x-visible"
       {...(isAdminCanvas
         ? {
@@ -1154,8 +1210,13 @@ export default function BranchSiteHomeView({
       ) : null}
       {isAdminCanvas &&
       admin?.onViewportFloatingIconsChange &&
-      (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
-        <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[32] flex justify-center">
+      (admin.viewportFloatingIcons?.length ?? 0) > 0 &&
+      adminViewportLayerReady ? (
+        <div
+          data-viewport-floating-shell
+          className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+          style={adminViewportLayerHeightPx != null ? { height: adminViewportLayerHeightPx } : undefined}
+        >
           <div className="relative h-full w-full">
             <div
               className="absolute inset-0 z-[33]"
