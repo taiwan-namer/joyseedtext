@@ -297,6 +297,18 @@ export default function BranchSiteHomeView({
   }, [carouselList.length]);
 
   useEffect(() => {
+    if (isAdminCanvas || typeof window === "undefined") return;
+    if (window.location.hash !== "#faq") return;
+
+    // 使用者重新整理時若網址殘留 #faq，瀏覽器會自動跳到 FAQ；這裡改為回到頁首。
+    const nextUrl = `${window.location.pathname}${window.location.search}`;
+    window.history.replaceState(null, "", nextUrl);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+  }, [isAdminCanvas]);
+
+  useEffect(() => {
     setWallIndex((i) => (carouselList.length === 0 ? 0 : i % carouselList.length));
   }, [carouselList.length]);
 
