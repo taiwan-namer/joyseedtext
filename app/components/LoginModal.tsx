@@ -35,6 +35,21 @@ export type LoginModalProps = {
 
 type Step = 1 | 2 | 3;
 
+function translateAuthErrorMessage(message: string | null | undefined): string {
+  const raw = String(message ?? "").trim();
+  if (!raw) return "登入失敗，請稍後再試";
+
+  const normalized = raw.toLowerCase();
+  if (normalized.includes("invalid login credentials")) return "帳號或密碼錯誤";
+  if (normalized.includes("email not confirmed")) return "信箱尚未驗證，請先完成驗證";
+  if (normalized.includes("user already registered")) return "此電子郵件已註冊";
+  if (normalized.includes("password should be at least")) return "密碼長度不足，請至少輸入 6 碼";
+  if (normalized.includes("invalid email")) return "電子郵件格式不正確";
+  if (normalized.includes("too many requests")) return "嘗試次數過多，請稍後再試";
+  if (normalized.includes("network") || normalized.includes("fetch")) return "網路連線異常，請稍後再試";
+  return "登入失敗，請確認帳號密碼或稍後再試";
+}
+
 export default function LoginModal({
   isOpen,
   onClose,
@@ -80,10 +95,10 @@ export default function LoginModal({
         options: { redirectTo },
       });
       if (error) {
-        setFormError(error.message);
+        setFormError(translateAuthErrorMessage(error.message));
       }
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : "登入失敗");
+      setFormError(e instanceof Error ? translateAuthErrorMessage(e.message) : "登入失敗，請稍後再試");
     } finally {
       setOauthLoading(false);
     }
@@ -104,7 +119,7 @@ export default function LoginModal({
       const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setFormError(error.message);
+        setFormError(translateAuthErrorMessage(error.message));
         return;
       }
       onSuccess?.(data.session ?? null);
@@ -139,7 +154,7 @@ export default function LoginModal({
       const supabase = createClient();
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) {
-        setFormError(error.message);
+        setFormError(translateAuthErrorMessage(error.message));
         return;
       }
       // Supabase 若已關閉「確認信箱」，signUp 會直接回傳 session，視為註冊完成
