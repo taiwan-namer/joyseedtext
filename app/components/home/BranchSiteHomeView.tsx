@@ -1204,7 +1204,7 @@ export default function BranchSiteHomeView({
             <div className="relative h-full w-full max-w-7xl">
               <HeroFloatingIconsLayer
                 icons={viewportFloatingIcons ?? undefined}
-                coordinateViewport="desktop"
+                coordinateViewport={coordMode}
                 scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
               />
             </div>
@@ -1225,13 +1225,13 @@ export default function BranchSiteHomeView({
             >
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}
-                coordinateViewport="desktop"
+                coordinateViewport={coordMode}
                 scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
               />
               <div className="absolute inset-0 z-[33]" data-floating-icon-editor data-viewport-floating-editor>
                 <HeroFloatingIconsEditor
                   overlayMode
-                  coordinateMode="desktop"
+                  coordinateMode={coordMode}
                   icons={admin.viewportFloatingIcons!}
                   onChange={admin.onViewportFloatingIconsChange}
                   selectedIconId={admin.selectedViewportFloatingIconId ?? null}
