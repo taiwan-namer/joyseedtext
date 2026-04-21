@@ -10,7 +10,7 @@ import FAQ from "@/app/components/FAQ";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import HomeFeaturedCoursesOnePlusSix from "@/app/components/home/HomeFeaturedCoursesOnePlusSix";
 import HomeCoursesGridListBlock from "@/app/components/home/HomeCoursesGridListBlock";
-import HeroFloatingIconsLayer from "@/app/components/home/HeroFloatingIconsLayer";
+import HeroFloatingIconsLayer, { useNarrowMaxMd } from "@/app/components/home/HeroFloatingIconsLayer";
 import { getCoursesForHomepage } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity } from "@/app/lib/mapCourseToHomeActivity";
 import type { Activity } from "@/app/lib/homeSectionTypes";
@@ -20,6 +20,7 @@ import type { CarouselItem, HeroFloatingIcon, LayoutBlock } from "@/app/lib/fron
 import {
   DEFAULT_ABOUT_PAGE_URL,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+  LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX,
   LAYOUT_SECTION_LABELS,
   layoutBlockForCanvasWrapper,
   normalizeAboutPageUrl,
@@ -202,10 +203,18 @@ export default function BranchSiteHomeView({
     (item) => item.visible !== false
   );
   const admin = adminLayout ?? null;
-  const coordMode = previewCoordinateViewport ?? admin?.floatingIconsCoordinateMode ?? "desktop";
+  const narrowViewport = useNarrowMaxMd();
+  /**
+   * 訪客在手機寬度時使用 mobile 座標與 390px 縮放基準，與後台手機畫布一致；
+   * 有 admin 時以畫布開關為準（不依視窗窄否覆寫）。
+   */
+  const coordMode =
+    previewCoordinateViewport ??
+    admin?.floatingIconsCoordinateMode ??
+    (admin == null && narrowViewport ? "mobile" : "desktop");
   const isAdminCanvas = admin != null;
   const floatingScaleReferenceWidthPx =
-    isAdminCanvas && coordMode === "mobile" ? 390 : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
+    coordMode === "mobile" ? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
   const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
   const isEditingViewportFloatingInAdmin = !!(isAdminCanvas && admin?.selectedViewportFloatingIconId);
   const viewportRootRef = useRef<HTMLDivElement | null>(null);
