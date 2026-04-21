@@ -327,15 +327,9 @@ export default function HeroFloatingIconsEditor({
                     });
                     const v = parseInt(String(raw).trim(), 10);
                     if (Number.isFinite(v)) {
-                      const stored = storedPxFromPreview(Math.max(16, v));
-                      if (coordinateMode === "mobile") {
-                        updateIcon(selectedForToolbar.id, { widthPxMobile: stored });
-                      } else {
-                        updateIcon(selectedForToolbar.id, {
-                          widthPx: stored,
-                          widthPxMobile: stored,
-                        });
-                      }
+                      updateIcon(selectedForToolbar.id, {
+                        widthPx: storedPxFromPreview(Math.max(16, v)),
+                      });
                     }
                   }}
                   className="w-20 rounded border border-gray-300 px-1 py-0.5"
@@ -407,15 +401,9 @@ export default function HeroFloatingIconsEditor({
                     });
                     const v = parseInt(String(raw).trim(), 10);
                     if (Number.isFinite(v)) {
-                      const stored = storedPxFromPreview(Math.max(16, v));
-                      if (coordinateMode === "mobile") {
-                        updateIcon(selectedForToolbar.id, { heightPxMobile: stored });
-                      } else {
-                        updateIcon(selectedForToolbar.id, {
-                          heightPx: stored,
-                          heightPxMobile: stored,
-                        });
-                      }
+                      updateIcon(selectedForToolbar.id, {
+                        heightPx: storedPxFromPreview(Math.max(16, v)),
+                      });
                     }
                   }}
                   className="w-20 rounded border border-gray-300 px-1 py-0.5"
