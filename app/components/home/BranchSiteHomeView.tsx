@@ -213,6 +213,7 @@ export default function BranchSiteHomeView({
   const [viewportLayerReady, setViewportLayerReady] = useState(() => !(!isAdminCanvas && hasViewportFloatingIcons));
   const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
   const hasAdminViewportFloatingIcons = !!(isAdminCanvas && (admin?.viewportFloatingIcons?.length ?? 0) > 0);
+  const [adminViewportLayerReady, setAdminViewportLayerReady] = useState(() => !hasAdminViewportFloatingIcons);
 
   useEffect(() => {
     const shouldWaitForStableLayout = !isAdminCanvas && hasViewportFloatingIcons;
@@ -279,6 +280,41 @@ export default function BranchSiteHomeView({
       cleanupObservers();
     };
   }, [isAdminCanvas, hasViewportFloatingIcons]);
+
+  useEffect(() => {
+    if (!hasAdminViewportFloatingIcons) {
+      setAdminViewportLayerReady(true);
+      return;
+    }
+    setAdminViewportLayerReady(false);
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const finalize = () => {
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) setAdminViewportLayerReady(true);
+        });
+      });
+    };
+    const onLoad = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(finalize, 220);
+    };
+
+    if (document.readyState === "complete") onLoad();
+    else window.addEventListener("load", onLoad);
+    // 即使 load 已完成，仍給一個短暫緩衝讓畫布初次重排結束再掛載
+    onLoad();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("load", onLoad);
+    };
+  }, [hasAdminViewportFloatingIcons]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -1160,7 +1196,8 @@ export default function BranchSiteHomeView({
       ) : null}
       {isAdminCanvas &&
       admin?.onViewportFloatingIconsChange &&
-      (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
+      (admin.viewportFloatingIcons?.length ?? 0) > 0 &&
+      adminViewportLayerReady ? (
         <div
           data-viewport-floating-shell
           className="pointer-events-none absolute inset-0 z-[32] flex justify-center"

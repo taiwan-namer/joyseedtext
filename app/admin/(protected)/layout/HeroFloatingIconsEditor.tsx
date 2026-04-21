@@ -84,7 +84,7 @@ export default function HeroFloatingIconsEditor({
   const [dimFocus, setDimFocus] = useState<string | null>(null);
   const dimKey = (iconId: string, axis: "w" | "h") => `${iconId}:${axis}`;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const apply = () => {
