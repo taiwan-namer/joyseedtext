@@ -372,10 +372,10 @@ export default function AdminLayout({
   /**
    * 手機畫布 iframe 內嵌頁：不可套用側欄／頂欄與 main padding，否則內層視窗寬度被壓扁、
    * Tailwind `md:` 斷點錯亂，全頁／區塊裝飾圖在 iframe 內會對錯座標或看似不顯示。
-   * （與總站後台「preview 裸頁」一致。）
+   * （與總站後台「preview 裸頁」一致；含子路徑以保險。）
    */
-  if (pathname === "/admin/layout/preview") {
-    return <>{children}</>;
+  if (pathname === "/admin/layout/preview" || pathname.startsWith("/admin/layout/preview/")) {
+    return <div className="min-h-dvh min-w-0 bg-gray-100">{children}</div>;
   }
   return (
     <div className="flex min-h-screen bg-gray-100">

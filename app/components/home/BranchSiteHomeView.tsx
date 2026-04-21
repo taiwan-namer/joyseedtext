@@ -220,7 +220,6 @@ export default function BranchSiteHomeView({
   const hasAdminViewportFloatingIcons = !!(isAdminCanvas && (admin?.viewportFloatingIcons?.length ?? 0) > 0);
   const [viewportLayerReady, setViewportLayerReady] = useState(() => !hasViewportFloatingIcons);
   const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
-  const [adminViewportLayerReady, setAdminViewportLayerReady] = useState(() => !hasAdminViewportFloatingIcons);
   const [adminViewportLayerHeightPx, setAdminViewportLayerHeightPx] = useState<number | null>(null);
 
   useLayoutEffect(() => {
@@ -270,7 +269,6 @@ export default function BranchSiteHomeView({
 
   useLayoutEffect(() => {
     if (!hasAdminViewportFloatingIcons) {
-      setAdminViewportLayerReady(true);
       setAdminViewportLayerHeightPx(null);
       return;
     }
@@ -279,15 +277,11 @@ export default function BranchSiteHomeView({
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let hardTimer: ReturnType<typeof setTimeout> | null = null;
-    setAdminViewportLayerReady(false);
     const mark = () => {
       if (settled) return;
       settled = true;
       const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
       setAdminViewportLayerHeightPx(h > 0 ? h : null);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setAdminViewportLayerReady(true));
-      });
     };
     const queue = () => {
       if (settled) return;
@@ -314,7 +308,7 @@ export default function BranchSiteHomeView({
         img.removeEventListener("error", onImgDone);
       }
     };
-  }, [hasAdminViewportFloatingIcons, layoutBlocks.length, carouselList.length]);
+  }, [hasAdminViewportFloatingIcons, layoutBlocks.length, carouselList.length, admin?.viewportFloatingIcons]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -1222,7 +1216,12 @@ export default function BranchSiteHomeView({
           }
         : {})}
     >
-      <div ref={viewportRootRef} className="relative">
+      <div
+        ref={viewportRootRef}
+        className={
+          isAdminCanvas && hasAdminViewportFloatingIcons ? "relative min-h-screen min-w-0" : "relative"
+        }
+      >
         {!isAdminCanvas && hasViewportFloatingIcons && viewportLayerReady ? (
           <div
             data-viewport-floating-shell
@@ -1241,8 +1240,7 @@ export default function BranchSiteHomeView({
         ) : null}
         {isAdminCanvas &&
         admin?.onViewportFloatingIconsChange &&
-        (admin.viewportFloatingIcons?.length ?? 0) > 0 &&
-        adminViewportLayerReady ? (
+        (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
           <div
             data-viewport-floating-shell
             className="pointer-events-none absolute inset-0 z-[32] flex justify-center"

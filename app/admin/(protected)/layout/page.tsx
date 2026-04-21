@@ -51,6 +51,7 @@ import {
   LAYOUT_PREVIEW_BLOCK_HEIGHT,
   LAYOUT_PREVIEW_FLOATING_ICONS,
   LAYOUT_PREVIEW_READY,
+  LAYOUT_PREVIEW_REQUEST_SYNC,
   LAYOUT_PREVIEW_SELECT_BLOCK,
   LAYOUT_PREVIEW_SELECT_FLOATING_ICON,
   LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON,
@@ -320,6 +321,8 @@ export default function AdminLayoutPage() {
   const viewportFloatFileRef = useRef<HTMLInputElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const mobilePreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
+  /** iframe postMessage 監聽器必須呼叫「當次 render」的同步函式，不可閉包舊的 postLayoutPreviewToIframe */
+  const postLayoutPreviewToIframeRef = useRef<(() => void) | null>(null);
   const blockListItemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const rightEditorRef = useRef<HTMLDivElement | null>(null);
   const [editorPos, setEditorPos] = useState<{ top: number; left: number }>({ top: 96, left: 0 });
@@ -791,8 +794,8 @@ export default function AdminLayoutPage() {
       if (e.origin !== window.location.origin) return;
       const d = e.data as Record<string, unknown>;
       if (!d || typeof d !== "object") return;
-      if (d.type === LAYOUT_PREVIEW_READY) {
-        postLayoutPreviewToIframe();
+      if (d.type === LAYOUT_PREVIEW_READY || d.type === LAYOUT_PREVIEW_REQUEST_SYNC) {
+        postLayoutPreviewToIframeRef.current?.();
         return;
       }
       if (d.type === LAYOUT_PREVIEW_SELECT_BLOCK) {
@@ -1687,6 +1690,8 @@ export default function AdminLayoutPage() {
     },
     [layoutPreviewPayload]
   );
+
+  postLayoutPreviewToIframeRef.current = postLayoutPreviewToIframe;
 
   useEffect(() => {
     postLayoutPreviewToIframe();

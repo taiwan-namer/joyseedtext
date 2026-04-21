@@ -6,6 +6,7 @@ import {
   LAYOUT_PREVIEW_BLOCK_HEIGHT,
   LAYOUT_PREVIEW_FLOATING_ICONS,
   LAYOUT_PREVIEW_READY,
+  LAYOUT_PREVIEW_REQUEST_SYNC,
   LAYOUT_PREVIEW_SELECT_BLOCK,
   LAYOUT_PREVIEW_SELECT_FLOATING_ICON,
   LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON,
@@ -24,14 +25,17 @@ export default function AdminLayoutMobilePreviewPage() {
   const [payload, setPayload] = useState<LayoutPreviewSyncPayload | null>(null);
   const [heroImageBlobUrl, setHeroImageBlobUrl] = useState<string | null>(null);
 
-  useEffect(() => {
+  const requestSyncFromParent = useCallback(() => {
+    postToParent({ type: LAYOUT_PREVIEW_REQUEST_SYNC });
     postToParent({ type: LAYOUT_PREVIEW_READY });
-    const t = window.setInterval(() => {
-      if (payload) return;
-      postToParent({ type: LAYOUT_PREVIEW_READY });
-    }, 800);
+  }, []);
+
+  useEffect(() => {
+    requestSyncFromParent();
+    if (payload) return;
+    const t = window.setInterval(() => requestSyncFromParent(), 500);
     return () => window.clearInterval(t);
-  }, [payload]);
+  }, [payload, requestSyncFromParent]);
 
   useEffect(() => {
     const html = document.documentElement;

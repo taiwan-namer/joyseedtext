@@ -10,6 +10,8 @@ import type {
 export const LAYOUT_PREVIEW_SYNC_TYPE = "layout-preview-sync" as const;
 /** iframe → 父頁：手機預覽已掛載，請立即重送最新 payload */
 export const LAYOUT_PREVIEW_READY = "layout-preview-ready" as const;
+/** iframe → 父頁：主動請求最新同步（與 READY 並用；避免父頁 onLoad 漏送時閉包仍為舊 state） */
+export const LAYOUT_PREVIEW_REQUEST_SYNC = "layout-preview-request-sync" as const;
 
 /** iframe → 父頁：選取區塊（與手機座標編輯連動） */
 export const LAYOUT_PREVIEW_SELECT_BLOCK = "layout-preview-select-block" as const;
