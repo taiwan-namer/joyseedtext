@@ -365,6 +365,18 @@ export default function BranchSiteHomeView({
     () => getVisibleOrderedBranchSectionIds(layoutBlocks, admin != null),
     [layoutBlocks, admin]
   );
+  const visitorSectionIdSet = useMemo(
+    () => new Set(getVisibleOrderedBranchSectionIds(layoutBlocks, false)),
+    [layoutBlocks]
+  );
+  const visitorOrderedSectionIds = useMemo(
+    () => orderedSectionIds.filter((id) => visitorSectionIdSet.has(id)),
+    [orderedSectionIds, visitorSectionIdSet]
+  );
+  const adminOnlyOrderedSectionIds = useMemo(
+    () => (isAdminCanvas ? orderedSectionIds.filter((id) => !visitorSectionIdSet.has(id)) : []),
+    [isAdminCanvas, orderedSectionIds, visitorSectionIdSet]
+  );
 
   /** adminId：與 layout_blocks 內積木 id 一致（選取／拖曳用）；blockOverride：實際套用樣式與高度的 LayoutBlock */
   const wrap = (
@@ -1138,66 +1150,72 @@ export default function BranchSiteHomeView({
           }
         : {})}
     >
-      {/**
-       * 全頁裝飾：百分比相對「整段 main」寬高（非 max-w 欄寬）。
-       * 內層維持 w-full h-full，才能與後台畫布使用同一座標系，並可貼近左右邊緣。
-       */}
-      {!isAdminCanvas && hasViewportFloatingIcons && viewportLayerReady ? (
-        <div
-          data-viewport-floating-shell
-          className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
-          style={viewportLayerHeightPx != null ? { height: viewportLayerHeightPx } : undefined}
-          aria-hidden
-        >
-          <div className="relative h-full w-full">
-            <HeroFloatingIconsLayer
-              icons={viewportFloatingIcons ?? undefined}
-              coordinateViewport="desktop"
-              scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
-            />
-          </div>
-        </div>
-      ) : null}
-      {isAdminCanvas &&
-      admin?.onViewportFloatingIconsChange &&
-      (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
-        <div
-          data-viewport-floating-shell
-          className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
-        >
-          <div className="relative h-full w-full">
-            <HeroFloatingIconsLayer
-              icons={admin.viewportFloatingIcons}
-              coordinateViewport="desktop"
-              scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
-            />
-            <div
-              className="absolute inset-0 z-[33]"
-              data-floating-icon-editor
-              data-viewport-floating-editor
-            >
-              <HeroFloatingIconsEditor
-                overlayMode
-                coordinateMode="desktop"
-                icons={admin.viewportFloatingIcons!}
-                onChange={admin.onViewportFloatingIconsChange}
-                selectedIconId={admin.selectedViewportFloatingIconId ?? null}
-                onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
+      <div className="relative">
+        {/**
+         * 全頁裝飾：座標分母鎖在「前台可見區塊」高度；後台專用占位區塊不納入。
+         */
+        {!isAdminCanvas && hasViewportFloatingIcons && viewportLayerReady ? (
+          <div
+            data-viewport-floating-shell
+            className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+            style={viewportLayerHeightPx != null ? { height: viewportLayerHeightPx } : undefined}
+            aria-hidden
+          >
+            <div className="relative h-full w-full">
+              <HeroFloatingIconsLayer
+                icons={viewportFloatingIcons ?? undefined}
+                coordinateViewport="desktop"
                 scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
-                showImageInOverlay={false}
-                viewportInlineToolbar
-                canvasPreviewScale={admin.canvasPreviewScale ?? 1}
-                onRemoveIcon={(id) => {
-                  const next = (admin.viewportFloatingIcons ?? []).filter((x) => x.id !== id);
-                  admin.onViewportFloatingIconsChange!(next);
-                  admin.onSelectViewportFloatingIcon?.(null);
-                }}
               />
             </div>
           </div>
-        </div>
-      ) : null}
-      {orderedSectionIds.map((id) => {
+        ) : null}
+        {isAdminCanvas &&
+        admin?.onViewportFloatingIconsChange &&
+        (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
+          <div
+            data-viewport-floating-shell
+            className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+          >
+            <div className="relative h-full w-full">
+              <HeroFloatingIconsLayer
+                icons={admin.viewportFloatingIcons}
+                coordinateViewport="desktop"
+                scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+              />
+              <div
+                className="absolute inset-0 z-[33]"
+                data-floating-icon-editor
+                data-viewport-floating-editor
+              >
+                <HeroFloatingIconsEditor
+                  overlayMode
+                  coordinateMode="desktop"
+                  icons={admin.viewportFloatingIcons!}
+                  onChange={admin.onViewportFloatingIconsChange}
+                  selectedIconId={admin.selectedViewportFloatingIconId ?? null}
+                  onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
+                  scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+                  showImageInOverlay={false}
+                  viewportInlineToolbar
+                  canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                  onRemoveIcon={(id) => {
+                    const next = (admin.viewportFloatingIcons ?? []).filter((x) => x.id !== id);
+                    admin.onViewportFloatingIconsChange!(next);
+                    admin.onSelectViewportFloatingIcon?.(null);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {visitorOrderedSectionIds.map((id) => {
+          const node = renderSectionById(id);
+          if (node == null) return null;
+          return <Fragment key={id}>{node}</Fragment>;
+        })}
+      </div>
+      {adminOnlyOrderedSectionIds.map((id) => {
         const node = renderSectionById(id);
         if (node == null) return null;
         return <Fragment key={id}>{node}</Fragment>;
