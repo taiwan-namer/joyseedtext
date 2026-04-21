@@ -284,64 +284,82 @@ export default function BranchSiteHomeView({
   }, [isAdminCanvas, hasViewportFloatingIcons]);
 
   useEffect(() => {
-    if (!hasAdminViewportFloatingIcons) {
+    if (!isAdminCanvas || !hasAdminViewportFloatingIcons) {
+      setAdminViewportCoordHeightPx(null);
       setAdminViewportLayerReady(true);
       return;
     }
-    setAdminViewportLayerReady(false);
     if (typeof window === "undefined" || typeof document === "undefined") return;
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const finalize = () => {
-      if (cancelled) return;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!cancelled) setAdminViewportLayerReady(true);
-        });
-      });
-    };
-    const onLoad = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(finalize, 220);
-    };
-
-    if (document.readyState === "complete") onLoad();
-    else window.addEventListener("load", onLoad);
-    // 即使 load 已完成，仍給一個短暫緩衝讓畫布初次重排結束再掛載
-    onLoad();
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener("load", onLoad);
-    };
-  }, [hasAdminViewportFloatingIcons]);
-
-  useEffect(() => {
-    if (!isAdminCanvas) {
-      setAdminViewportCoordHeightPx(null);
-      return;
-    }
     const root = pageRootRef.current;
     if (!root) return;
 
-    const measure = () => {
+    setAdminViewportLayerReady(false);
+
+    let cancelled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let hardTimeout: ReturnType<typeof setTimeout> | null = null;
+    let ro: ResizeObserver | null = null;
+    let maxCoordH = 1;
+    let settled = false;
+
+    const computeCoordH = () => {
       const rootH = Math.max(root.scrollHeight, root.clientHeight, root.offsetHeight);
       let adminOnlyH = 0;
       const adminOnlyNodes = root.querySelectorAll<HTMLElement>("[data-admin-only-block='true']");
       adminOnlyNodes.forEach((el) => {
         adminOnlyH += Math.max(el.offsetHeight, el.scrollHeight, el.clientHeight);
       });
-      const coordH = Math.max(1, rootH - adminOnlyH);
-      setAdminViewportCoordHeightPx(coordH);
+      return Math.max(1, rootH - adminOnlyH);
     };
 
-    measure();
-    const ro = new ResizeObserver(measure);
+    const cleanup = () => {
+      if (ro) {
+        ro.disconnect();
+        ro = null;
+      }
+      root.removeEventListener("load", onAssetEvent, true);
+      root.removeEventListener("error", onAssetEvent, true);
+      window.removeEventListener("load", onAssetEvent);
+    };
+
+    const finalize = () => {
+      if (cancelled || settled) return;
+      settled = true;
+      cleanup();
+      setAdminViewportCoordHeightPx(maxCoordH);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) setAdminViewportLayerReady(true);
+        });
+      });
+    };
+
+    const scheduleFinalize = () => {
+      maxCoordH = Math.max(maxCoordH, computeCoordH());
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(finalize, 260);
+    };
+
+    const onAssetEvent = () => {
+      scheduleFinalize();
+    };
+
+    maxCoordH = computeCoordH();
+    ro = new ResizeObserver(scheduleFinalize);
     ro.observe(root);
-    return () => ro.disconnect();
-  }, [isAdminCanvas, orderedSectionIds, layoutBlocks]);
+    root.addEventListener("load", onAssetEvent, true);
+    root.addEventListener("error", onAssetEvent, true);
+    window.addEventListener("load", onAssetEvent);
+    hardTimeout = setTimeout(finalize, 1800);
+    scheduleFinalize();
+
+    return () => {
+      cancelled = true;
+      if (settleTimer) clearTimeout(settleTimer);
+      if (hardTimeout) clearTimeout(hardTimeout);
+      cleanup();
+    };
+  }, [isAdminCanvas, hasAdminViewportFloatingIcons, orderedSectionIds, layoutBlocks]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
