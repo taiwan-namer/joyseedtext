@@ -39,6 +39,10 @@ export type LayoutPreviewSyncPayload = {
   mobileCanvasZoomPct: number;
   /** 手機 iframe 目前實際預覽寬度（px），用來貼近真實裝置寬度 */
   mobilePreviewViewportWidthPx: number;
+  /** 桌機畫布縮放比例（用於需要與桌機 1:1 同步時）。 */
+  desktopCanvasZoomPct: number;
+  /** 桌機畫布視窗寬度（px，用於需要與桌機 1:1 同步時）。 */
+  desktopCanvasViewportWidthPx: number;
   heroImageUrl: string | null;
   /** 未儲存時同步主圖原檔，讓 iframe 內可自行建立 blob URL 預覽。 */
   heroImageFile?: File | null;
