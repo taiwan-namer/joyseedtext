@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity as mapCourseToHomePageActivity } from "@/lib/homePageActivity";
 import FAQ from "@/app/components/FAQ";
@@ -202,6 +202,7 @@ export default function BranchSiteHomeView({
   const isAdminCanvas = admin != null;
   const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
   const isEditingViewportFloatingInAdmin = !!(isAdminCanvas && admin?.selectedViewportFloatingIconId);
+  const viewportRootRef = useRef<HTMLDivElement | null>(null);
   const viewportIconUrlSet = useMemo(() => {
     const s = new Set<string>();
     for (const ic of viewportFloatingIcons ?? []) {
@@ -210,6 +211,82 @@ export default function BranchSiteHomeView({
     }
     return s;
   }, [viewportFloatingIcons]);
+  const hasAdminViewportFloatingIcons = !!(isAdminCanvas && (admin?.viewportFloatingIcons?.length ?? 0) > 0);
+  const [viewportLayerReady, setViewportLayerReady] = useState(() => !hasViewportFloatingIcons);
+  const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
+  const [adminViewportLayerReady, setAdminViewportLayerReady] = useState(() => !hasAdminViewportFloatingIcons);
+  const [adminViewportLayerHeightPx, setAdminViewportLayerHeightPx] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (!hasViewportFloatingIcons) {
+      setViewportLayerReady(true);
+      setViewportLayerHeightPx(null);
+      return;
+    }
+    const host = viewportRootRef.current;
+    if (!host) return;
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    setViewportLayerReady(false);
+    const mark = () => {
+      if (settled) return;
+      settled = true;
+      const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
+      setViewportLayerHeightPx(h > 0 ? h : null);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setViewportLayerReady(true));
+      });
+    };
+    const queue = () => {
+      if (settled) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(mark, 220);
+    };
+    const ro = new ResizeObserver(queue);
+    ro.observe(host);
+    queue();
+    return () => {
+      if (timer) clearTimeout(timer);
+      ro.disconnect();
+    };
+  }, [hasViewportFloatingIcons, layoutBlocks.length, carouselList.length]);
+
+  useLayoutEffect(() => {
+    if (!hasAdminViewportFloatingIcons) {
+      setAdminViewportLayerReady(true);
+      setAdminViewportLayerHeightPx(null);
+      return;
+    }
+    const host = viewportRootRef.current;
+    if (!host) return;
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let hardTimer: ReturnType<typeof setTimeout> | null = null;
+    setAdminViewportLayerReady(false);
+    const mark = () => {
+      if (settled) return;
+      settled = true;
+      const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
+      setAdminViewportLayerHeightPx(h > 0 ? h : null);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setAdminViewportLayerReady(true));
+      });
+    };
+    const queue = () => {
+      if (settled) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(mark, 320);
+    };
+    const ro = new ResizeObserver(queue);
+    ro.observe(host);
+    hardTimer = setTimeout(mark, 2200);
+    queue();
+    return () => {
+      if (timer) clearTimeout(timer);
+      if (hardTimer) clearTimeout(hardTimer);
+      ro.disconnect();
+    };
+  }, [hasAdminViewportFloatingIcons, layoutBlocks.length, carouselList.length]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -1081,9 +1158,14 @@ export default function BranchSiteHomeView({
           }
         : {})}
     >
-      <div className="relative">
-        {!isAdminCanvas && hasViewportFloatingIcons ? (
-          <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[32] flex justify-center" aria-hidden>
+      <div ref={viewportRootRef} className="relative">
+        {!isAdminCanvas && hasViewportFloatingIcons && viewportLayerReady ? (
+          <div
+            data-viewport-floating-shell
+            className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+            style={viewportLayerHeightPx != null ? { height: viewportLayerHeightPx } : undefined}
+            aria-hidden
+          >
             <div className="relative h-full w-full max-w-7xl px-4 sm:px-4">
               <HeroFloatingIconsLayer
                 icons={viewportFloatingIcons ?? undefined}
@@ -1095,8 +1177,13 @@ export default function BranchSiteHomeView({
         ) : null}
         {isAdminCanvas &&
         admin?.onViewportFloatingIconsChange &&
-        (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
-          <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[32] flex justify-center">
+        (admin.viewportFloatingIcons?.length ?? 0) > 0 &&
+        adminViewportLayerReady ? (
+          <div
+            data-viewport-floating-shell
+            className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+            style={adminViewportLayerHeightPx != null ? { height: adminViewportLayerHeightPx } : undefined}
+          >
             <div className="relative h-full w-full max-w-7xl px-4 sm:px-4">
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}
