@@ -1016,7 +1016,7 @@ export default function BranchSiteHomeView({
 
   return (
     <div
-      className="relative min-h-screen bg-page flex flex-col"
+      className="relative min-h-screen bg-page flex flex-col overflow-x-visible"
       {...(isAdminCanvas
         ? {
             onClickCapture: suppressCanvasLinkNavigation,
@@ -1024,41 +1024,53 @@ export default function BranchSiteHomeView({
           }
         : {})}
     >
+      {/**
+       * 全頁裝飾：百分比相對「整段 main」寬高（非 max-w 欄寬）。
+       * 內層維持 w-full h-full，才能與後台畫布使用同一座標系，並可貼近左右邊緣。
+       */}
       {!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0 ? (
-        <div className="pointer-events-none absolute inset-0 z-[32]" aria-hidden>
-          <HeroFloatingIconsLayer
-            icons={viewportFloatingIcons ?? undefined}
-            coordinateViewport={coordMode}
-            scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
-          />
+        <div
+          data-viewport-floating-shell
+          className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+          aria-hidden
+        >
+          <div className="relative h-full w-full">
+            <HeroFloatingIconsLayer
+              icons={viewportFloatingIcons ?? undefined}
+              coordinateViewport={coordMode}
+              scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+            />
+          </div>
         </div>
       ) : null}
       {isAdminCanvas &&
       admin?.onViewportFloatingIconsChange &&
       (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
-        <div className="pointer-events-none absolute inset-0 z-[32]">
-          <HeroFloatingIconsLayer
-            icons={admin.viewportFloatingIcons}
-            coordinateViewport={coordMode}
-            scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
-          />
-          <div className="absolute inset-0 z-[33]" data-floating-icon-editor>
-            <HeroFloatingIconsEditor
-              overlayMode
-              coordinateMode={coordMode}
-              icons={admin.viewportFloatingIcons!}
-              onChange={admin.onViewportFloatingIconsChange}
-              selectedIconId={admin.selectedViewportFloatingIconId ?? null}
-              onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
+        <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[32] flex justify-center">
+          <div className="relative h-full w-full">
+            <HeroFloatingIconsLayer
+              icons={admin.viewportFloatingIcons}
+              coordinateViewport={coordMode}
               scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
-              viewportInlineToolbar
-              canvasPreviewScale={admin.canvasPreviewScale ?? 1}
-              onRemoveIcon={(id) => {
-                const next = (admin.viewportFloatingIcons ?? []).filter((x) => x.id !== id);
-                admin.onViewportFloatingIconsChange!(next);
-                admin.onSelectViewportFloatingIcon?.(null);
-              }}
             />
+            <div className="absolute inset-0 z-[33]" data-floating-icon-editor>
+              <HeroFloatingIconsEditor
+                overlayMode
+                coordinateMode={coordMode}
+                icons={admin.viewportFloatingIcons!}
+                onChange={admin.onViewportFloatingIconsChange}
+                selectedIconId={admin.selectedViewportFloatingIconId ?? null}
+                onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
+                scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+                viewportInlineToolbar
+                canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                onRemoveIcon={(id) => {
+                  const next = (admin.viewportFloatingIcons ?? []).filter((x) => x.id !== id);
+                  admin.onViewportFloatingIconsChange!(next);
+                  admin.onSelectViewportFloatingIcon?.(null);
+                }}
+              />
+            </div>
           </div>
         </div>
       ) : null}

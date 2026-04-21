@@ -435,17 +435,13 @@ export default function HeroFloatingIconsEditor({
         const wPx = eff.widthPx;
         const displayW = wPx * iconScale;
         const displayH = floatingIconDisplayHeight({ ...icon, widthPx: wPx, heightPx: eff.heightPx }) * iconScale;
-        /**
-         * 與 HeroFloatingIconsLayer 同一外層：width + maxWidth + height:auto + 內層 img（object-contain）。
-         * 勿用固定 height: displayH 的方塊，否則實際圖片可視區與透明拖曳區中心會錯位（常變成要點右側才抓得到）。
-         */
+        /** 與前台 HeroFloatingIconsLayer 一致：固定 width/height + 中心錨點，避免儲存後位移。 */
         const outerStyle: CSSProperties = {
           left: `${leftPct}%`,
           top: `${topPct}%`,
           transform,
           width: displayW,
-          maxWidth: "100%",
-          height: "auto",
+          height: displayH,
           zIndex: 20 + (icon.zIndex ?? 0),
         };
         return (
@@ -468,8 +464,7 @@ export default function HeroFloatingIconsEditor({
             <img
               src={icon.imageUrl}
               alt=""
-              className="pointer-events-none block h-auto w-full object-contain select-none"
-              style={{ maxHeight: displayH }}
+              className="pointer-events-none block h-full w-full object-contain select-none"
               draggable={false}
             />
           </button>

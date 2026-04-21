@@ -442,7 +442,9 @@ export async function updateLayoutBlocks(
         { onConflict: "merchant_id" }
       );
     if (error) return { success: false, error: error.message };
-    revalidatePath("/");
+    revalidatePath("/", "layout");
+    revalidatePath("/", "page");
+    revalidatePath("/about", "page");
     return { success: true, message: "版面已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";

@@ -108,14 +108,14 @@ export default function HeroFloatingIconsLayer({
         return (
           <div
             key={icon.id}
-            className="absolute box-border overflow-hidden"
+            className="absolute box-border overflow-visible"
             data-floating-slot={slot1Based > 0 ? slot1Based : undefined}
             style={{
               left: `${leftPct}%`,
               top: `${topPct}%`,
               transform,
               width: displayW,
-              maxWidth: "100%",
+              /* 勿設 maxWidth:100%：translate(-50%) 貼邊時會壓縮盒寬，導致無法靠近左右 */
               height: displayH,
               zIndex: 1 + (icon.zIndex ?? 0),
             }}
