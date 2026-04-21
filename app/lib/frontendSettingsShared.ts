@@ -8,12 +8,6 @@
 export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
 
 /**
- * 手機（max-md）裝飾圖寬度縮放基準（px）。
- * 須與後台手機畫布 iframe 之設計寬一致，否則同 `widthPx` 在預覽與真機會差約 1280/390 倍。
- */
-export const LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX = 390 as const;
-
-/**
  * 後台「首頁版面」畫布模擬的瀏覽器視窗寬度（px）。
  * 須大於 {@link LAYOUT_DESIGN_CANVAS_WIDTH_PX}，畫布內才會出現與前台寬螢幕相同的兩側留白；主內容仍由 `max-w-7xl` 置中。
  * 裝飾圖座標仍為「主圖／區塊框內」百分比，與視窗外側留白無關。

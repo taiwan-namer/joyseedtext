@@ -23,8 +23,7 @@ type Props = {
   scaleReferenceWidthPx?: number;
 };
 
-/** 與後台手機畫布／前台訪客手機裝飾圖縮放一致時使用 */
-export function useNarrowMaxMd(): boolean {
+function useNarrowMaxMd(): boolean {
   const [narrow, setNarrow] = useState(false);
   /** 必須在繪製前同步（useLayoutEffect），否則未傳 coordinateViewport 時會先以桌機座標／縮放畫一幀，再跳到手機，造成「裝飾圖先跑掉」。 */
   useLayoutEffect(() => {
