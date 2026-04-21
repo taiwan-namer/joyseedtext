@@ -40,6 +40,8 @@ export type LayoutPreviewSyncPayload = {
   /** 手機 iframe 目前實際預覽寬度（px），用來貼近真實裝置寬度 */
   mobilePreviewViewportWidthPx: number;
   heroImageUrl: string | null;
+  /** 未儲存時同步主圖原檔，讓 iframe 內可自行建立 blob URL 預覽。 */
+  heroImageFile?: File | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;
   navAboutLabel: string;
