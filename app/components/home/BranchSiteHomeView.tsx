@@ -202,6 +202,7 @@ export default function BranchSiteHomeView({
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
   const isAdminCanvas = admin != null;
   const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
+  const isEditingViewportFloatingInAdmin = !!(isAdminCanvas && admin?.selectedViewportFloatingIconId);
   const viewportIconUrlSet = useMemo(() => {
     const s = new Set<string>();
     for (const ic of viewportFloatingIcons ?? []) {
@@ -465,6 +466,10 @@ export default function BranchSiteHomeView({
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
     if (!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0) {
       // 前台已有全頁裝飾時，關閉 Hero 類區塊裝飾，避免視覺上出現兩個位置交替。
+      if (blockId === "hero" || blockId === "hero_carousel") return null;
+    }
+    if (isEditingViewportFloatingInAdmin && hasViewportFloatingIcons) {
+      // 後台正在編輯「全頁裝飾」時，先隱藏 Hero 類區塊裝飾，避免同圖雙來源造成視覺誤判。
       if (blockId === "hero" || blockId === "hero_carousel") return null;
     }
     const b = getBlock(blockId);
