@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity as mapCourseToHomePageActivity } from "@/lib/homePageActivity";
 import FAQ from "@/app/components/FAQ";
@@ -210,6 +210,7 @@ export default function BranchSiteHomeView({
     }
     return s;
   }, [viewportFloatingIcons]);
+  const viewportContentRef = useRef<HTMLDivElement | null>(null);
   const [viewportLayerReady, setViewportLayerReady] = useState(() => !(!isAdminCanvas && hasViewportFloatingIcons));
   const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
   const hasAdminViewportFloatingIcons = !!(isAdminCanvas && (admin?.viewportFloatingIcons?.length ?? 0) > 0);
@@ -229,6 +230,7 @@ export default function BranchSiteHomeView({
     let cancelled = false;
     let settled = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    const viewportHost = viewportContentRef.current;
     const root = document.documentElement;
     const body = document.body;
     let ro: ResizeObserver | null = null;
@@ -245,7 +247,9 @@ export default function BranchSiteHomeView({
       if (cancelled || settled) return;
       settled = true;
       cleanupObservers();
-      const lockedHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      const lockedHeight = viewportHost
+        ? Math.max(viewportHost.scrollHeight, Math.round(viewportHost.getBoundingClientRect().height))
+        : Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
       setViewportLayerHeightPx(lockedHeight > 0 ? lockedHeight : null);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -268,8 +272,11 @@ export default function BranchSiteHomeView({
       scheduleReady();
     });
 
-    ro.observe(root);
-    if (body) ro.observe(body);
+    if (viewportHost) ro.observe(viewportHost);
+    else {
+      ro.observe(root);
+      if (body) ro.observe(body);
+    }
 
     if (document.readyState === "complete") onLoad();
     else window.addEventListener("load", onLoad);
@@ -296,6 +303,7 @@ export default function BranchSiteHomeView({
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
     let hardTimer: ReturnType<typeof setTimeout> | null = null;
     let settled = false;
+    const viewportHost = viewportContentRef.current;
     const root = document.documentElement;
     const body = document.body;
     let ro: ResizeObserver | null = null;
@@ -312,7 +320,9 @@ export default function BranchSiteHomeView({
       if (cancelled || settled) return;
       settled = true;
       cleanup();
-      const lockedHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      const lockedHeight = viewportHost
+        ? Math.max(viewportHost.scrollHeight, Math.round(viewportHost.getBoundingClientRect().height))
+        : Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
       setAdminViewportLayerHeightPx(lockedHeight > 0 ? lockedHeight : null);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -332,12 +342,19 @@ export default function BranchSiteHomeView({
     };
 
     ro = new ResizeObserver(() => {
-      // 全頁高度仍在改變時不顯示，避免看見連續往下跳
-      void Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      // 基準容器高度仍在改變時不顯示，避免看見連續往下跳
+      if (viewportHost) {
+        void Math.max(viewportHost.scrollHeight, Math.round(viewportHost.getBoundingClientRect().height));
+      } else {
+        void Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      }
       scheduleReady();
     });
-    ro.observe(root);
-    if (body) ro.observe(body);
+    if (viewportHost) ro.observe(viewportHost);
+    else {
+      ro.observe(root);
+      if (body) ro.observe(body);
+    }
 
     if (document.readyState === "complete") onLoad();
     else window.addEventListener("load", onLoad);
@@ -1222,7 +1239,7 @@ export default function BranchSiteHomeView({
           }
         : {})}
     >
-      <div className="relative">
+      <div ref={viewportContentRef} className="relative">
         {/*
          * 全頁裝飾：座標分母鎖在「前台可見區塊」高度；後台專用占位區塊不納入。
          */}
