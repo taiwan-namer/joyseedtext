@@ -213,6 +213,7 @@ export default function BranchSiteHomeView({
   const [viewportLayerReady, setViewportLayerReady] = useState(() => !(!isAdminCanvas && hasViewportFloatingIcons));
   const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
   const hasAdminViewportFloatingIcons = !!(isAdminCanvas && (admin?.viewportFloatingIcons?.length ?? 0) > 0);
+  const [adminViewportLayerReady, setAdminViewportLayerReady] = useState(() => !hasAdminViewportFloatingIcons);
 
   useEffect(() => {
     const shouldWaitForStableLayout = !isAdminCanvas && hasViewportFloatingIcons;
@@ -279,6 +280,72 @@ export default function BranchSiteHomeView({
       cleanupObservers();
     };
   }, [isAdminCanvas, hasViewportFloatingIcons]);
+
+  useEffect(() => {
+    if (!hasAdminViewportFloatingIcons) {
+      setAdminViewportLayerReady(true);
+      return;
+    }
+    setAdminViewportLayerReady(false);
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    let cancelled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let hardTimer: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+    const root = document.documentElement;
+    const body = document.body;
+    let ro: ResizeObserver | null = null;
+
+    const cleanup = () => {
+      if (ro) {
+        ro.disconnect();
+        ro = null;
+      }
+      window.removeEventListener("load", onLoad);
+    };
+
+    const markReady = () => {
+      if (cancelled || settled) return;
+      settled = true;
+      cleanup();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) setAdminViewportLayerReady(true);
+        });
+      });
+    };
+
+    const scheduleReady = () => {
+      if (settled) return;
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(markReady, 320);
+    };
+
+    const onLoad = () => {
+      scheduleReady();
+    };
+
+    ro = new ResizeObserver(() => {
+      // 全頁高度仍在改變時不顯示，避免看見連續往下跳
+      void Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      scheduleReady();
+    });
+    ro.observe(root);
+    if (body) ro.observe(body);
+
+    if (document.readyState === "complete") onLoad();
+    else window.addEventListener("load", onLoad);
+    hardTimer = setTimeout(markReady, 2200);
+    scheduleReady();
+
+    return () => {
+      cancelled = true;
+      if (settleTimer) clearTimeout(settleTimer);
+      if (hardTimer) clearTimeout(hardTimer);
+      cleanup();
+    };
+  }, [hasAdminViewportFloatingIcons]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -1172,7 +1239,8 @@ export default function BranchSiteHomeView({
         ) : null}
         {isAdminCanvas &&
         admin?.onViewportFloatingIconsChange &&
-        (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
+      (admin.viewportFloatingIcons?.length ?? 0) > 0 &&
+      adminViewportLayerReady ? (
           <div
             data-viewport-floating-shell
             className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
