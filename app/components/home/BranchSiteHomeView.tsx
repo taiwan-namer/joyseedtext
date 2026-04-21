@@ -553,45 +553,6 @@ export default function BranchSiteHomeView({
               ) : null}
             </button>
           ) : null}
-          {!isAdminCanvas && hasViewportFloatingIcons ? (
-            <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[14]" aria-hidden>
-              <HeroFloatingIconsLayer
-                icons={viewportFloatingIcons ?? undefined}
-                coordinateViewport="desktop"
-                scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
-              />
-            </div>
-          ) : null}
-          {isAdminCanvas &&
-          admin?.onViewportFloatingIconsChange &&
-          (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
-            <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[14]">
-              <HeroFloatingIconsLayer
-                icons={admin.viewportFloatingIcons}
-                coordinateViewport="desktop"
-                scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
-              />
-              <div className="absolute inset-0 z-[33]" data-floating-icon-editor data-viewport-floating-editor>
-                <HeroFloatingIconsEditor
-                  overlayMode
-                  coordinateMode="desktop"
-                  icons={admin.viewportFloatingIcons!}
-                  onChange={admin.onViewportFloatingIconsChange}
-                  selectedIconId={admin.selectedViewportFloatingIconId ?? null}
-                  onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
-                  scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
-                  showImageInOverlay={false}
-                  viewportInlineToolbar
-                  canvasPreviewScale={admin.canvasPreviewScale ?? 1}
-                  onRemoveIcon={(id) => {
-                    const next = (admin.viewportFloatingIcons ?? []).filter((x) => x.id !== id);
-                    admin.onViewportFloatingIconsChange!(next);
-                    admin.onSelectViewportFloatingIcon?.(null);
-                  }}
-                />
-              </div>
-            </div>
-          ) : null}
           {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
             <div className="absolute inset-0 z-[15]">
               <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={iconsForMainHeroSection!} />
@@ -1121,6 +1082,49 @@ export default function BranchSiteHomeView({
         : {})}
     >
       <div className="relative">
+        {!isAdminCanvas && hasViewportFloatingIcons ? (
+          <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[32] flex justify-center" aria-hidden>
+            <div className="relative h-full w-full max-w-7xl px-4 sm:px-4">
+              <HeroFloatingIconsLayer
+                icons={viewportFloatingIcons ?? undefined}
+                coordinateViewport="desktop"
+                scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
+              />
+            </div>
+          </div>
+        ) : null}
+        {isAdminCanvas &&
+        admin?.onViewportFloatingIconsChange &&
+        (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
+          <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[32] flex justify-center">
+            <div className="relative h-full w-full max-w-7xl px-4 sm:px-4">
+              <HeroFloatingIconsLayer
+                icons={admin.viewportFloatingIcons}
+                coordinateViewport="desktop"
+                scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
+              />
+              <div className="absolute inset-0 z-[33]" data-floating-icon-editor data-viewport-floating-editor>
+                <HeroFloatingIconsEditor
+                  overlayMode
+                  coordinateMode="desktop"
+                  icons={admin.viewportFloatingIcons!}
+                  onChange={admin.onViewportFloatingIconsChange}
+                  selectedIconId={admin.selectedViewportFloatingIconId ?? null}
+                  onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
+                  scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
+                  showImageInOverlay={false}
+                  viewportInlineToolbar
+                  canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                  onRemoveIcon={(id) => {
+                    const next = (admin.viewportFloatingIcons ?? []).filter((x) => x.id !== id);
+                    admin.onViewportFloatingIconsChange!(next);
+                    admin.onSelectViewportFloatingIcon?.(null);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
         {visitorOrderedSectionIds.map((id) => {
           const node = renderSectionById(id);
           if (node == null) return null;

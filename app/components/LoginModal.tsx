@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { X, Eye, EyeOff, Mail } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
@@ -42,6 +43,7 @@ export default function LoginModal({
   returnTo,
   onBeforeGoogleRedirect,
 }: LoginModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<Step>(1);
   const [formError, setFormError] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
@@ -49,6 +51,11 @@ export default function LoginModal({
   const [registerLoading, setRegisterLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -161,10 +168,10 @@ export default function LoginModal({
     );
   }
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden onClick={onClose} />
       <div
         role="dialog"
@@ -400,6 +407,7 @@ export default function LoginModal({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
