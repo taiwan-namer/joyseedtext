@@ -114,11 +114,11 @@ export default function AdminLayoutMobilePreviewPage() {
         selectedBlockId={payload.selectedBlockId}
         onSelectBlock={onSelectBlock}
         onBlockResizeHeight={onBlockResizeHeight}
-        floatingIconsCoordinateMode="desktop"
+        floatingIconsCoordinateMode="mobile"
         selectedFloatingIconId={payload.selectedFloatingIconId ?? null}
         onSelectFloatingIcon={onSelectFloatingIcon}
-        designWidthPx={Math.max(390, Math.round(payload.desktopCanvasViewportWidthPx || window.innerWidth || 1280))}
-        zoomPercent={payload.desktopCanvasZoomPct}
+        designWidthPx={Math.max(320, Math.round(payload.mobilePreviewViewportWidthPx || window.innerWidth || 390))}
+        zoomPercent={payload.mobileCanvasZoomPct}
         adminInteractive
         heroImageUrl={heroImageBlobUrl ?? payload.heroImageUrl}
         carouselItems={payload.carouselItems}
