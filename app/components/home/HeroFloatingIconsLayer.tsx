@@ -49,7 +49,8 @@ export default function HeroFloatingIconsLayer({
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scaleBase = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
-  const [hostWidth, setHostWidth] = useState<number>(scaleBase);
+  /** null=尚未量到容器寬；先不渲染 icon，避免第一幀跳位 */
+  const [hostWidth, setHostWidth] = useState<number | null>(null);
   const narrowAuto = useNarrowMaxMd();
   const resolvedMode: "desktop" | "mobile" =
     coordinateViewport === "mobile" ? "mobile" : coordinateViewport === "desktop" ? "desktop" : narrowAuto ? "mobile" : "desktop";
@@ -58,7 +59,8 @@ export default function HeroFloatingIconsLayer({
   const centerSet = horizontalCenterSlots1Based ?? [];
   const rowGroups = horizontalRowGroups1Based ?? [];
   const nudgeMap = verticalNudgePxBySlot1Based ?? {};
-  const iconScale = Math.max(0.2, hostWidth / scaleBase);
+  const iconScale =
+    hostWidth != null ? Math.max(0.2, hostWidth / scaleBase) : 1;
   const useAboutRules = resolvedMode === "desktop" && (centerSet.length > 0 || rowGroups.length > 0);
 
   /** 初始 hostWidth 用設計欄寬；實際容器寬度須在繪製前以 ResizeObserver 寫入，否則 iconScale 先為 1 再變小，裝飾圖會先錯位／錯尺寸。 */
@@ -78,6 +80,16 @@ export default function HeroFloatingIconsLayer({
   if (list.length === 0) return null;
 
   const zClass = underContent ? "z-[1]" : "z-[30]";
+  if (hostWidth === null) {
+    return (
+      <div
+        ref={hostRef}
+        className={`pointer-events-none absolute inset-0 ${zClass} ${wrapperClassName}`.trim()}
+        aria-hidden
+      />
+    );
+  }
+
   return (
     <div
       ref={hostRef}

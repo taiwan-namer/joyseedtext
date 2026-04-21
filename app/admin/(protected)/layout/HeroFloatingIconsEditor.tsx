@@ -70,8 +70,9 @@ export default function HeroFloatingIconsEditor({
   const iconButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const scaleBase = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : DEFAULT_SCALE_REF;
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [hostWidth, setHostWidth] = useState<number>(scaleBase);
-  const iconScale = Math.max(0.2, hostWidth / scaleBase);
+  /** null=尚未量到容器寬；先不渲染 icon，避免第一幀跳位 */
+  const [hostWidth, setHostWidth] = useState<number | null>(null);
+  const iconScale = hostWidth != null ? Math.max(0.2, hostWidth / scaleBase) : 1;
   const previewScale = Math.min(100, Math.max(0.25, canvasPreviewScale));
   const previewPxFromStored = useCallback((n: number) => Math.round(n * previewScale), [previewScale]);
   const storedPxFromPreview = useCallback((n: number) => Math.round(n / previewScale), [previewScale]);
@@ -229,6 +230,16 @@ export default function HeroFloatingIconsEditor({
     viewportInlineToolbar && selectedIconId
       ? icons.find((i) => i.id === selectedIconId && i.enabled !== false)
       : null;
+
+  if (hostWidth === null) {
+    return (
+      <div
+        ref={containerRef}
+        data-floating-icon-editor
+        className={`pointer-events-none absolute inset-0 ${overlayMode ? "z-[45]" : "z-[30]"}`}
+      />
+    );
+  }
 
   const toolbarPortal =
     typeof document !== "undefined" &&
