@@ -1151,9 +1151,9 @@ export default function BranchSiteHomeView({
         : {})}
     >
       <div className="relative">
-        {/**
+        {/*
          * 全頁裝飾：座標分母鎖在「前台可見區塊」高度；後台專用占位區塊不納入。
-         */
+         */}
         {!isAdminCanvas && hasViewportFloatingIcons && viewportLayerReady ? (
           <div
             data-viewport-floating-shell
