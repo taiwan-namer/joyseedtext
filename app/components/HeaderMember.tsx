@@ -59,6 +59,13 @@ export function HeaderMember() {
     window.location.href = "/";
   };
 
+  const loginButtonClassName = [
+    "flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center sm:min-w-0 sm:justify-start p-2 rounded-full transition-colors touch-manipulation",
+    loginOpen
+      ? "bg-amber-100 text-amber-700"
+      : "text-gray-600 hover:bg-gray-100",
+  ].join(" ");
+
   return (
     <>
       <div className="flex items-center gap-2 shrink-0">
@@ -89,7 +96,7 @@ export function HeaderMember() {
           <button
             type="button"
             onClick={() => setLoginOpen(true)}
-            className="flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center sm:min-w-0 sm:justify-start p-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors touch-manipulation"
+            className={loginButtonClassName}
             aria-label="登入"
           >
             <User size={22} />
