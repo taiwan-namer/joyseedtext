@@ -221,13 +221,24 @@ export default function BranchSiteHomeView({
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
     let cancelled = false;
+    let settled = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
     const root = document.documentElement;
     const body = document.body;
-    let lastHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+    let ro: ResizeObserver | null = null;
+
+    const cleanupObservers = () => {
+      if (ro) {
+        ro.disconnect();
+        ro = null;
+      }
+      window.removeEventListener("load", onLoad);
+    };
 
     const markReady = () => {
-      if (cancelled) return;
+      if (cancelled || settled) return;
+      settled = true;
+      cleanupObservers();
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (!cancelled) setViewportLayerReady(true);
@@ -236,25 +247,16 @@ export default function BranchSiteHomeView({
     };
 
     const scheduleReady = () => {
+      if (settled) return;
       if (settleTimer) clearTimeout(settleTimer);
       settleTimer = setTimeout(markReady, 220);
     };
 
     const onLoad = () => {
-      const nowHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
-      if (Math.abs(nowHeight - lastHeight) >= 1) {
-        lastHeight = nowHeight;
-        setViewportLayerReady(false);
-      }
       scheduleReady();
     };
 
-    const ro = new ResizeObserver(() => {
-      const nowHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
-      if (Math.abs(nowHeight - lastHeight) >= 1) {
-        lastHeight = nowHeight;
-        setViewportLayerReady(false);
-      }
+    ro = new ResizeObserver(() => {
       scheduleReady();
     });
 
@@ -268,8 +270,7 @@ export default function BranchSiteHomeView({
     return () => {
       cancelled = true;
       if (settleTimer) clearTimeout(settleTimer);
-      ro.disconnect();
-      window.removeEventListener("load", onLoad);
+      cleanupObservers();
     };
   }, [isAdminCanvas, hasViewportFloatingIcons]);
 
