@@ -200,6 +200,7 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
   const isAdminCanvas = admin != null;
+  const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
   const viewportIconUrlSet = useMemo(() => {
     const s = new Set<string>();
     for (const ic of viewportFloatingIcons ?? []) {
@@ -208,6 +209,69 @@ export default function BranchSiteHomeView({
     }
     return s;
   }, [viewportFloatingIcons]);
+  const [viewportLayerReady, setViewportLayerReady] = useState(() => !(!isAdminCanvas && hasViewportFloatingIcons));
+
+  useEffect(() => {
+    const shouldWaitForStableLayout = !isAdminCanvas && hasViewportFloatingIcons;
+    if (!shouldWaitForStableLayout) {
+      setViewportLayerReady(true);
+      return;
+    }
+    setViewportLayerReady(false);
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    let cancelled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    const root = document.documentElement;
+    const body = document.body;
+    let lastHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+
+    const markReady = () => {
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) setViewportLayerReady(true);
+        });
+      });
+    };
+
+    const scheduleReady = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(markReady, 220);
+    };
+
+    const onLoad = () => {
+      const nowHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      if (Math.abs(nowHeight - lastHeight) >= 1) {
+        lastHeight = nowHeight;
+        setViewportLayerReady(false);
+      }
+      scheduleReady();
+    };
+
+    const ro = new ResizeObserver(() => {
+      const nowHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      if (Math.abs(nowHeight - lastHeight) >= 1) {
+        lastHeight = nowHeight;
+        setViewportLayerReady(false);
+      }
+      scheduleReady();
+    });
+
+    ro.observe(root);
+    if (body) ro.observe(body);
+
+    if (document.readyState === "complete") onLoad();
+    else window.addEventListener("load", onLoad);
+
+    scheduleReady();
+    return () => {
+      cancelled = true;
+      if (settleTimer) clearTimeout(settleTimer);
+      ro.disconnect();
+      window.removeEventListener("load", onLoad);
+    };
+  }, [isAdminCanvas, hasViewportFloatingIcons]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -1067,7 +1131,7 @@ export default function BranchSiteHomeView({
        * 全頁裝飾：百分比相對「整段 main」寬高（非 max-w 欄寬）。
        * 內層維持 w-full h-full，才能與後台畫布使用同一座標系，並可貼近左右邊緣。
        */}
-      {!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0 ? (
+      {!isAdminCanvas && hasViewportFloatingIcons && viewportLayerReady ? (
         <div
           data-viewport-floating-shell
           className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
