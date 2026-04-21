@@ -779,8 +779,15 @@ export default function AdminLayoutPage() {
         );
         return;
       }
+      /** 桌機調整寬高時同步寫入手機專用欄位，前台窄螢幕才會變；桌機仍只讀 widthPx／heightPx，視覺不變 */
       updateBlockFloatingIcons(blockId, (icons) =>
-        icons.map((x) => (x.id === iconId ? { ...x, ...patch } : x))
+        icons.map((x) => {
+          if (x.id !== iconId) return x;
+          const merged = { ...x, ...patch };
+          if (patch.widthPx != null) merged.widthPxMobile = patch.widthPx;
+          if (patch.heightPx != null) merged.heightPxMobile = patch.heightPx;
+          return merged;
+        })
       );
     },
     [floatingEditViewport, updateBlockFloatingIcons]
@@ -878,6 +885,8 @@ export default function AdminLayoutPage() {
             topPct: 40,
             widthPx,
             heightPx,
+            widthPxMobile: widthPx,
+            heightPxMobile: heightPx,
             enabled: true,
           },
         ]);
@@ -921,6 +930,8 @@ export default function AdminLayoutPage() {
             topPct: 35,
             widthPx,
             heightPx,
+            widthPxMobile: widthPx,
+            heightPxMobile: heightPx,
             enabled: true,
           },
         ]);
