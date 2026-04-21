@@ -210,11 +210,13 @@ export default function BranchSiteHomeView({
     return s;
   }, [viewportFloatingIcons]);
   const [viewportLayerReady, setViewportLayerReady] = useState(() => !(!isAdminCanvas && hasViewportFloatingIcons));
+  const [viewportLayerHeightPx, setViewportLayerHeightPx] = useState<number | null>(null);
 
   useEffect(() => {
     const shouldWaitForStableLayout = !isAdminCanvas && hasViewportFloatingIcons;
     if (!shouldWaitForStableLayout) {
       setViewportLayerReady(true);
+      setViewportLayerHeightPx(null);
       return;
     }
     setViewportLayerReady(false);
@@ -239,6 +241,8 @@ export default function BranchSiteHomeView({
       if (cancelled || settled) return;
       settled = true;
       cleanupObservers();
+      const lockedHeight = Math.max(root.scrollHeight, body?.scrollHeight ?? 0);
+      setViewportLayerHeightPx(lockedHeight > 0 ? lockedHeight : null);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (!cancelled) setViewportLayerReady(true);
@@ -1136,6 +1140,7 @@ export default function BranchSiteHomeView({
         <div
           data-viewport-floating-shell
           className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
+          style={viewportLayerHeightPx != null ? { height: viewportLayerHeightPx } : undefined}
           aria-hidden
         >
           <div className="relative h-full w-full">
