@@ -1612,6 +1612,21 @@ export default function AdminLayoutPage() {
     );
   }, [layoutPreviewPayload]);
 
+  const postLayoutPreviewToIframeWithZoom = useCallback(
+    (nextZoomPct: number) => {
+      const w = mobilePreviewIframeRef.current?.contentWindow;
+      if (!w) return;
+      w.postMessage(
+        {
+          type: LAYOUT_PREVIEW_SYNC_TYPE,
+          payload: { ...layoutPreviewPayload, mobileCanvasZoomPct: nextZoomPct },
+        },
+        window.location.origin
+      );
+    },
+    [layoutPreviewPayload]
+  );
+
   useEffect(() => {
     postLayoutPreviewToIframe();
   }, [postLayoutPreviewToIframe]);
@@ -2035,7 +2050,11 @@ export default function AdminLayoutPage() {
                   <button
                     key={pct}
                     type="button"
-                    onClick={() => setMobileCanvasZoomPct(pct)}
+                    onClick={() => {
+                      setMobileCanvasZoomPct(pct);
+                      // 立即同步到 iframe，避免僅靠 effect 鏈造成視覺延遲或未更新。
+                      postLayoutPreviewToIframeWithZoom(pct);
+                    }}
                     className={`rounded-md px-2 py-1 font-medium transition-colors ${
                       mobileCanvasZoomPct === pct
                         ? "bg-amber-500 text-white"
