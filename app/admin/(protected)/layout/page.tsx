@@ -51,6 +51,7 @@ import {
   LAYOUT_MOBILE_PREVIEW_WIDTH_PX,
   LAYOUT_PREVIEW_BLOCK_HEIGHT,
   LAYOUT_PREVIEW_FLOATING_ICONS,
+  LAYOUT_PREVIEW_READY,
   LAYOUT_PREVIEW_SELECT_BLOCK,
   LAYOUT_PREVIEW_SELECT_FLOATING_ICON,
   LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON,
@@ -735,6 +736,10 @@ export default function AdminLayoutPage() {
       if (e.origin !== window.location.origin) return;
       const d = e.data as Record<string, unknown>;
       if (!d || typeof d !== "object") return;
+      if (d.type === LAYOUT_PREVIEW_READY) {
+        postLayoutPreviewToIframe();
+        return;
+      }
       if (d.type === LAYOUT_PREVIEW_SELECT_BLOCK) {
         handleSelectBlockRef.current(String(d.blockId), {
           scrollCanvasIntoView: false,

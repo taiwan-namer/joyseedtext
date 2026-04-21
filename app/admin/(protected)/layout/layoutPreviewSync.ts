@@ -8,6 +8,8 @@ import type {
 
 /** 與後台「首頁版面」手機 iframe 預覽同步的訊息類型（postMessage） */
 export const LAYOUT_PREVIEW_SYNC_TYPE = "layout-preview-sync" as const;
+/** iframe → 父頁：手機預覽已掛載，請立即重送最新 payload */
+export const LAYOUT_PREVIEW_READY = "layout-preview-ready" as const;
 
 /** iframe → 父頁：選取區塊（與手機座標編輯連動） */
 export const LAYOUT_PREVIEW_SELECT_BLOCK = "layout-preview-select-block" as const;

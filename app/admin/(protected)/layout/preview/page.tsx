@@ -6,6 +6,7 @@ import {
   LAYOUT_MOBILE_PREVIEW_WIDTH_PX,
   LAYOUT_PREVIEW_BLOCK_HEIGHT,
   LAYOUT_PREVIEW_FLOATING_ICONS,
+  LAYOUT_PREVIEW_READY,
   LAYOUT_PREVIEW_SELECT_BLOCK,
   LAYOUT_PREVIEW_SELECT_FLOATING_ICON,
   LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON,
@@ -22,6 +23,15 @@ function postToParent(msg: Record<string, unknown>) {
 
 export default function AdminLayoutMobilePreviewPage() {
   const [payload, setPayload] = useState<LayoutPreviewSyncPayload | null>(null);
+
+  useEffect(() => {
+    postToParent({ type: LAYOUT_PREVIEW_READY });
+    const t = window.setInterval(() => {
+      if (payload) return;
+      postToParent({ type: LAYOUT_PREVIEW_READY });
+    }, 800);
+    return () => window.clearInterval(t);
+  }, [payload]);
 
   useEffect(() => {
     const html = document.documentElement;
