@@ -296,20 +296,25 @@ export default function BranchSiteHomeView({
     let cancelled = false;
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let hardTimeout: ReturnType<typeof setTimeout> | null = null;
     let ro: ResizeObserver | null = null;
+    const measureH = () => Math.max(root.scrollHeight, root.clientHeight, root.offsetHeight);
+    let maxHeight = measureH();
 
     const cleanup = () => {
       if (ro) {
         ro.disconnect();
         ro = null;
       }
+      root.removeEventListener("load", onAssetLoadOrError, true);
+      root.removeEventListener("error", onAssetLoadOrError, true);
     };
 
     const ready = () => {
       if (cancelled || settled) return;
       settled = true;
       cleanup();
-      const h = Math.max(root.scrollHeight, root.clientHeight);
+      const h = maxHeight;
       setAdminViewportLayerHeightPx(h > 0 ? h : null);
       requestAnimationFrame(() => {
         if (!cancelled) setAdminViewportLayerReady(true);
@@ -318,20 +323,29 @@ export default function BranchSiteHomeView({
 
     const schedule = () => {
       if (settled) return;
+      maxHeight = Math.max(maxHeight, measureH());
       if (timer) clearTimeout(timer);
-      timer = setTimeout(ready, 180);
+      timer = setTimeout(ready, 260);
+    };
+
+    const onAssetLoadOrError = () => {
+      schedule();
     };
 
     ro = new ResizeObserver(schedule);
     ro.observe(root);
+    root.addEventListener("load", onAssetLoadOrError, true);
+    root.addEventListener("error", onAssetLoadOrError, true);
+    hardTimeout = setTimeout(ready, 1800);
     schedule();
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      if (hardTimeout) clearTimeout(hardTimeout);
       cleanup();
     };
-  }, [hasAdminViewportFloatingIcons]);
+  }, [hasAdminViewportFloatingIcons, layoutBlocks, heroImageUrl, fullWidthImageUrl, carouselItems, aboutContent]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
