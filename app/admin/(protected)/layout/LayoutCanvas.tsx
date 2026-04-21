@@ -60,6 +60,8 @@ type LayoutCanvasProps = {
   onHeroImagePickRequest?: () => void;
   /** 後台桌機主畫布可用：容器吃滿可用寬度；手機 iframe 預覽請維持 false 以保留原縮放行為 */
   stretchContainer?: boolean;
+  /** false 時以前台訪客模式渲染（不掛 admin 互動層），用於「前台一致預覽」。 */
+  adminInteractive?: boolean;
 };
 
 const DEFAULT_CAROUSEL = [
@@ -107,6 +109,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     onSelectViewportFloatingIcon,
     onHeroImagePickRequest,
     stretchContainer = false,
+    adminInteractive = true,
   } = props;
   const coordMode = floatingIconsCoordinateMode;
   const carouselList = (carouselItems.length > 0 ? carouselItems : DEFAULT_CAROUSEL).filter(
@@ -185,21 +188,26 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
               navBookingLabel={navBookingLabel}
               navFaqLabel={navFaqLabel}
               aboutPageUrl={aboutPageUrl}
-              adminLayout={{
-                selectedBlockId,
-                onSelectBlock,
-                onBlockResizeHeight,
-                onBlockFloatingIconsChange,
-                floatingIconsCoordinateMode: coordMode,
-                selectedFloatingIconId,
-                onSelectFloatingIcon,
-                canvasPreviewScale: scale,
-                viewportFloatingIcons,
-                onViewportFloatingIconsChange,
-                selectedViewportFloatingIconId: viewportSelectedFloatingIconId,
-                onSelectViewportFloatingIcon,
-                onHeroImagePickRequest,
-              }}
+              adminLayout={
+                adminInteractive
+                  ? {
+                      selectedBlockId,
+                      onSelectBlock,
+                      onBlockResizeHeight,
+                      onBlockFloatingIconsChange,
+                      floatingIconsCoordinateMode: coordMode,
+                      selectedFloatingIconId,
+                      onSelectFloatingIcon,
+                      canvasPreviewScale: scale,
+                      viewportFloatingIcons,
+                      onViewportFloatingIconsChange,
+                      selectedViewportFloatingIconId: viewportSelectedFloatingIconId,
+                      onSelectViewportFloatingIcon,
+                      onHeroImagePickRequest,
+                    }
+                  : null
+              }
+              viewportFloatingIcons={adminInteractive ? null : viewportFloatingIcons}
             />
           </CanvasPageBackground>
         </div>
@@ -241,21 +249,26 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
             navBookingLabel={navBookingLabel}
             navFaqLabel={navFaqLabel}
             aboutPageUrl={aboutPageUrl}
-            adminLayout={{
-              selectedBlockId,
-              onSelectBlock,
-              onBlockResizeHeight,
-              onBlockFloatingIconsChange,
-              floatingIconsCoordinateMode: coordMode,
-              selectedFloatingIconId,
-              onSelectFloatingIcon,
-              canvasPreviewScale: scale,
-              viewportFloatingIcons,
-              onViewportFloatingIconsChange,
-              selectedViewportFloatingIconId: viewportSelectedFloatingIconId,
-              onSelectViewportFloatingIcon,
-              onHeroImagePickRequest,
-            }}
+            adminLayout={
+              adminInteractive
+                ? {
+                    selectedBlockId,
+                    onSelectBlock,
+                    onBlockResizeHeight,
+                    onBlockFloatingIconsChange,
+                    floatingIconsCoordinateMode: coordMode,
+                    selectedFloatingIconId,
+                    onSelectFloatingIcon,
+                    canvasPreviewScale: scale,
+                    viewportFloatingIcons,
+                    onViewportFloatingIconsChange,
+                    selectedViewportFloatingIconId: viewportSelectedFloatingIconId,
+                    onSelectViewportFloatingIcon,
+                    onHeroImagePickRequest,
+                  }
+                : null
+            }
+            viewportFloatingIcons={adminInteractive ? null : viewportFloatingIcons}
           />
           </CanvasPageBackground>
         </div>

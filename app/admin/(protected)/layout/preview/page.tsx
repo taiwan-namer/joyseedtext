@@ -99,6 +99,7 @@ export default function AdminLayoutMobilePreviewPage() {
         onSelectFloatingIcon={onSelectFloatingIcon}
         designWidthPx={Math.max(320, Math.round(payload.mobilePreviewViewportWidthPx || window.innerWidth || 390))}
         zoomPercent={payload.mobileCanvasZoomPct}
+        adminInteractive={false}
         heroImageUrl={payload.heroImageUrl}
         carouselItems={payload.carouselItems}
         aboutContent={payload.aboutContent}
