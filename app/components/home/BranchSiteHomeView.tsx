@@ -359,7 +359,7 @@ export default function BranchSiteHomeView({
       if (hardTimeout) clearTimeout(hardTimeout);
       cleanup();
     };
-  }, [isAdminCanvas, hasAdminViewportFloatingIcons, orderedSectionIds, layoutBlocks]);
+  }, [isAdminCanvas, hasAdminViewportFloatingIcons, layoutBlocks]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
