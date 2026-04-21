@@ -188,6 +188,9 @@ export default function BranchSiteHomeView({
   const carouselList = (carouselItems.length > 0 ? carouselItems : defaultCarousel).filter(
     (item) => item.visible !== false
   );
+  const admin = adminLayout ?? null;
+  const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
+  const isAdminCanvas = admin != null;
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -232,11 +235,6 @@ export default function BranchSiteHomeView({
         : {}),
     };
   };
-
-  const admin = adminLayout ?? null;
-  const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
-
-  const isAdminCanvas = admin != null;
 
   /** 後台畫布：攔截預覽區內所有連結，避免點擊跳到前台／另開分頁；不阻擋區塊選取與裝飾圖編輯 */
   const suppressCanvasLinkNavigation = (e: React.MouseEvent) => {
