@@ -31,6 +31,8 @@ type Props = {
    * 現改為與非 overlay 相同顯示圖片，與 Layer 重疊時視覺仍為單一圖。
    */
   overlayMode?: boolean;
+  /** overlay 模式是否仍由 editor 自行顯示圖片；若底層已有 Layer，設 false 可避免雙層渲染偏差 */
+  showImageInOverlay?: boolean;
   /** desktop：寫入 leftPct/topPct；mobile：寫入 leftPctMobile/topPctMobile（與桌機分開） */
   coordinateMode?: "desktop" | "mobile";
   /** 與側欄「編號」連動高亮 */
@@ -58,6 +60,7 @@ export default function HeroFloatingIconsEditor({
   horizontalRowGroups1Based,
   verticalNudgePxBySlot1Based,
   overlayMode = false,
+  showImageInOverlay = true,
   coordinateMode = "desktop",
   selectedIconId = null,
   onIconPointerDown,
@@ -470,14 +473,17 @@ export default function HeroFloatingIconsEditor({
             onPointerDown={(e) => onPointerDownIcon(e, icon.id)}
             aria-label={`拖曳調整${slotLabel}裝飾圖位置`}
           >
-            {/* overlay 與否皆顯示圖，避免後台畫布僅見透明拖曳區 */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={icon.imageUrl}
-              alt=""
-              className="pointer-events-none block h-full w-full object-contain select-none"
-              draggable={false}
-            />
+            {!overlayMode || showImageInOverlay ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={icon.imageUrl}
+                  alt=""
+                  className="pointer-events-none block h-full w-full object-contain select-none"
+                  draggable={false}
+                />
+              </>
+            ) : null}
           </button>
         );
       })}

@@ -1218,6 +1218,11 @@ export default function BranchSiteHomeView({
           style={adminViewportLayerHeightPx != null ? { height: adminViewportLayerHeightPx } : undefined}
         >
           <div className="relative h-full w-full">
+            <HeroFloatingIconsLayer
+              icons={admin.viewportFloatingIcons}
+              coordinateViewport="desktop"
+              scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+            />
             <div
               className="absolute inset-0 z-[33]"
               data-floating-icon-editor
@@ -1231,6 +1236,7 @@ export default function BranchSiteHomeView({
                 selectedIconId={admin.selectedViewportFloatingIconId ?? null}
                 onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
                 scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
+                showImageInOverlay={false}
                 viewportInlineToolbar
                 canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                 onRemoveIcon={(id) => {
