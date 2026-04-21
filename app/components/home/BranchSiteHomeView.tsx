@@ -175,6 +175,8 @@ export default function BranchSiteHomeView({
     : "";
 
   const [wallIndex, setWallIndex] = useState(0);
+  /** 前台全頁裝飾以整頁高度作百分比定位；待首屏資源載入後再顯示，避免初次高度改變造成「掉位」。 */
+  const [viewportLayerReady, setViewportLayerReady] = useState(false);
   const defaultCarousel: CarouselItem[] = useMemo(
     () => [
       { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
@@ -194,6 +196,26 @@ export default function BranchSiteHomeView({
     }, CAROUSEL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [carouselList.length]);
+
+  useEffect(() => {
+    if (isAdminCanvas) {
+      setViewportLayerReady(true);
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const markReady = () => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => setViewportLayerReady(true));
+      });
+    };
+    if (document.readyState === "complete") {
+      markReady();
+      return;
+    }
+    const onLoad = () => markReady();
+    window.addEventListener("load", onLoad, { once: true });
+    return () => window.removeEventListener("load", onLoad);
+  }, [isAdminCanvas]);
 
   useEffect(() => {
     setWallIndex((i) => (carouselList.length === 0 ? 0 : i % carouselList.length));
@@ -1028,7 +1050,7 @@ export default function BranchSiteHomeView({
        * 全頁裝飾：百分比相對「整段 main」寬高（非 max-w 欄寬）。
        * 內層維持 w-full h-full，才能與後台畫布使用同一座標系，並可貼近左右邊緣。
        */}
-      {!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0 ? (
+      {!isAdminCanvas && viewportLayerReady && (viewportFloatingIcons?.length ?? 0) > 0 ? (
         <div
           data-viewport-floating-shell
           className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
