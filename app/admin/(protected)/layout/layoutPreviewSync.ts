@@ -37,6 +37,8 @@ export type LayoutPreviewSyncPayload = {
   selectedFloatingIconId?: string | null;
   /** 手機 iframe 預覽專用，與桌機畫布「預覽比例」分開 */
   mobileCanvasZoomPct: number;
+  /** 手機 iframe 目前實際預覽寬度（px），用來貼近真實裝置寬度 */
+  mobilePreviewViewportWidthPx: number;
   heroImageUrl: string | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;

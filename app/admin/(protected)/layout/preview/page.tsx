@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import LayoutCanvas from "../LayoutCanvas";
 import {
-  LAYOUT_MOBILE_PREVIEW_WIDTH_PX,
   LAYOUT_PREVIEW_BLOCK_HEIGHT,
   LAYOUT_PREVIEW_FLOATING_ICONS,
   LAYOUT_PREVIEW_READY,
@@ -98,7 +97,7 @@ export default function AdminLayoutMobilePreviewPage() {
         floatingIconsCoordinateMode="mobile"
         selectedFloatingIconId={payload.selectedFloatingIconId ?? null}
         onSelectFloatingIcon={onSelectFloatingIcon}
-        designWidthPx={LAYOUT_MOBILE_PREVIEW_WIDTH_PX}
+        designWidthPx={Math.max(320, Math.round(payload.mobilePreviewViewportWidthPx || window.innerWidth || 390))}
         zoomPercent={payload.mobileCanvasZoomPct}
         heroImageUrl={payload.heroImageUrl}
         carouselItems={payload.carouselItems}

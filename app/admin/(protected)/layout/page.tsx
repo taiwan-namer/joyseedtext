@@ -312,6 +312,10 @@ export default function AdminLayoutPage() {
   const [desktopCanvasViewportWidthPx, setDesktopCanvasViewportWidthPx] = useState(1280);
   /** 手機寬度 iframe 預覽專用，與桌機畫布預覽比例分開；預設 100% 以貼近前台手機 1:1 呈現。 */
   const [mobileCanvasZoomPct, setMobileCanvasZoomPct] = useState(100);
+  /** 手機 iframe 目前實際可視寬度（px），用來同步手機版畫布設計寬。 */
+  const [mobilePreviewViewportWidthPx, setMobilePreviewViewportWidthPx] = useState(
+    LAYOUT_MOBILE_PREVIEW_WIDTH_PX
+  );
   /** 側欄裝飾圖編輯：與「畫布開關」同步（桌機版／手機版） */
   const [floatingEditViewport, setFloatingEditViewport] = useState<"desktop" | "mobile">("desktop");
   /** 僅顯示一種畫布，避免同時捲動兩段預覽 */
@@ -335,6 +339,22 @@ export default function AdminLayoutPage() {
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(host);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [canvasViewportMode]);
+  useLayoutEffect(() => {
+    const iframe = mobilePreviewIframeRef.current;
+    if (!iframe) return;
+    const measure = () => {
+      const w = Math.max(320, Math.round(iframe.clientWidth || LAYOUT_MOBILE_PREVIEW_WIDTH_PX));
+      setMobilePreviewViewportWidthPx((prev) => (prev === w ? prev : w));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(iframe);
     window.addEventListener("resize", measure);
     return () => {
       ro.disconnect();
@@ -1526,6 +1546,7 @@ export default function AdminLayoutPage() {
       selectedBlockId,
       selectedFloatingIconId,
       mobileCanvasZoomPct,
+      mobilePreviewViewportWidthPx,
       heroImageUrl: displayHeroImageUrl,
       carouselItems: displayCarouselItems,
       aboutContent,
@@ -1566,6 +1587,7 @@ export default function AdminLayoutPage() {
       selectedBlockId,
       selectedFloatingIconId,
       mobileCanvasZoomPct,
+      mobilePreviewViewportWidthPx,
       displayHeroImageUrl,
       displayCarouselItems,
       aboutContent,
@@ -2041,7 +2063,7 @@ export default function AdminLayoutPage() {
               <div className="space-y-0.5 min-w-0 flex-1">
                 <span className="font-medium text-gray-800">手機寬度預覽</span>
                 <p className="text-gray-600 leading-snug">
-                  寬度 {LAYOUT_MOBILE_PREVIEW_WIDTH_PX}px；可在此 iframe 內點區塊、拖曳裝飾圖（寫入手機專用座標，與桌機分開）。下方比例僅影響此預覽。
+                  寬度 {mobilePreviewViewportWidthPx}px；可在此 iframe 內點區塊、拖曳裝飾圖（寫入手機專用座標，與桌機分開）。下方比例僅影響此預覽。
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 justify-end shrink-0">
@@ -2071,7 +2093,7 @@ export default function AdminLayoutPage() {
                 ref={mobilePreviewIframeRef}
                 title="首頁版面手機寬度預覽"
                 src="/admin/layout/preview"
-                className="w-[min(100%,390px)] max-w-full border border-gray-300 rounded-lg bg-white shadow"
+                className="w-full max-w-[430px] border border-gray-300 rounded-lg bg-white shadow"
                 style={{ height: "min(78vh, 920px)" }}
                 onLoad={postLayoutPreviewToIframe}
               />
