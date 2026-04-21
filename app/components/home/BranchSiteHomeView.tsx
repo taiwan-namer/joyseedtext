@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Image as LucideImage, Facebook, Instagram } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import { mapCourseToHomeActivity as mapCourseToHomePageActivity } from "@/lib/homePageActivity";
 import FAQ from "@/app/components/FAQ";
@@ -175,9 +175,6 @@ export default function BranchSiteHomeView({
     : "";
 
   const [wallIndex, setWallIndex] = useState(0);
-  /** 前台全頁裝飾以整頁高度作百分比定位；待首屏資源載入後再顯示，避免初次高度改變造成「掉位」。 */
-  const [viewportLayerReady, setViewportLayerReady] = useState(false);
-  const pageRootRef = useRef<HTMLDivElement | null>(null);
   const defaultCarousel: CarouselItem[] = useMemo(
     () => [
       { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
@@ -192,6 +189,14 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
   const isAdminCanvas = admin != null;
+  const viewportIconUrlSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const ic of viewportFloatingIcons ?? []) {
+      const u = ic.imageUrl?.trim();
+      if (u) s.add(u);
+    }
+    return s;
+  }, [viewportFloatingIcons]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
@@ -200,44 +205,6 @@ export default function BranchSiteHomeView({
     }, CAROUSEL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [carouselList.length]);
-
-  useEffect(() => {
-    if (isAdminCanvas) {
-      setViewportLayerReady(true);
-      return;
-    }
-    const root = pageRootRef.current;
-    if (!root || typeof window === "undefined") return;
-
-    setViewportLayerReady(false);
-
-    let settleTimer: number | null = null;
-    const clearSettleTimer = () => {
-      if (settleTimer != null) {
-        window.clearTimeout(settleTimer);
-        settleTimer = null;
-      }
-    };
-    const scheduleReadyAfterSettled = () => {
-      clearSettleTimer();
-      // 高度連續一段時間不再變化才顯示，避免 refresh 後再次掉位
-      settleTimer = window.setTimeout(() => {
-        setViewportLayerReady(true);
-      }, 500);
-    };
-
-    scheduleReadyAfterSettled();
-
-    const ro = new ResizeObserver(() => {
-      scheduleReadyAfterSettled();
-    });
-    ro.observe(root);
-
-    return () => {
-      clearSettleTimer();
-      ro.disconnect();
-    };
-  }, [isAdminCanvas]);
 
   useEffect(() => {
     setWallIndex((i) => (carouselList.length === 0 ? 0 : i % carouselList.length));
@@ -467,10 +434,16 @@ export default function BranchSiteHomeView({
    * 主圖合併槽：優先使用「首頁大圖」(hero) 的裝飾圖；若 hero 存在但尚未掛圖、圖在「首頁大圖（輪播）」(hero_carousel)，則改顯示後者。
    * 舊邏輯在兩區塊並存時只讀 hero，常導致前台完全沒有裝飾圖請求。
    */
-  const iconsForMainHeroSection =
+  const iconsForMainHeroSectionRaw =
     (heroBlock?.floatingIcons?.length ?? 0) > 0
       ? heroBlock!.floatingIcons
       : heroCarouselBlock?.floatingIcons;
+  const iconsForMainHeroSection = useMemo(() => {
+    if (isAdminCanvas) return iconsForMainHeroSectionRaw;
+    if (!iconsForMainHeroSectionRaw || viewportIconUrlSet.size === 0) return iconsForMainHeroSectionRaw;
+    // 前台若同圖同時存在於 Hero 區塊裝飾與全頁裝飾，保留全頁裝飾，避免視覺上像「同一張圖掉到另一個位置」。
+    return iconsForMainHeroSectionRaw.filter((ic) => !viewportIconUrlSet.has(ic.imageUrl?.trim() ?? ""));
+  }, [iconsForMainHeroSectionRaw, isAdminCanvas, viewportIconUrlSet]);
   const heroEditBlockId =
     admin?.selectedBlockId === "hero" || admin?.selectedBlockId === "hero_carousel"
       ? admin.selectedBlockId
@@ -1055,7 +1028,6 @@ export default function BranchSiteHomeView({
 
   return (
     <div
-      ref={pageRootRef}
       className="relative min-h-screen bg-page flex flex-col overflow-x-visible"
       {...(isAdminCanvas
         ? {
@@ -1068,7 +1040,7 @@ export default function BranchSiteHomeView({
        * 全頁裝飾：百分比相對「整段 main」寬高（非 max-w 欄寬）。
        * 內層維持 w-full h-full，才能與後台畫布使用同一座標系，並可貼近左右邊緣。
        */}
-      {!isAdminCanvas && viewportLayerReady && (viewportFloatingIcons?.length ?? 0) > 0 ? (
+      {!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0 ? (
         <div
           data-viewport-floating-shell
           className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
