@@ -325,6 +325,10 @@ export default function BranchSiteHomeView({
    * 勿以全螢幕寬 section 為基準，否則與後台／前台共用之 LAYOUT_DESIGN_CANVAS_WIDTH_PX（max-w-7xl）欄位對不齊。
    */
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
+    if (!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0) {
+      // 前台已有全頁裝飾時，關閉 Hero 類區塊裝飾，避免視覺上出現兩個位置交替。
+      if (blockId === "hero" || blockId === "hero_carousel") return null;
+    }
     const b = getBlock(blockId);
     const sourceIcons = b?.floatingIcons ?? [];
     const dedupedIcons =
@@ -458,6 +462,7 @@ export default function BranchSiteHomeView({
       ? heroBlock!.floatingIcons
       : heroCarouselBlock?.floatingIcons;
   const iconsForMainHeroSection = useMemo(() => {
+    if (!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0) return [];
     if (isAdminCanvas) return iconsForMainHeroSectionRaw;
     if (!iconsForMainHeroSectionRaw || viewportIconUrlSet.size === 0) return iconsForMainHeroSectionRaw;
     // 前台若同圖同時存在於 Hero 區塊裝飾與全頁裝飾，保留全頁裝飾，避免視覺上像「同一張圖掉到另一個位置」。
@@ -465,7 +470,7 @@ export default function BranchSiteHomeView({
       const key = normalizeFloatingImageKey(ic.imageUrl);
       return !key || !viewportIconUrlSet.has(key);
     });
-  }, [iconsForMainHeroSectionRaw, isAdminCanvas, viewportIconUrlSet]);
+  }, [iconsForMainHeroSectionRaw, isAdminCanvas, viewportFloatingIcons, viewportIconUrlSet]);
   const heroEditBlockId =
     admin?.selectedBlockId === "hero" || admin?.selectedBlockId === "hero_carousel"
       ? admin.selectedBlockId
