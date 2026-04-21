@@ -188,6 +188,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
               navBookingLabel={navBookingLabel}
               navFaqLabel={navFaqLabel}
               aboutPageUrl={aboutPageUrl}
+              previewCoordinateViewport={adminInteractive ? undefined : coordMode}
               adminLayout={
                 adminInteractive
                   ? {
@@ -249,6 +250,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
             navBookingLabel={navBookingLabel}
             navFaqLabel={navFaqLabel}
             aboutPageUrl={aboutPageUrl}
+            previewCoordinateViewport={adminInteractive ? undefined : coordMode}
             adminLayout={
               adminInteractive
                 ? {

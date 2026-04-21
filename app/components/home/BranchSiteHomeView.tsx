@@ -148,6 +148,8 @@ export type BranchSiteHomeViewProps = {
   serverHomeCourses?: { courses: CourseForPublic[]; error: string | null };
   /** 訪客首頁：全頁裝飾層（相對本頁根容器寬高之百分比，與畫布一致、隨捲動）；後台畫布勿傳 */
   viewportFloatingIcons?: HeroFloatingIcon[] | null;
+  /** 非 admin 互動模式下仍可指定以手機座標渲染（供後台手機「前台一致預覽」） */
+  previewCoordinateViewport?: "desktop" | "mobile";
 };
 
 export default function BranchSiteHomeView({
@@ -167,6 +169,7 @@ export default function BranchSiteHomeView({
   activities: activitiesFromParent,
   serverHomeCourses,
   viewportFloatingIcons = null,
+  previewCoordinateViewport,
 }: BranchSiteHomeViewProps) {
   const {
     siteName,
@@ -199,7 +202,7 @@ export default function BranchSiteHomeView({
     (item) => item.visible !== false
   );
   const admin = adminLayout ?? null;
-  const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
+  const coordMode = previewCoordinateViewport ?? admin?.floatingIconsCoordinateMode ?? "desktop";
   const isAdminCanvas = admin != null;
   const floatingScaleReferenceWidthPx =
     isAdminCanvas && coordMode === "mobile" ? 390 : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
