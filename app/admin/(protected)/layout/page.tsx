@@ -89,6 +89,22 @@ const BLOCK_BACKGROUND_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 800 
 /** 與畫布輪播區 aspect 12/5 一致 */
 const CAROUSEL_SLIDE_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 800 px";
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string" && result.trim()) {
+        resolve(result);
+        return;
+      }
+      reject(new Error("主圖轉換失敗"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("主圖轉換失敗"));
+    reader.readAsDataURL(file);
+  });
+}
+
 /** 側欄不顯示「裝飾圖座標／上傳裝飾圖」的區塊（與全螢幕裝飾或固定版型一致） */
 const LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL = new Set<string>([
   "hero",
@@ -422,6 +438,8 @@ export default function AdminLayoutPage() {
   const fullWidthImageFileRef = useRef<HTMLInputElement | null>(null);
   /** 首頁主圖：選檔預覽，儲存時上傳 R2 */
   const [heroImageDraftUrl, setHeroImageDraftUrl] = useState<string | null>(null);
+  /** 手機 iframe 預覽需跨 document，blob URL 可能不可用，改用 data URL 同步。 */
+  const [heroImageDraftMobilePreviewUrl, setHeroImageDraftMobilePreviewUrl] = useState<string | null>(null);
   const [heroImagePendingFile, setHeroImagePendingFile] = useState<File | null>(null);
   const heroImageFileRef = useRef<HTMLInputElement | null>(null);
   /** LOGO／頁首背景 */
@@ -923,6 +941,12 @@ export default function AdminLayoutPage() {
     () => heroImageDraftUrl ?? heroImageUrl,
     [heroImageDraftUrl, heroImageUrl]
   );
+  const mobilePreviewHeroImageUrl = useMemo(() => {
+    if (displayHeroImageUrl?.startsWith("blob:")) {
+      return heroImageDraftMobilePreviewUrl;
+    }
+    return displayHeroImageUrl;
+  }, [displayHeroImageUrl, heroImageDraftMobilePreviewUrl]);
 
   const displayLogoUrl = useMemo(() => logoDraftUrl ?? logoUrl, [logoDraftUrl, logoUrl]);
 
@@ -979,6 +1003,14 @@ export default function AdminLayoutPage() {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(file);
     });
+    setHeroImageDraftMobilePreviewUrl(null);
+    void readFileAsDataUrl(file)
+      .then((url) => {
+        setHeroImageDraftMobilePreviewUrl(url);
+      })
+      .catch(() => {
+        setMessage({ type: "error", text: "主圖預覽轉換失敗，請重新選擇檔案" });
+      });
     setHeroImagePendingFile(file);
     setMessage(null);
   };
@@ -988,6 +1020,7 @@ export default function AdminLayoutPage() {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
+    setHeroImageDraftMobilePreviewUrl(null);
     setHeroImagePendingFile(null);
   };
 
@@ -1547,7 +1580,7 @@ export default function AdminLayoutPage() {
       selectedFloatingIconId,
       mobileCanvasZoomPct,
       mobilePreviewViewportWidthPx,
-      heroImageUrl: displayHeroImageUrl,
+      heroImageUrl: mobilePreviewHeroImageUrl,
       carouselItems: displayCarouselItems,
       aboutContent,
       navAboutLabel,
@@ -1588,7 +1621,7 @@ export default function AdminLayoutPage() {
       selectedFloatingIconId,
       mobileCanvasZoomPct,
       mobilePreviewViewportWidthPx,
-      displayHeroImageUrl,
+      mobilePreviewHeroImageUrl,
       displayCarouselItems,
       aboutContent,
       navAboutLabel,
