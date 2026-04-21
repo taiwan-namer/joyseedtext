@@ -1266,7 +1266,11 @@ export default function BranchSiteHomeView({
                   selectedIconId={admin.selectedViewportFloatingIconId ?? null}
                   onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
                   scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
-                  showImageInOverlay={false}
+                  /**
+                   * 手機 iframe 預覽偶發底層 Layer 尚未就緒，若 overlay 不畫圖會出現「看不到裝飾圖」。
+                   * 這裡維持 overlay 同步顯示，確保拖曳編輯時永遠可見。
+                   */
+                  showImageInOverlay
                   viewportInlineToolbar
                   canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   onRemoveIcon={(id) => {
