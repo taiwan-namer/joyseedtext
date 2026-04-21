@@ -34,6 +34,7 @@ const HeroFloatingIconsEditor = dynamic(
 );
 
 const CAROUSEL_INTERVAL_MS = 4000;
+const ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX = 5;
 
 function normalizeFloatingImageKey(raw: string | null | undefined): string {
   const t = String(raw ?? "").trim();
@@ -1218,7 +1219,10 @@ export default function BranchSiteHomeView({
             className="pointer-events-none absolute inset-0 z-[32] flex justify-center"
             style={adminViewportLayerHeightPx != null ? { height: adminViewportLayerHeightPx } : undefined}
           >
-            <div className="relative h-full w-full max-w-7xl">
+            <div
+              className="relative h-full w-full max-w-7xl"
+              style={{ transform: `translateY(${ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX}px)` }}
+            >
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}
                 coordinateViewport="desktop"
