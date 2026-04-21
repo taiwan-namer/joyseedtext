@@ -201,6 +201,8 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = admin?.floatingIconsCoordinateMode ?? "desktop";
   const isAdminCanvas = admin != null;
+  const floatingScaleReferenceWidthPx =
+    isAdminCanvas && coordMode === "mobile" ? 390 : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
   const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
   const isEditingViewportFloatingInAdmin = !!(isAdminCanvas && admin?.selectedViewportFloatingIconId);
   const viewportRootRef = useRef<HTMLDivElement | null>(null);
@@ -472,7 +474,11 @@ export default function BranchSiteHomeView({
     return (
       <div className="pointer-events-none absolute inset-0 z-[15] flex justify-center">
         <div className="relative h-full w-full max-w-7xl px-4 sm:px-4 min-h-0">
-          <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={dedupedIcons} />
+          <HeroFloatingIconsLayer
+            coordinateViewport={coordMode}
+            icons={dedupedIcons}
+            scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+          />
           {admin && admin.selectedBlockId === blockId ? (
             <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
               <HeroFloatingIconsEditor
@@ -667,7 +673,11 @@ export default function BranchSiteHomeView({
           ) : null}
           {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
             <div className="absolute inset-0 z-[15]">
-              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={iconsForMainHeroSection!} />
+              <HeroFloatingIconsLayer
+                coordinateViewport={coordMode}
+                icons={iconsForMainHeroSection!}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+              />
               {showFloatingEditorOnMainHero && heroIconsForEditor && heroIconsForEditor.length > 0 && heroEditBlockId ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
                   <HeroFloatingIconsEditor
@@ -708,7 +718,11 @@ export default function BranchSiteHomeView({
           </p>
           {(heroCarouselBlock.floatingIcons?.length ?? 0) > 0 ? (
             <div className="pointer-events-none absolute inset-0 z-[15] mt-8">
-              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={heroCarouselBlock.floatingIcons!} />
+              <HeroFloatingIconsLayer
+                coordinateViewport={coordMode}
+                icons={heroCarouselBlock.floatingIcons!}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+              />
               {admin.selectedBlockId === "hero_carousel" ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
                   <HeroFloatingIconsEditor
@@ -775,7 +789,11 @@ export default function BranchSiteHomeView({
           </div>
           {(carouselBlock?.floatingIcons?.length ?? 0) > 0 ? (
             <div className="pointer-events-none absolute inset-0 z-[25]">
-              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={carouselBlock!.floatingIcons!} />
+              <HeroFloatingIconsLayer
+                coordinateViewport={coordMode}
+                icons={carouselBlock!.floatingIcons!}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+              />
               {admin &&
               admin.selectedBlockId === "carousel" &&
               (carouselBlock?.floatingIcons?.length ?? 0) > 0 ? (
@@ -1133,7 +1151,11 @@ export default function BranchSiteHomeView({
                 </p>
                 {(b?.floatingIcons?.length ?? 0) > 0 ? (
                   <div className="pointer-events-none absolute inset-0 z-[15]">
-                    <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
+                    <HeroFloatingIconsLayer
+                      coordinateViewport={coordMode}
+                      icons={b!.floatingIcons!}
+                      scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                    />
                     {admin.selectedBlockId === "full_width_image" ? (
                       <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
                         <HeroFloatingIconsEditor
@@ -1166,7 +1188,11 @@ export default function BranchSiteHomeView({
             {hasFloat ? (
               <div className="pointer-events-none absolute inset-0 z-[30] flex justify-center px-4">
                 <div className="relative h-full min-h-[120px] w-full max-w-7xl">
-                  <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
+                  <HeroFloatingIconsLayer
+                    coordinateViewport={coordMode}
+                    icons={b!.floatingIcons!}
+                    scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                  />
                 </div>
               </div>
             ) : null}
@@ -1205,7 +1231,7 @@ export default function BranchSiteHomeView({
               <HeroFloatingIconsLayer
                 icons={viewportFloatingIcons ?? undefined}
                 coordinateViewport={coordMode}
-                scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
               />
             </div>
           </div>
@@ -1226,7 +1252,7 @@ export default function BranchSiteHomeView({
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}
                 coordinateViewport={coordMode}
-                scaleReferenceWidthPx={LAYOUT_DESIGN_CANVAS_WIDTH_PX}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
               />
               <div className="absolute inset-0 z-[33]" data-floating-icon-editor data-viewport-floating-editor>
                 <HeroFloatingIconsEditor

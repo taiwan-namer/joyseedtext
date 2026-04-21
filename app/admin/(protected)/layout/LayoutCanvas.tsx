@@ -58,6 +58,8 @@ type LayoutCanvasProps = {
   onSelectViewportFloatingIcon?: (id: string | null) => void;
   /** 畫布主圖區點擊選檔或更換（主編輯頁傳入；手機 iframe 預覽可不傳） */
   onHeroImagePickRequest?: () => void;
+  /** 後台桌機主畫布可用：容器吃滿可用寬度；手機 iframe 預覽請維持 false 以保留原縮放行為 */
+  stretchContainer?: boolean;
 };
 
 const DEFAULT_CAROUSEL = [
@@ -104,6 +106,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     viewportSelectedFloatingIconId = null,
     onSelectViewportFloatingIcon,
     onHeroImagePickRequest,
+    stretchContainer = false,
   } = props;
   const coordMode = floatingIconsCoordinateMode;
   const carouselList = (carouselItems.length > 0 ? carouselItems : DEFAULT_CAROUSEL).filter(
@@ -141,24 +144,81 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
 
   const scaledH = innerHeight > 0 ? Math.ceil(innerHeight * scale) : Math.ceil(480 * scale);
 
-  return (
-    <div
-      className="mx-auto overflow-visible"
-      style={{
-        width: designWidthPx * scale,
-        height: scaledH,
-        minHeight: scaledH,
-      }}
-    >
+  if (!stretchContainer) {
+    return (
       <div
-        ref={innerRef}
-        className="w-full space-y-0 rounded-b-lg"
+        className="mx-auto overflow-visible"
         style={{
-          width: designWidthPx,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
+          width: designWidthPx * scale,
+          height: scaledH,
+          minHeight: scaledH,
         }}
       >
+        <div
+          ref={innerRef}
+          className="w-full space-y-0 rounded-b-lg"
+          style={{
+            width: designWidthPx,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          <CanvasPageBackground
+            pageBackgroundUrl={pageBackgroundUrl}
+            pageBackgroundMobileUrl={pageBackgroundMobileUrl}
+            pageBackgroundExtensionColor={pageBackgroundExtensionColor}
+          >
+            <BranchSiteHomeView
+              layoutBlocks={blocks}
+              heroImageUrl={heroImageUrl}
+              fullWidthImageUrl={fullWidthImageUrl ?? null}
+              previewHeader={{
+                logoUrl: logoUrl ?? null,
+                headerBackgroundUrl: headerBackgroundUrl ?? null,
+                headerBackgroundMobileUrl: headerBackgroundMobileUrl ?? null,
+              }}
+              activities={activities}
+              carouselItems={carouselItems}
+              aboutContent={aboutContent}
+              navAboutLabel={navAboutLabel}
+              navCoursesLabel={navCoursesLabel}
+              navBookingLabel={navBookingLabel}
+              navFaqLabel={navFaqLabel}
+              aboutPageUrl={aboutPageUrl}
+              adminLayout={{
+                selectedBlockId,
+                onSelectBlock,
+                onBlockResizeHeight,
+                onBlockFloatingIconsChange,
+                floatingIconsCoordinateMode: coordMode,
+                selectedFloatingIconId,
+                onSelectFloatingIcon,
+                canvasPreviewScale: scale,
+                viewportFloatingIcons,
+                onViewportFloatingIconsChange,
+                selectedViewportFloatingIconId: viewportSelectedFloatingIconId,
+                onSelectViewportFloatingIcon,
+                onHeroImagePickRequest,
+              }}
+            />
+          </CanvasPageBackground>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full overflow-visible" style={{ height: scaledH, minHeight: scaledH }}>
+      <div className="mx-auto overflow-visible" style={{ width: designWidthPx * scale }}>
+        <div
+          ref={innerRef}
+          className="w-full space-y-0 rounded-b-lg"
+          style={{
+            width: designWidthPx,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
         <CanvasPageBackground
           pageBackgroundUrl={pageBackgroundUrl}
           pageBackgroundMobileUrl={pageBackgroundMobileUrl}
@@ -197,7 +257,8 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
               onHeroImagePickRequest,
             }}
           />
-        </CanvasPageBackground>
+          </CanvasPageBackground>
+        </div>
       </div>
     </div>
   );

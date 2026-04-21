@@ -309,8 +309,8 @@ export default function AdminLayoutPage() {
   const rightEditorRef = useRef<HTMLDivElement | null>(null);
   const [editorPos, setEditorPos] = useState<{ top: number; left: number }>({ top: 96, left: 0 });
   const [canvasZoomPct, setCanvasZoomPct] = useState(50);
-  /** 手機寬度 iframe 預覽專用，與桌機畫布預覽比例分開 */
-  const [mobileCanvasZoomPct, setMobileCanvasZoomPct] = useState(50);
+  /** 手機寬度 iframe 預覽專用，與桌機畫布預覽比例分開；預設 100% 以貼近前台手機 1:1 呈現。 */
+  const [mobileCanvasZoomPct, setMobileCanvasZoomPct] = useState(100);
   /** 側欄裝飾圖編輯：與「畫布開關」同步（桌機版／手機版） */
   const [floatingEditViewport, setFloatingEditViewport] = useState<"desktop" | "mobile">("desktop");
   /** 僅顯示一種畫布，避免同時捲動兩段預覽 */
@@ -1837,7 +1837,7 @@ export default function AdminLayoutPage() {
         </aside>
 
         {/* 中間：畫布（保留左側空間；右側浮窗改覆蓋不壓縮畫布） */}
-        <div className="flex-1 min-w-0 flex flex-col items-start overflow-x-hidden">
+        <div className="flex-1 min-w-0 flex flex-col items-stretch overflow-x-visible">
           <div className="w-full shrink-0 mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="text-sm font-semibold text-gray-800">編輯畫布</span>
             <div
@@ -1930,12 +1930,16 @@ export default function AdminLayoutPage() {
                 ))}
               </div>
             </div>
-            <div ref={canvasWrapRef} className="overflow-auto max-h-[min(78vh,920px)] p-3 sm:p-4">
+            <div
+              ref={canvasWrapRef}
+              className="max-h-[min(78vh,920px)] overflow-y-auto overflow-x-auto p-2 sm:p-3"
+            >
               <LayoutCanvas
                 blocks={blocks}
                 selectedBlockId={selectedBlockId}
                 onSelectBlock={(id) => handleSelectBlock(id, { scrollCanvasIntoView: false })}
                 onBlockResizeHeight={onBlockResizeHeight}
+                stretchContainer
                 floatingIconsCoordinateMode="desktop"
                 selectedFloatingIconId={selectedFloatingIconId}
                 onSelectFloatingIcon={(blockId, iconId) => {
