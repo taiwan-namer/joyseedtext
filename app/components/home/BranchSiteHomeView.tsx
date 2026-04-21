@@ -35,6 +35,17 @@ const HeroFloatingIconsEditor = dynamic(
 
 const CAROUSEL_INTERVAL_MS = 4000;
 
+function normalizeFloatingImageKey(raw: string | null | undefined): string {
+  const t = String(raw ?? "").trim();
+  if (!t) return "";
+  try {
+    const u = new URL(t, typeof window !== "undefined" ? window.location.origin : "https://local");
+    return `${u.origin}${u.pathname}`.toLowerCase();
+  } catch {
+    return t.split("#")[0].split("?")[0].toLowerCase();
+  }
+}
+
 /** 分站首頁實際會畫出的區塊 id */
 const BRANCH_LAYOUT_ID_LIST = [
   "header",
@@ -192,7 +203,7 @@ export default function BranchSiteHomeView({
   const viewportIconUrlSet = useMemo(() => {
     const s = new Set<string>();
     for (const ic of viewportFloatingIcons ?? []) {
-      const u = ic.imageUrl?.trim();
+      const u = normalizeFloatingImageKey(ic.imageUrl);
       if (u) s.add(u);
     }
     return s;
@@ -315,17 +326,25 @@ export default function BranchSiteHomeView({
    */
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
     const b = getBlock(blockId);
-    if (!b?.floatingIcons?.length) return null;
+    const sourceIcons = b?.floatingIcons ?? [];
+    const dedupedIcons =
+      !isAdminCanvas && viewportIconUrlSet.size > 0
+        ? sourceIcons.filter((ic) => {
+            const key = normalizeFloatingImageKey(ic.imageUrl);
+            return !key || !viewportIconUrlSet.has(key);
+          })
+        : sourceIcons;
+    if (dedupedIcons.length === 0) return null;
     return (
       <div className="pointer-events-none absolute inset-0 z-[15] flex justify-center">
         <div className="relative h-full w-full max-w-7xl px-4 sm:px-4 min-h-0">
-          <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b.floatingIcons} />
+          <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={dedupedIcons} />
           {admin && admin.selectedBlockId === blockId ? (
             <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
               <HeroFloatingIconsEditor
                 overlayMode
                 coordinateMode={coordMode}
-                icons={b.floatingIcons}
+                icons={sourceIcons}
                 onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
                 selectedIconId={admin.selectedFloatingIconId ?? null}
                 onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
@@ -442,7 +461,10 @@ export default function BranchSiteHomeView({
     if (isAdminCanvas) return iconsForMainHeroSectionRaw;
     if (!iconsForMainHeroSectionRaw || viewportIconUrlSet.size === 0) return iconsForMainHeroSectionRaw;
     // 前台若同圖同時存在於 Hero 區塊裝飾與全頁裝飾，保留全頁裝飾，避免視覺上像「同一張圖掉到另一個位置」。
-    return iconsForMainHeroSectionRaw.filter((ic) => !viewportIconUrlSet.has(ic.imageUrl?.trim() ?? ""));
+    return iconsForMainHeroSectionRaw.filter((ic) => {
+      const key = normalizeFloatingImageKey(ic.imageUrl);
+      return !key || !viewportIconUrlSet.has(key);
+    });
   }, [iconsForMainHeroSectionRaw, isAdminCanvas, viewportIconUrlSet]);
   const heroEditBlockId =
     admin?.selectedBlockId === "hero" || admin?.selectedBlockId === "hero_carousel"
