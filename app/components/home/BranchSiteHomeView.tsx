@@ -1048,11 +1048,6 @@ export default function BranchSiteHomeView({
       (admin.viewportFloatingIcons?.length ?? 0) > 0 ? (
         <div data-viewport-floating-shell className="pointer-events-none absolute inset-0 z-[32] flex justify-center">
           <div className="relative h-full w-full">
-            <HeroFloatingIconsLayer
-              icons={admin.viewportFloatingIcons}
-              coordinateViewport="desktop"
-              scaleReferenceWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
-            />
             <div
               className="absolute inset-0 z-[33]"
               data-floating-icon-editor
