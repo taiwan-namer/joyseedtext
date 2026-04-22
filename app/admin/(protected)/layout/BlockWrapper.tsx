@@ -3,11 +3,14 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import {
   type LayoutBlock,
+  effectiveLayoutBlockMinHeightPx,
   estimateIntrinsicMinHeightPxForBranchHomeBlock,
 } from "@/app/lib/frontendSettingsShared";
 
 type Props = {
   block: LayoutBlock;
+  /** 與後台畫布桌機／手機分頁一致，決定讀寫 heightPx 或 heightPxMobile */
+  layoutViewport?: "desktop" | "mobile";
   isSelected: boolean;
   onSelect: () => void;
   onResizeHeight: (heightPx: number | null) => void;
@@ -22,6 +25,7 @@ type Props = {
 /** 畫布上的區塊外層：可點選、可拖曳底部改變高度 */
 export default function BlockWrapper({
   block,
+  layoutViewport = "desktop",
   isSelected,
   onSelect,
   onResizeHeight,
@@ -36,6 +40,7 @@ export default function BlockWrapper({
   const scale = previewScale > 0 ? previewScale : 1;
 
   const intrinsicH = estimateIntrinsicMinHeightPxForBranchHomeBlock(block.id);
+  const effectiveMinH = effectiveLayoutBlockMinHeightPx(block, layoutViewport);
 
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -43,13 +48,10 @@ export default function BlockWrapper({
       e.stopPropagation();
       setIsDragging(true);
       startYRef.current = e.clientY;
-      const base =
-        block.heightPx != null && block.heightPx > 0
-          ? block.heightPx
-          : intrinsicH ?? 200;
+      const base = effectiveMinH != null ? effectiveMinH : intrinsicH ?? 200;
       startHeightRef.current = base;
     },
-    [block.heightPx, block.id, intrinsicH]
+    [effectiveMinH, intrinsicH]
   );
 
   const handleMouseMove = useCallback(
@@ -77,7 +79,7 @@ export default function BlockWrapper({
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const rawH = block.heightPx != null && block.heightPx > 0 ? block.heightPx : null;
+  const rawH = effectiveMinH != null ? effectiveMinH : null;
   const canvasPreviewH = rawH != null ? Math.round(rawH * scale) : null;
   const heightBadge =
     rawH == null
@@ -89,7 +91,7 @@ export default function BlockWrapper({
         : `${rawH} px`;
 
   const blockStyle: React.CSSProperties = {
-    minHeight: block.heightPx != null && block.heightPx > 0 ? block.heightPx : undefined,
+    minHeight: rawH != null ? rawH : undefined,
     ...(skipBackgroundImage || !block.backgroundImageUrl
       ? {}
       : {

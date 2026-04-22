@@ -449,8 +449,10 @@ export function persistFrontendSettingsBase(existing: FrontendSettings): Record<
 export type LayoutBlock = {
   id: string;
   order: number;
-  /** 區塊高度（px），用戶可調；未設則用元件預設 */
+  /** 區塊最小高度（px，桌機畫布／訪客寬螢幕）；未設則用元件預設 */
   heightPx: number | null;
+  /** 手機畫布與訪客窄螢幕（max-md）專用最小高度；未設時沿用 `heightPx`。與桌機分開儲存。 */
+  heightPxMobile?: number | null;
   /** 區塊背景圖網址（上傳至 R2 後存 URL） */
   backgroundImageUrl: string | null;
   /** 是否啟用顯示，預設 true */
@@ -467,6 +469,9 @@ export function serializeLayoutBlockForPersist(b: LayoutBlock): Record<string, u
     id: b.id,
     order: b.order,
     heightPx: b.heightPx,
+    ...(typeof b.heightPxMobile === "number" && b.heightPxMobile > 0
+      ? { heightPxMobile: Math.round(b.heightPxMobile) }
+      : {}),
     backgroundImageUrl: b.backgroundImageUrl,
     enabled: b.enabled !== false,
     title: b.title ?? null,
@@ -507,6 +512,24 @@ export function layoutBlockForCanvasWrapper(
   if (!source) return undefined;
   if (source.id === canonicalSectionId) return source;
   return { ...source, id: canonicalSectionId };
+}
+
+/**
+ * 區塊最小高度（px）：`layoutViewport === "mobile"` 時優先 `heightPxMobile`，否則用 `heightPx`；
+ * 桌機僅讀 `heightPx`。
+ */
+export function effectiveLayoutBlockMinHeightPx(
+  block: LayoutBlock | undefined,
+  layoutViewport: "desktop" | "mobile"
+): number | undefined {
+  if (!block) return undefined;
+  if (layoutViewport === "mobile") {
+    if (block.heightPxMobile != null && block.heightPxMobile > 0) return block.heightPxMobile;
+    if (block.heightPx != null && block.heightPx > 0) return block.heightPx;
+    return undefined;
+  }
+  if (block.heightPx != null && block.heightPx > 0) return block.heightPx;
+  return undefined;
 }
 
 /**

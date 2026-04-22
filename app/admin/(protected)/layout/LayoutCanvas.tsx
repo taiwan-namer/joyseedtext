@@ -10,7 +10,11 @@ type LayoutCanvasProps = {
   blocks: LayoutBlock[];
   selectedBlockId: string | null;
   onSelectBlock: (id: string) => void;
-  onBlockResizeHeight: (blockId: string, heightPx: number | null) => void;
+  onBlockResizeHeight: (
+    blockId: string,
+    heightPx: number | null,
+    layoutViewport?: "desktop" | "mobile"
+  ) => void;
   /** 模擬瀏覽器視窗寬度（建議 LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX＝1920），非主內容欄寬 */
   designWidthPx: number;
   /** 預覽縮放 1–100（例如 50 表示視覺縮為一半，方便一覽整頁） */

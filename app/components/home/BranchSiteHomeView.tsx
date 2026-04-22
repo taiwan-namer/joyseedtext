@@ -19,6 +19,7 @@ import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adm
 import type { CarouselItem, HeroFloatingIcon, LayoutBlock } from "@/app/lib/frontendSettingsShared";
 import {
   DEFAULT_ABOUT_PAGE_URL,
+  effectiveLayoutBlockMinHeightPx,
   LAYOUT_CONTENT_COLUMN_INSET_X_PX,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
   LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX,
@@ -116,6 +117,20 @@ function LineIcon({ className }: { className?: string }) {
   );
 }
 
+/** 與 HeroFloatingIconsLayer 相同斷點：訪客首頁依此選擇區塊 `heightPxMobile` 或桌機 `heightPx` */
+function useVisitorNarrowMaxMd(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(max-width: 767px)");
+    const apply = () => setNarrow(mql.matches);
+    apply();
+    mql.addEventListener("change", apply);
+    return () => mql.removeEventListener("change", apply);
+  }, []);
+  return narrow;
+}
+
 export type BranchSiteHomeViewProps = {
   layoutBlocks: LayoutBlock[];
   /**
@@ -209,6 +224,14 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = previewCoordinateViewport ?? admin?.floatingIconsCoordinateMode ?? "desktop";
   const isAdminCanvas = admin != null;
+  const visitorNarrowMaxMd = useVisitorNarrowMaxMd();
+  /** 區塊 minHeight：後台依畫布桌機／手機；訪客依窄螢幕或預覽強制座標 */
+  const layoutViewportForHeights = useMemo<"desktop" | "mobile">(() => {
+    if (admin != null) return coordMode;
+    if (previewCoordinateViewport === "mobile") return "mobile";
+    if (previewCoordinateViewport === "desktop") return "desktop";
+    return visitorNarrowMaxMd ? "mobile" : "desktop";
+  }, [admin, coordMode, previewCoordinateViewport, visitorNarrowMaxMd]);
   /** 後台依分頁強制座標；訪客勿固定 desktop，否則窄螢幕仍用桌機欄位、手機專用座標／寬度全被忽略 */
   const floatingCoordinateViewport =
     admin != null ? coordMode : (previewCoordinateViewport ?? undefined);
@@ -348,8 +371,9 @@ export default function BranchSiteHomeView({
   const getBlockStyle = (id: string): CSSProperties => {
     const b = resolveLayoutBlockForStyle(layoutBlocks, id);
     if (!b) return {};
+    const minH = effectiveLayoutBlockMinHeightPx(b, layoutViewportForHeights);
     return {
-      ...(b.heightPx != null && b.heightPx > 0 ? { minHeight: b.heightPx } : {}),
+      ...(minH != null ? { minHeight: minH } : {}),
       ...(b.backgroundImageUrl
         ? { backgroundImage: `url(${b.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
         : {}),
@@ -442,9 +466,12 @@ export default function BranchSiteHomeView({
     return (
       <BlockWrapper
         block={block}
+        layoutViewport={admin.floatingIconsCoordinateMode ?? "desktop"}
         isSelected={admin.selectedBlockId === adminId}
         onSelect={() => admin.onSelectBlock(adminId)}
-        onResizeHeight={(heightPx) => admin.onBlockResizeHeight(adminId, heightPx)}
+        onResizeHeight={(heightPx) =>
+          admin.onBlockResizeHeight(adminId, heightPx, admin.floatingIconsCoordinateMode ?? "desktop")
+        }
         blockLabel={LAYOUT_SECTION_LABELS[adminId] ?? adminId}
         skipBackgroundImage={opts?.skipBackgroundImage}
         previewScale={admin.canvasPreviewScale ?? 1}
@@ -770,8 +797,7 @@ export default function BranchSiteHomeView({
     ) : null;
 
   const carouselBlock = resolveLayoutBlockForStyle(layoutBlocks, "carousel");
-  const carouselMinH =
-    carouselBlock?.heightPx != null && carouselBlock.heightPx > 0 ? carouselBlock.heightPx : null;
+  const carouselMinH = effectiveLayoutBlockMinHeightPx(carouselBlock, layoutViewportForHeights) ?? null;
   const carouselInner =
     carouselList.length > 0 ? (
       <section className="relative w-full py-4" style={getBlockStyle("carousel")}>

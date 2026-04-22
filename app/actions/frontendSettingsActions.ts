@@ -102,6 +102,14 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
           ? parseInt(heightRaw.trim(), 10)
           : NaN;
     const heightPx = Number.isFinite(heightNum) && heightNum > 0 ? heightNum : null;
+    const heightMobRaw = o.heightPxMobile ?? o.height_px_mobile;
+    const heightMobNum =
+      typeof heightMobRaw === "number" && Number.isFinite(heightMobRaw)
+        ? heightMobRaw
+        : typeof heightMobRaw === "string" && /^\d+$/.test(String(heightMobRaw).trim())
+          ? parseInt(String(heightMobRaw).trim(), 10)
+          : NaN;
+    const heightPxMobile = Number.isFinite(heightMobNum) && heightMobNum > 0 ? heightMobNum : null;
     const bgRaw = o.backgroundImageUrl ?? o.background_image_url;
     const backgroundImageUrl = typeof bgRaw === "string" && bgRaw.trim() ? bgRaw.trim() : null;
     const enabled = o.enabled === false ? false : true;
@@ -112,6 +120,7 @@ function parseLayoutBlocks(raw: unknown): LayoutBlock[] {
       id,
       order,
       heightPx,
+      ...(heightPxMobile != null ? { heightPxMobile } : {}),
       backgroundImageUrl,
       enabled,
       title,

@@ -4,7 +4,11 @@ import type { HeroFloatingIcon } from "@/app/lib/frontendSettingsShared";
 export type AdminLayoutCanvasConfig = {
   selectedBlockId: string | null;
   onSelectBlock: (id: string) => void;
-  onBlockResizeHeight: (blockId: string, heightPx: number | null) => void;
+  onBlockResizeHeight: (
+    blockId: string,
+    heightPx: number | null,
+    layoutViewport?: "desktop" | "mobile"
+  ) => void;
   onBlockFloatingIconsChange: (blockId: string, next: HeroFloatingIcon[]) => void;
   /** 後台桌機／手機畫布：裝飾圖座標分別儲存 */
   floatingIconsCoordinateMode?: "desktop" | "mobile";

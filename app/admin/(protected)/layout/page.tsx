@@ -378,21 +378,39 @@ export default function AdminLayoutPage() {
   /** 畫布上視覺高度（螢幕 px）≈ 前台 heightPx × 預覽縮放，僅供說明用 */
   const blockHeightCanvasPreviewPx = (stored: number | null | undefined) =>
     stored != null && stored > 0 ? Math.round(stored * layoutHeightScale) : null;
-  /** 與側欄「目前高度」文案一致：前台為主；未設定時附內建版型概算高度 */
-  const layoutBlockHeightStatusLine = (storedPx: number | null | undefined, blockId?: string | null) => {
+  /** 與側欄「目前高度」文案一致：依目前畫布桌機／手機讀 heightPx 或 heightPxMobile */
+  const layoutBlockHeightStatusLine = (block: LayoutBlock, blockId?: string | null) => {
+    const id = blockId ?? block.id;
+    const canvasMobile = canvasViewportMode === "mobile";
+    const inheritedDesktop =
+      canvasMobile &&
+      (block.heightPxMobile == null || block.heightPxMobile <= 0) &&
+      block.heightPx != null &&
+      block.heightPx > 0;
+    const storedPx = canvasMobile
+      ? block.heightPxMobile != null && block.heightPxMobile > 0
+        ? block.heightPxMobile
+        : block.heightPx
+      : block.heightPx;
     const approx =
-      blockId != null && blockId !== ""
-        ? estimateIntrinsicMinHeightPxForBranchHomeBlock(blockId)
-        : null;
+      id != null && id !== "" ? estimateIntrinsicMinHeightPxForBranchHomeBlock(id) : null;
     if (storedPx == null || storedPx <= 0) {
       if (approx != null) {
         return `自動（前台此區內建版面約 ${approx} px；須大於此值才會明顯加高）`;
       }
       return "自動";
     }
-    if (layoutHeightScale >= 0.999) return `前台 ${storedPx} px（與畫布 1:1）`;
+    if (layoutHeightScale >= 0.999) {
+      if (inheritedDesktop) {
+        return `手機沿用桌機 ${block.heightPx} px（與畫布 1:1）`;
+      }
+      return `前台 ${storedPx} px（與畫布 1:1）`;
+    }
     const preview = blockHeightCanvasPreviewPx(storedPx) ?? 0;
     const pct = Math.round(layoutHeightScale * 100);
+    if (inheritedDesktop) {
+      return `手機沿用桌機 ${block.heightPx} px；畫布預覽約 ${preview} px（預覽縮放 ${pct}%）`;
+    }
     return `前台 ${storedPx} px；畫布預覽約 ${preview} px（預覽縮放 ${pct}%）`;
   };
 
@@ -682,7 +700,15 @@ export default function AdminLayoutPage() {
 
   const setBlockHeightByIndex = (index: number, heightPx: number | null) => {
     const next = [...blocks];
-    next[index] = { ...next[index], heightPx: heightPx && heightPx > 0 ? heightPx : null };
+    const mobile = canvasViewportMode === "mobile";
+    if (mobile) {
+      next[index] = {
+        ...next[index],
+        heightPxMobile: heightPx && heightPx > 0 ? heightPx : null,
+      };
+    } else {
+      next[index] = { ...next[index], heightPx: heightPx && heightPx > 0 ? heightPx : null };
+    }
     setBlocks(next);
   };
 
@@ -704,9 +730,23 @@ export default function AdminLayoutPage() {
     setBlocks(next);
   };
 
-  const onBlockResizeHeight = (blockId: string, heightPx: number | null) => {
+  const onBlockResizeHeight = (
+    blockId: string,
+    heightPx: number | null,
+    layoutViewport: "desktop" | "mobile" = "desktop"
+  ) => {
+    const mobile = layoutViewport === "mobile";
     setBlocks((prev) =>
-      prev.map((b) => (b.id === blockId ? { ...b, heightPx: heightPx && heightPx > 0 ? heightPx : null } : b))
+      prev.map((b) => {
+        if (b.id !== blockId) return b;
+        if (mobile) {
+          return {
+            ...b,
+            heightPxMobile: heightPx && heightPx > 0 ? heightPx : null,
+          };
+        }
+        return { ...b, heightPx: heightPx && heightPx > 0 ? heightPx : null };
+      })
     );
   };
 
@@ -803,7 +843,9 @@ export default function AdminLayoutPage() {
         const heightPx = d.heightPx as number | null | undefined;
         setBlocks((prev) =>
           prev.map((b) =>
-            b.id === blockId ? { ...b, heightPx: heightPx && heightPx > 0 ? heightPx : null } : b
+            b.id === blockId
+              ? { ...b, heightPxMobile: heightPx && heightPx > 0 ? heightPx : null }
+              : b
           )
         );
         return;
@@ -2269,19 +2311,25 @@ export default function AdminLayoutPage() {
                 <>
                   <div>
                     <p className="text-xs font-medium text-amber-700 mb-1">
-                      目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx, selectedBlock.id)}
+                      目前高度：{layoutBlockHeightStatusLine(selectedBlock, selectedBlock.id)}
                     </p>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      區塊最小高度（前台 px，與訪客畫面一致）
+                      {canvasViewportMode === "mobile"
+                        ? "區塊最小高度（手機專用 px；留空＝沿用桌機）"
+                        : "區塊最小高度（桌機／寬螢幕 px，與訪客一致）"}
                     </label>
                     <input
                       type="number"
                       min={0}
                       step={1}
                       value={
-                        selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                          ? selectedBlock.heightPx
-                          : ""
+                        canvasViewportMode === "mobile"
+                          ? selectedBlock.heightPxMobile != null && selectedBlock.heightPxMobile > 0
+                            ? selectedBlock.heightPxMobile
+                            : ""
+                          : selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                            ? selectedBlock.heightPx
+                            : ""
                       }
                       onChange={(e) => {
                         const v = e.target.value.trim();
@@ -2459,19 +2507,25 @@ export default function AdminLayoutPage() {
               <>
                 <div>
                   <p className="text-xs font-medium text-amber-700 mb-1">
-                    目前高度：{layoutBlockHeightStatusLine(selectedBlock.heightPx, selectedBlock.id)}
+                    目前高度：{layoutBlockHeightStatusLine(selectedBlock, selectedBlock.id)}
                   </p>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
-                    區塊最小高度（前台 px，與訪客畫面一致）
+                    {canvasViewportMode === "mobile"
+                      ? "區塊最小高度（手機專用 px；留空＝沿用桌機）"
+                      : "區塊最小高度（桌機／寬螢幕 px，與訪客一致）"}
                   </label>
                   <input
                     type="number"
                     min={0}
                     step={1}
                     value={
-                      selectedBlock.heightPx != null && selectedBlock.heightPx > 0
-                        ? selectedBlock.heightPx
-                        : ""
+                      canvasViewportMode === "mobile"
+                        ? selectedBlock.heightPxMobile != null && selectedBlock.heightPxMobile > 0
+                          ? selectedBlock.heightPxMobile
+                          : ""
+                        : selectedBlock.heightPx != null && selectedBlock.heightPx > 0
+                          ? selectedBlock.heightPx
+                          : ""
                     }
                     onChange={(e) => {
                       const v = e.target.value.trim();
