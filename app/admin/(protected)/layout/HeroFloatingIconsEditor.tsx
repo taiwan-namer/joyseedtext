@@ -167,14 +167,19 @@ export default function HeroFloatingIconsEditor({
   const onPointerMove = useCallback(
     (e: PointerEvent) => {
       if (!draggingId || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      if (rect.width < 1 || rect.height < 1) return;
-      const x = e.clientX - rect.left;
+      const el = containerRef.current;
+      const rect = el.getBoundingClientRect();
+      /** 版面寬高（與 clientWidth／Layer 的 host 一致）；勿用 rect.width：祖先 `transform: scale` 時 rect 為視覺尺寸，會與 % 定位與前台錯位。 */
+      const layoutW = Math.max(1, el.clientWidth);
+      const layoutH = Math.max(1, el.clientHeight);
+      if (rect.width < 0.5 || rect.height < 0.5) return;
+      const xLayout = ((e.clientX - rect.left) / rect.width) * layoutW;
+      const yLayout = ((e.clientY - rect.top) / rect.height) * layoutH;
       const leftPctRaw =
         horizontalLayout === "content-column-in-viewport"
-          ? floatingIconHostXToColumnLeftPct(x, rect.width, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
-          : clampPct((x / rect.width) * 100);
-      const topPct = clampPct(((e.clientY - rect.top) / rect.height) * 100);
+          ? floatingIconHostXToColumnLeftPct(xLayout, layoutW, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+          : clampPct((xLayout / layoutW) * 100);
+      const topPct = clampPct((yLayout / layoutH) * 100);
       const isMobile = coordinateMode === "mobile";
       if (
         horizontalCenterSlots1Based?.length &&
