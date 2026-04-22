@@ -67,11 +67,11 @@ export function parsePageBackgroundExtensionColor(value: unknown): string | null
   return PAGE_BG_EXTENSION_HEX_RE.test(t) ? t : null;
 }
 
-/** 首頁各區塊裝飾圖：座標為區塊內百分比，錨點為圖片中心 */
+/** 首頁各區塊／全頁裝飾圖：錨點為圖片中心；橫向多為「置中內容欄」座標（見 {@link floatingIconColumnLeftPctToHostLeftPct}） */
 export type HeroFloatingIcon = {
   id: string;
   imageUrl: string;
-  /** 相對容器寬度之水平百分比（中心錨點）；全頁裝飾時見 {@link floatingIconColumnLeftPctToHostLeftPct} */
+  /** 水平百分比（中心錨點）：相對置中內容欄（寬至多 {@link LAYOUT_DESIGN_CANVAS_WIDTH_PX}），可小於 0 或大於 100 以延伸至左右留白 */
   leftPct: number;
   /** 0–100，相對 Hero 容器高度 */
   topPct: number;
@@ -121,10 +121,10 @@ export function formatFloatingIconSlotLabel(zeroBasedIndex: number): string {
   return `編號 ${zeroBasedIndex + 1}`;
 }
 
-/** 裝飾圖水平百分比：全頁裝飾可超出 0–100（置中欄左右留白）；仍做寬鬆夾限避免異常數值 */
+/** 裝飾圖水平百分比：可超出 0–100（置中內容欄左右留白）；仍做寬鬆夾限避免異常數值 */
 const FLOATING_LEFT_PCT_MIN = -400;
 const FLOATING_LEFT_PCT_MAX = 400;
-function clampFloatingLeftPct(n: number): number {
+export function clampFloatingLeftPct(n: number): number {
   return Math.min(FLOATING_LEFT_PCT_MAX, Math.max(FLOATING_LEFT_PCT_MIN, n));
 }
 
@@ -132,7 +132,9 @@ export function serializeFloatingIconsForPersist(icons: HeroFloatingIcon[] | und
   return (icons ?? []).map((ic) => ({
     id: ic.id,
     imageUrl: ic.imageUrl,
-    leftPct: ic.leftPct,
+    leftPct: clampFloatingLeftPct(
+      Math.round(typeof ic.leftPct === "number" && Number.isFinite(ic.leftPct) ? ic.leftPct : 50)
+    ),
     topPct: ic.topPct,
     widthPx: ic.widthPx,
     ...(typeof ic.heightPx === "number" && ic.heightPx >= 16 ? { heightPx: ic.heightPx } : {}),

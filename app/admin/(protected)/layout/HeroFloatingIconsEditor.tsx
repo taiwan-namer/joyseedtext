@@ -4,6 +4,7 @@ import { useRef, useCallback, useState, useEffect, useLayoutEffect, type CSSProp
 import { createPortal } from "react-dom";
 import {
   type HeroFloatingIcon,
+  clampFloatingLeftPct,
   effectiveFloatingCoords,
   floatingIconDisplayHeight,
   floatingIconColumnLeftPctToHostLeftPct,
@@ -177,7 +178,9 @@ export default function HeroFloatingIconsEditor({
       const yLayout = ((e.clientY - rect.top) / rect.height) * layoutH;
       const leftPctRaw =
         horizontalLayout === "content-column-in-viewport"
-          ? floatingIconHostXToColumnLeftPct(xLayout, layoutW, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+          ? clampFloatingLeftPct(
+              floatingIconHostXToColumnLeftPct(xLayout, layoutW, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+            )
           : clampPct((xLayout / layoutW) * 100);
       const topPct = clampPct((yLayout / layoutH) * 100);
       const isMobile = coordinateMode === "mobile";

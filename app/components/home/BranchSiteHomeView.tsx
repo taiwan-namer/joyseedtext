@@ -449,8 +449,7 @@ export default function BranchSiteHomeView({
 
   /**
    * 訪客與後台皆顯示裝飾圖層；僅後台且選取該積木時顯示編輯器。
-   * 座標與首頁大圖一致：百分比相對「mx-auto max-w-7xl px-4」內之寬高（見 hero 主圖外層），
-   * 與 LAYOUT_DESIGN_CANVAS_WIDTH_PX（max-w-7xl）及 HeroFloatingIconsLayer 縮放一致。
+   * 橫向座標與全頁裝飾一致：`horizontalLayout="content-column-in-viewport"`，leftPct 相對置中內容欄（可小於 0 或超過 100 以置於區塊左右留白）；圖層 host 為區塊全寬。
    */
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
     if (isEditingViewportFloatingInAdmin && hasViewportFloatingIcons) {
@@ -468,12 +467,13 @@ export default function BranchSiteHomeView({
         : sourceIcons;
     if (dedupedIcons.length === 0) return null;
     return (
-      <div className="pointer-events-none absolute inset-0 z-[15] flex justify-center">
-        <div className="relative h-full w-full max-w-7xl px-4 sm:px-4 min-h-0">
+      <div className="pointer-events-none absolute inset-0 z-[15] w-full min-h-0">
+        <div className="relative h-full w-full min-h-0">
           <HeroFloatingIconsLayer
             coordinateViewport={coordMode}
             icons={dedupedIcons}
             scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+            horizontalLayout="content-column-in-viewport"
           />
           {admin && admin.selectedBlockId === blockId ? (
             <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -484,6 +484,9 @@ export default function BranchSiteHomeView({
                 onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
                 selectedIconId={admin.selectedFloatingIconId ?? null}
                 onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
+                horizontalLayout="content-column-in-viewport"
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                canvasPreviewScale={admin.canvasPreviewScale ?? 1}
               />
             </div>
           ) : null}
@@ -629,9 +632,10 @@ export default function BranchSiteHomeView({
     !!admin;
 
   const heroInner = hasMainHeroVisual ? (
-    <section className="w-full pt-0 pb-4" style={getBlockStyle("hero")}>
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
-        <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
+    <section className="relative w-full pt-0 pb-4" style={getBlockStyle("hero")}>
+      <div className="relative w-full">
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
+          <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
           {heroImageTrimmed ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -666,12 +670,16 @@ export default function BranchSiteHomeView({
               ) : null}
             </button>
           ) : null}
-          {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
-            <div className="absolute inset-0 z-[15]">
+          </div>
+        </div>
+        {(iconsForMainHeroSection?.length ?? 0) > 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-[15] min-h-0">
+            <div className="relative h-full w-full min-h-0">
               <HeroFloatingIconsLayer
                 coordinateViewport={coordMode}
                 icons={iconsForMainHeroSection!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                horizontalLayout="content-column-in-viewport"
               />
               {showFloatingEditorOnMainHero && heroIconsForEditor && heroIconsForEditor.length > 0 && heroEditBlockId ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -682,12 +690,15 @@ export default function BranchSiteHomeView({
                     onChange={(next) => admin.onBlockFloatingIconsChange(heroEditBlockId, next)}
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(heroEditBlockId, id)}
+                    horizontalLayout="content-column-in-viewport"
+                    scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                    canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
                 </div>
               ) : null}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
     </section>
   ) : null;
@@ -706,17 +717,20 @@ export default function BranchSiteHomeView({
 
   const heroCarouselStripInner =
     admin && heroImageUrl && heroBlock && heroCarouselBlock ? (
-      <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+      <section className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
         <div className="relative mx-auto max-w-7xl px-4 py-4 min-h-[100px]">
           <p className="text-xs text-center text-gray-600 relative z-0">
             首頁大圖（輪播）裝飾圖層—與上方主圖共用同一張圖；此區編輯「首頁大圖（輪播）」積木的裝飾圖。
           </p>
-          {(heroCarouselBlock.floatingIcons?.length ?? 0) > 0 ? (
-            <div className="pointer-events-none absolute inset-0 z-[15] mt-8">
+        </div>
+        {(heroCarouselBlock.floatingIcons?.length ?? 0) > 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-[15] min-h-0 pt-10">
+            <div className="relative h-full w-full min-h-0">
               <HeroFloatingIconsLayer
                 coordinateViewport={coordMode}
                 icons={heroCarouselBlock.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                horizontalLayout="content-column-in-viewport"
               />
               {admin.selectedBlockId === "hero_carousel" ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -727,12 +741,15 @@ export default function BranchSiteHomeView({
                     onChange={(next) => admin.onBlockFloatingIconsChange("hero_carousel", next)}
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("hero_carousel", id)}
+                    horizontalLayout="content-column-in-viewport"
+                    scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                    canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
                 </div>
               ) : null}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </section>
     ) : null;
 
@@ -741,53 +758,58 @@ export default function BranchSiteHomeView({
     carouselBlock?.heightPx != null && carouselBlock.heightPx > 0 ? carouselBlock.heightPx : null;
   const carouselInner =
     carouselList.length > 0 ? (
-      <section className="w-full px-4 sm:px-4 py-4 mx-auto max-w-7xl" style={getBlockStyle("carousel")}>
-        <div
-          className={`relative w-full rounded-xl overflow-hidden ${carouselMinH == null ? "aspect-[12/5]" : ""}`}
-          style={
-            carouselMinH != null
-              ? {
-                  aspectRatio: "12 / 5",
-                  minHeight: carouselMinH,
-                  width: "100%",
-                }
-              : undefined
-          }
-        >
-          {carouselList.map((item, i) => (
-            <div
-              key={item.id}
-              className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-500 ${
-                i === wallIndex ? "opacity-100 z-10" : "opacity-0 z-0"
-              } ${item.imageUrl ? "bg-gray-900" : "bg-amber-100"}`}
-            >
-              {item.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              ) : (
-                <LucideImage className="w-12 h-12 text-gray-400 relative z-10" strokeWidth={1.5} />
-              )}
-            </div>
-          ))}
-          <div className="absolute bottom-2 left-0 right-0 z-20 flex justify-center gap-1.5">
-            {carouselList.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setWallIndex(i)}
-                aria-label={`第 ${i + 1} 張`}
-                className={`h-2 rounded-full transition-all ${
-                  i === wallIndex ? "w-6 bg-amber-500" : "w-2 bg-white/80 hover:bg-white"
-                }`}
-              />
+      <section className="relative w-full py-4" style={getBlockStyle("carousel")}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-4">
+          <div
+            className={`relative w-full rounded-xl overflow-hidden ${carouselMinH == null ? "aspect-[12/5]" : ""}`}
+            style={
+              carouselMinH != null
+                ? {
+                    aspectRatio: "12 / 5",
+                    minHeight: carouselMinH,
+                    width: "100%",
+                  }
+                : undefined
+            }
+          >
+            {carouselList.map((item, i) => (
+              <div
+                key={item.id}
+                className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-500 ${
+                  i === wallIndex ? "opacity-100 z-10" : "opacity-0 z-0"
+                } ${item.imageUrl ? "bg-gray-900" : "bg-amber-100"}`}
+              >
+                {item.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <LucideImage className="w-12 h-12 text-gray-400 relative z-10" strokeWidth={1.5} />
+                )}
+              </div>
             ))}
+            <div className="absolute bottom-2 left-0 right-0 z-20 flex justify-center gap-1.5">
+              {carouselList.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setWallIndex(i)}
+                  aria-label={`第 ${i + 1} 張`}
+                  className={`h-2 rounded-full transition-all ${
+                    i === wallIndex ? "w-6 bg-amber-500" : "w-2 bg-white/80 hover:bg-white"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-          {(carouselBlock?.floatingIcons?.length ?? 0) > 0 ? (
-            <div className="pointer-events-none absolute inset-0 z-[25]">
+        </div>
+        {(carouselBlock?.floatingIcons?.length ?? 0) > 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-[25] min-h-0">
+            <div className="relative h-full w-full min-h-0">
               <HeroFloatingIconsLayer
                 coordinateViewport={coordMode}
                 icons={carouselBlock!.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                horizontalLayout="content-column-in-viewport"
               />
               {admin &&
               admin.selectedBlockId === "carousel" &&
@@ -800,12 +822,15 @@ export default function BranchSiteHomeView({
                     onChange={(next) => admin.onBlockFloatingIconsChange("carousel", next)}
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("carousel", id)}
+                    horizontalLayout="content-column-in-viewport"
+                    scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                    canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
                 </div>
               ) : null}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </section>
     ) : null;
 
@@ -1046,13 +1071,20 @@ export default function BranchSiteHomeView({
     if (!admin) return null;
     const b = getBlock(blockId);
     const inner = (
-      <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35" style={getBlockStyle(blockId)}>
-        <div className="relative w-full max-w-7xl mx-auto px-4 py-8 min-h-[140px]">
+      <section className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35" style={getBlockStyle(blockId)}>
+        <div className="relative mx-auto max-w-7xl px-4 py-8 min-h-[140px]">
           <p className="text-sm font-semibold text-center text-amber-950">{title}</p>
           <p className="text-xs text-gray-600 text-center mt-2 max-w-lg mx-auto leading-relaxed">{description}</p>
-          {(b?.floatingIcons?.length ?? 0) > 0 ? (
-            <div className="pointer-events-none absolute inset-0 z-[15]">
-              <HeroFloatingIconsLayer coordinateViewport={coordMode} icons={b!.floatingIcons!} />
+        </div>
+        {(b?.floatingIcons?.length ?? 0) > 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-[15] min-h-0">
+            <div className="relative h-full w-full min-h-0">
+              <HeroFloatingIconsLayer
+                coordinateViewport={coordMode}
+                icons={b!.floatingIcons!}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                horizontalLayout="content-column-in-viewport"
+              />
               {admin.selectedBlockId === blockId ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
                   <HeroFloatingIconsEditor
@@ -1062,12 +1094,15 @@ export default function BranchSiteHomeView({
                     onChange={(next) => admin.onBlockFloatingIconsChange(blockId, next)}
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
+                    horizontalLayout="content-column-in-viewport"
+                    scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                    canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
                 </div>
               ) : null}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </section>
     );
     return wrap(blockId, inner);
@@ -1132,8 +1167,8 @@ export default function BranchSiteHomeView({
         const b = getBlock("full_width_image");
         if (admin) {
           const inner = (
-            <section className="w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
-              <div className="relative w-full max-w-7xl mx-auto px-4 py-8 min-h-[120px]">
+            <section className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+              <div className="relative mx-auto max-w-7xl px-4 py-8 min-h-[120px]">
                 {fullWidthImageUrl ? (
                   <div className="relative w-full max-h-[220px] rounded-lg overflow-hidden bg-gray-100 border border-amber-200/60">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1144,12 +1179,15 @@ export default function BranchSiteHomeView({
                 <p className="text-xs text-gray-600 text-center mt-2 max-w-lg mx-auto leading-relaxed">
                   後台畫布預覽；於此區上傳圖後按「儲存版面」寫入前台。可調整高度、背景圖、裝飾圖。
                 </p>
-                {(b?.floatingIcons?.length ?? 0) > 0 ? (
-                  <div className="pointer-events-none absolute inset-0 z-[15]">
+              </div>
+              {(b?.floatingIcons?.length ?? 0) > 0 ? (
+                <div className="pointer-events-none absolute inset-0 z-[15] min-h-0">
+                  <div className="relative h-full w-full min-h-0">
                     <HeroFloatingIconsLayer
                       coordinateViewport={coordMode}
                       icons={b!.floatingIcons!}
                       scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                      horizontalLayout="content-column-in-viewport"
                     />
                     {admin.selectedBlockId === "full_width_image" ? (
                       <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -1160,12 +1198,15 @@ export default function BranchSiteHomeView({
                           onChange={(next) => admin.onBlockFloatingIconsChange("full_width_image", next)}
                           selectedIconId={admin.selectedFloatingIconId ?? null}
                           onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("full_width_image", id)}
+                          horizontalLayout="content-column-in-viewport"
+                          scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                          canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                         />
                       </div>
                     ) : null}
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </section>
           );
           return wrap("full_width_image", inner);
@@ -1181,12 +1222,13 @@ export default function BranchSiteHomeView({
               <div className="relative w-full min-h-[120px] rounded-lg bg-gray-50" aria-hidden />
             )}
             {hasFloat ? (
-              <div className="pointer-events-none absolute inset-0 z-[30] flex justify-center px-4">
-                <div className="relative h-full min-h-[120px] w-full max-w-7xl">
+              <div className="pointer-events-none absolute inset-0 z-[30] min-h-0">
+                <div className="relative h-full min-h-[120px] w-full">
                   <HeroFloatingIconsLayer
                     coordinateViewport={coordMode}
                     icons={b!.floatingIcons!}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                    horizontalLayout="content-column-in-viewport"
                   />
                 </div>
               </div>
