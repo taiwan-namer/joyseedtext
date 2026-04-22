@@ -107,18 +107,11 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-/** 側欄不顯示「裝飾圖座標／上傳裝飾圖」的區塊（主圖／輪播主圖除外；其餘多為固定版型或網格） */
-const LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL = new Set<string>([
-  "featured_categories",
-  "carousel",
-  "carousel_2",
-  "courses_grid",
-  "new_courses",
-  "popular_experiences",
-  "faq",
-  "contact",
-  "footer",
-]);
+/**
+ * 側欄不顯示「裝飾圖座標／上傳裝飾圖」的區塊 id。
+ * 空集合＝畫布上所有可選區塊皆可編輯區塊裝飾圖（與前台 {@link BranchSiteHomeView} 各區 overlay 一致）。
+ */
+const LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL = new Set<string>([]);
 
 /** 依 block id 對應到「編輯內容」的後台頁面 */
 const BLOCK_EDIT_LINKS: Record<string, { href: string; label: string }> = {
