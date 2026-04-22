@@ -291,6 +291,10 @@ function pickFirstFiniteNumber(o: Record<string, unknown>, ...keys: string[]): n
   for (const k of keys) {
     const v = o[k];
     if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim()) {
+      const n = Number(v.trim());
+      if (Number.isFinite(n)) return n;
+    }
   }
   return undefined;
 }
