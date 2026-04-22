@@ -21,6 +21,7 @@ import {
   DEFAULT_ABOUT_PAGE_URL,
   LAYOUT_CONTENT_COLUMN_INSET_X_PX,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+  LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX,
   LAYOUT_SECTION_LABELS,
   layoutBlockForCanvasWrapper,
   normalizeAboutPageUrl,
@@ -208,8 +209,13 @@ export default function BranchSiteHomeView({
   const admin = adminLayout ?? null;
   const coordMode = previewCoordinateViewport ?? admin?.floatingIconsCoordinateMode ?? "desktop";
   const isAdminCanvas = admin != null;
+  /** 後台依分頁強制座標；訪客勿固定 desktop，否則窄螢幕仍用桌機欄位、手機專用座標／寬度全被忽略 */
+  const floatingCoordinateViewport =
+    admin != null ? coordMode : (previewCoordinateViewport ?? undefined);
   const floatingScaleReferenceWidthPx =
-    isAdminCanvas && coordMode === "mobile" ? 390 : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
+    isAdminCanvas && coordMode === "mobile"
+      ? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX
+      : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
   const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
   const isEditingViewportFloatingInAdmin = !!(isAdminCanvas && admin?.selectedViewportFloatingIconId);
   const viewportRootRef = useRef<HTMLDivElement | null>(null);
@@ -471,7 +477,7 @@ export default function BranchSiteHomeView({
       <div className="pointer-events-none absolute inset-0 z-[15] w-full min-h-0">
         <div className="relative h-full w-full min-h-0">
           <HeroFloatingIconsLayer
-            coordinateViewport={coordMode}
+            coordinateViewport={floatingCoordinateViewport}
             icons={dedupedIcons}
             scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
             horizontalLayout="content-column-in-viewport"
@@ -679,7 +685,7 @@ export default function BranchSiteHomeView({
           <div className="pointer-events-none absolute inset-0 z-[15] min-h-0">
             <div className="relative h-full w-full min-h-0">
               <HeroFloatingIconsLayer
-                coordinateViewport={coordMode}
+                coordinateViewport={floatingCoordinateViewport}
                 icons={iconsForMainHeroSection!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
@@ -732,7 +738,7 @@ export default function BranchSiteHomeView({
           <div className="pointer-events-none absolute inset-0 z-[15] min-h-0 pt-10">
             <div className="relative h-full w-full min-h-0">
               <HeroFloatingIconsLayer
-                coordinateViewport={coordMode}
+                coordinateViewport={floatingCoordinateViewport}
                 icons={heroCarouselBlock.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
@@ -813,7 +819,7 @@ export default function BranchSiteHomeView({
           <div className="pointer-events-none absolute inset-0 z-[25] min-h-0">
             <div className="relative h-full w-full min-h-0">
               <HeroFloatingIconsLayer
-                coordinateViewport={coordMode}
+                coordinateViewport={floatingCoordinateViewport}
                 icons={carouselBlock!.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
@@ -1089,7 +1095,7 @@ export default function BranchSiteHomeView({
           <div className="pointer-events-none absolute inset-0 z-[15] min-h-0">
             <div className="relative h-full w-full min-h-0">
               <HeroFloatingIconsLayer
-                coordinateViewport={coordMode}
+                coordinateViewport={floatingCoordinateViewport}
                 icons={b!.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
@@ -1195,7 +1201,7 @@ export default function BranchSiteHomeView({
                 <div className="pointer-events-none absolute inset-0 z-[15] min-h-0">
                   <div className="relative h-full w-full min-h-0">
                     <HeroFloatingIconsLayer
-                      coordinateViewport={coordMode}
+                      coordinateViewport={floatingCoordinateViewport}
                       icons={b!.floatingIcons!}
                       scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                       horizontalLayout="content-column-in-viewport"
@@ -1238,7 +1244,7 @@ export default function BranchSiteHomeView({
               <div className="pointer-events-none absolute inset-0 z-[30] min-h-0">
                 <div className="relative h-full min-h-[120px] w-full">
                   <HeroFloatingIconsLayer
-                    coordinateViewport={coordMode}
+                    coordinateViewport={floatingCoordinateViewport}
                     icons={b!.floatingIcons!}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     horizontalLayout="content-column-in-viewport"
@@ -1288,7 +1294,7 @@ export default function BranchSiteHomeView({
             <div className="relative h-full w-full min-w-0">
               <HeroFloatingIconsLayer
                 icons={viewportFloatingIcons ?? undefined}
-                coordinateViewport={coordMode}
+                coordinateViewport={floatingCoordinateViewport}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
               />
@@ -1311,7 +1317,7 @@ export default function BranchSiteHomeView({
             >
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}
-                coordinateViewport={coordMode}
+                coordinateViewport={floatingCoordinateViewport}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
               />

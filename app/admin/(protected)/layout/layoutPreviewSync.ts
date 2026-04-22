@@ -1,9 +1,10 @@
 import type { Activity } from "@/app/lib/homeSectionTypes";
-import type {
-  CarouselItem,
-  FeaturedCategory,
-  HeroFloatingIcon,
-  LayoutBlock,
+import {
+  LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX,
+  type CarouselItem,
+  type FeaturedCategory,
+  type HeroFloatingIcon,
+  type LayoutBlock,
 } from "@/app/lib/frontendSettingsShared";
 
 /** 與後台「首頁版面」手機 iframe 預覽同步的訊息類型（postMessage） */
@@ -28,7 +29,7 @@ export const LAYOUT_PREVIEW_SELECT_VIEWPORT_FLOATING_ICON =
   "layout-preview-select-viewport-floating-icon" as const;
 
 /** 手機預覽 iframe 內 LayoutCanvas 的設計寬度（與常見手機 CSS 寬度一致，使 md: 以下斷點生效） */
-export const LAYOUT_MOBILE_PREVIEW_WIDTH_PX = 390;
+export const LAYOUT_MOBILE_PREVIEW_WIDTH_PX = LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX;
 
 /** 可 JSON 序列化、由父頁傳入 iframe 的畫布狀態（不含 callback） */
 export type LayoutPreviewSyncPayload = {

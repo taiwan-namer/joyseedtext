@@ -7,6 +7,7 @@ import {
   floatingIconDisplayHeight,
   floatingIconColumnLeftPctToHostLeftPct,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+  LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
 import { getAboutFloatingIconComputedPct } from "@/app/about/aboutFloatingLayout";
 
@@ -59,7 +60,6 @@ export default function HeroFloatingIconsLayer({
   columnContentInsetXPx = 0,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const scaleBase = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
   /** null=尚未量到容器寬；先不渲染 icon，避免第一幀跳位 */
   const [hostWidth, setHostWidth] = useState<number | null>(null);
   const narrowAuto = useNarrowMaxMd();
@@ -70,6 +70,15 @@ export default function HeroFloatingIconsLayer({
   const centerSet = horizontalCenterSlots1Based ?? [];
   const rowGroups = horizontalRowGroups1Based ?? [];
   const nudgeMap = verticalNudgePxBySlot1Based ?? {};
+  /**
+   * 手機座標＋內容欄換算：儲存之 px 與後台手機畫布均以 {@link LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX} 為基準；
+   * 訪客若仍用 1280 會讓裝飾圖比編輯畫布小約 390/1280。
+   */
+  const scaleBaseRaw = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
+  const scaleBase =
+    resolvedMode === "mobile" && horizontalLayout === "content-column-in-viewport"
+      ? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX
+      : scaleBaseRaw;
   const iconScale =
     hostWidth != null ? Math.max(0.2, hostWidth / scaleBase) : 1;
   const useAboutRules = resolvedMode === "desktop" && (centerSet.length > 0 || rowGroups.length > 0);

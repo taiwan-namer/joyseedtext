@@ -7,6 +7,13 @@
 export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
 
 /**
+ * 窄螢幕（手機座標模式）時區塊／全頁裝飾圖的縮放基準寬度 (px)。
+ * 須與後台手機 iframe 預覽寬一致（見 `LAYOUT_MOBILE_PREVIEW_WIDTH_PX`），否則手機版編輯所見與訪客真機尺寸差異極大。
+ */
+/** 使用 `number` 避免 `as const` 字面量 390 讓 `useState` 等推斷成僅能為 390 */
+export const LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX: number = 390;
+
+/**
  * 與首頁主內容 `max-w-7xl px-4` 左右 padding 一致（各 1rem）；區塊裝飾圖換算時傳入，全頁裝飾層傳 0。
  */
 export const LAYOUT_CONTENT_COLUMN_INSET_X_PX = 16 as const;
