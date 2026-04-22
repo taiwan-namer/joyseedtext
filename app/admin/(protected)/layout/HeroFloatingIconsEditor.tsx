@@ -46,6 +46,8 @@ type Props = {
   scaleReferenceWidthPx?: number;
   /** 與 HeroFloatingIconsLayer 之 horizontalLayout 一致（全頁裝飾用） */
   horizontalLayout?: "host" | "content-column-in-viewport";
+  /** 與 HeroFloatingIconsLayer 之 columnContentInsetXPx 一致；區塊裝飾圖傳 16，全頁傳 0 */
+  columnContentInsetXPx?: number;
   /** 全螢幕裝飾圖：選取時在圖旁顯示寬高／刪除（與側欄區塊裝飾圖邏輯一致，數值為畫布預覽 px） */
   viewportInlineToolbar?: boolean;
   /** 與後台畫布縮放一致，用於寬高輸入與儲存 px 換算 */
@@ -71,6 +73,7 @@ export default function HeroFloatingIconsEditor({
   onIconPointerDown,
   scaleReferenceWidthPx = DEFAULT_SCALE_REF,
   horizontalLayout = "host",
+  columnContentInsetXPx = 0,
   viewportInlineToolbar = false,
   canvasPreviewScale = 1,
   onRemoveIcon,
@@ -179,7 +182,12 @@ export default function HeroFloatingIconsEditor({
       const leftPctRaw =
         horizontalLayout === "content-column-in-viewport"
           ? clampFloatingLeftPct(
-              floatingIconHostXToColumnLeftPct(xLayout, layoutW, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+              floatingIconHostXToColumnLeftPct(
+                xLayout,
+                layoutW,
+                LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+                columnContentInsetXPx
+              )
             )
           : clampPct((xLayout / layoutW) * 100);
       const topPct = clampPct((yLayout / layoutH) * 100);
@@ -219,6 +227,7 @@ export default function HeroFloatingIconsEditor({
       onChange,
       coordinateMode,
       horizontalLayout,
+      columnContentInsetXPx,
     ]
   );
 
@@ -462,7 +471,12 @@ export default function HeroFloatingIconsEditor({
             })();
         const leftPct =
           !useAboutRules && horizontalLayout === "content-column-in-viewport" && hostWidth != null
-            ? floatingIconColumnLeftPctToHostLeftPct(rawLeftPct, hostWidth, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+            ? floatingIconColumnLeftPctToHostLeftPct(
+                rawLeftPct,
+                hostWidth,
+                LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+                columnContentInsetXPx
+              )
             : rawLeftPct;
         const nudgeY = (nudgeMap[slot1Based] ?? 0) * iconScale;
         const transform =

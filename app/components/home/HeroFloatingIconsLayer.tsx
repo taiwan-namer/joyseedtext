@@ -26,6 +26,10 @@ type Props = {
    * `content-column-in-viewport`：儲存之橫向座標為「置中內容欄」百分比，繪製時 host 為整頁寬，會換算成 host 上之百分比（既有座標不移位，但可拖進左右留白）。
    */
   horizontalLayout?: "host" | "content-column-in-viewport";
+  /**
+   * 與 `max-w-7xl px-4` 左右 padding 一致（通常 16，見 `LAYOUT_CONTENT_COLUMN_INSET_X_PX`）；區塊裝飾圖傳入以與主內容對齊。全頁裝飾層勿傳（0）。
+   */
+  columnContentInsetXPx?: number;
 };
 
 function useNarrowMaxMd(): boolean {
@@ -52,6 +56,7 @@ export default function HeroFloatingIconsLayer({
   wrapperClassName = "",
   scaleReferenceWidthPx = LAYOUT_DESIGN_CANVAS_WIDTH_PX,
   horizontalLayout = "host",
+  columnContentInsetXPx = 0,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scaleBase = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
@@ -118,7 +123,12 @@ export default function HeroFloatingIconsLayer({
             })();
         const leftPct =
           !useAboutRules && horizontalLayout === "content-column-in-viewport"
-            ? floatingIconColumnLeftPctToHostLeftPct(rawLeftPct, hostWidth, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+            ? floatingIconColumnLeftPctToHostLeftPct(
+                rawLeftPct,
+                hostWidth,
+                LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+                columnContentInsetXPx
+              )
             : rawLeftPct;
         const nudgeY = (nudgeMap[slot1Based] ?? 0) * iconScale;
         const transform =

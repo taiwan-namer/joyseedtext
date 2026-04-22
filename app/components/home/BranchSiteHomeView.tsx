@@ -19,6 +19,7 @@ import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adm
 import type { CarouselItem, HeroFloatingIcon, LayoutBlock } from "@/app/lib/frontendSettingsShared";
 import {
   DEFAULT_ABOUT_PAGE_URL,
+  LAYOUT_CONTENT_COLUMN_INSET_X_PX,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
   LAYOUT_SECTION_LABELS,
   layoutBlockForCanvasWrapper,
@@ -449,7 +450,7 @@ export default function BranchSiteHomeView({
 
   /**
    * 訪客與後台皆顯示裝飾圖層；僅後台且選取該積木時顯示編輯器。
-   * 橫向座標與全頁裝飾一致：`horizontalLayout="content-column-in-viewport"`，leftPct 相對置中內容欄（可小於 0 或超過 100 以置於區塊左右留白）；圖層 host 為區塊全寬。
+   * 橫向與主內容 `max-w-7xl px-4` 對齊：`content-column-in-viewport` + `columnContentInsetXPx`（與左右 padding 一致）；圖層 host 為區塊全寬。
    */
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
     if (isEditingViewportFloatingInAdmin && hasViewportFloatingIcons) {
@@ -474,6 +475,7 @@ export default function BranchSiteHomeView({
             icons={dedupedIcons}
             scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
             horizontalLayout="content-column-in-viewport"
+            columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
           />
           {admin && admin.selectedBlockId === blockId ? (
             <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -485,6 +487,7 @@ export default function BranchSiteHomeView({
                 selectedIconId={admin.selectedFloatingIconId ?? null}
                 onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
                 horizontalLayout="content-column-in-viewport"
+                columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 canvasPreviewScale={admin.canvasPreviewScale ?? 1}
               />
@@ -680,6 +683,7 @@ export default function BranchSiteHomeView({
                 icons={iconsForMainHeroSection!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
+                columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
               />
               {showFloatingEditorOnMainHero && heroIconsForEditor && heroIconsForEditor.length > 0 && heroEditBlockId ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -691,6 +695,7 @@ export default function BranchSiteHomeView({
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(heroEditBlockId, id)}
                     horizontalLayout="content-column-in-viewport"
+                    columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
@@ -731,6 +736,7 @@ export default function BranchSiteHomeView({
                 icons={heroCarouselBlock.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
+                columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
               />
               {admin.selectedBlockId === "hero_carousel" ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -742,6 +748,7 @@ export default function BranchSiteHomeView({
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("hero_carousel", id)}
                     horizontalLayout="content-column-in-viewport"
+                    columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
@@ -810,6 +817,7 @@ export default function BranchSiteHomeView({
                 icons={carouselBlock!.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
+                columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
               />
               {admin &&
               admin.selectedBlockId === "carousel" &&
@@ -823,6 +831,7 @@ export default function BranchSiteHomeView({
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("carousel", id)}
                     horizontalLayout="content-column-in-viewport"
+                    columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
@@ -1084,6 +1093,7 @@ export default function BranchSiteHomeView({
                 icons={b!.floatingIcons!}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 horizontalLayout="content-column-in-viewport"
+                columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
               />
               {admin.selectedBlockId === blockId ? (
                 <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -1095,6 +1105,7 @@ export default function BranchSiteHomeView({
                     selectedIconId={admin.selectedFloatingIconId ?? null}
                     onIconPointerDown={(id) => admin.onSelectFloatingIcon?.(blockId, id)}
                     horizontalLayout="content-column-in-viewport"
+                    columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                   />
@@ -1188,6 +1199,7 @@ export default function BranchSiteHomeView({
                       icons={b!.floatingIcons!}
                       scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                       horizontalLayout="content-column-in-viewport"
+                      columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     />
                     {admin.selectedBlockId === "full_width_image" ? (
                       <div className="pointer-events-auto absolute inset-0 z-[16]" data-floating-icon-editor>
@@ -1199,6 +1211,7 @@ export default function BranchSiteHomeView({
                           selectedIconId={admin.selectedFloatingIconId ?? null}
                           onIconPointerDown={(id) => admin.onSelectFloatingIcon?.("full_width_image", id)}
                           horizontalLayout="content-column-in-viewport"
+                          columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                           scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                           canvasPreviewScale={admin.canvasPreviewScale ?? 1}
                         />
@@ -1229,6 +1242,7 @@ export default function BranchSiteHomeView({
                     icons={b!.floatingIcons!}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     horizontalLayout="content-column-in-viewport"
+                    columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                   />
                 </div>
               </div>

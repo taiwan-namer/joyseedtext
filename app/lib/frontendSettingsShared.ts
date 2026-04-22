@@ -7,30 +7,45 @@
 export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
 
 /**
- * 全頁裝飾橫向：儲存之 leftPct／leftPctMobile 為「相對置中內容欄（寬 min(host, {@link LAYOUT_DESIGN_CANVAS_WIDTH_PX})）」之百分比（欄左為 0；可小於 0 或超過 100 表示在左右留白）。
+ * 與首頁主內容 `max-w-7xl px-4` 左右 padding 一致（各 1rem）；區塊裝飾圖換算時傳入，全頁裝飾層傳 0。
+ */
+export const LAYOUT_CONTENT_COLUMN_INSET_X_PX = 16 as const;
+
+/**
+ * 全頁裝飾橫向：儲存之 leftPct／leftPctMobile 為「相對置中內容欄」之百分比（欄左為 0；可小於 0 或超過 100 表示在左右留白）。
+ * 置中欄外寬為 min(host, columnMaxPx)；若 contentInsetXPx &gt; 0，則座標相對「欄內扣除左右 padding 後之內容寬」，與 `max-w-7xl px-4` 內實際排版一致。
  * 繪製時若 host 為整頁寬，須轉成 host 上之錨點百分比。
  */
 export function floatingIconColumnLeftPctToHostLeftPct(
   leftPctColumn: number,
   hostWidthPx: number,
-  columnMaxPx: number = LAYOUT_DESIGN_CANVAS_WIDTH_PX
+  columnMaxPx: number = LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+  contentInsetXPx: number = 0
 ): number {
   const w = Math.max(1, hostWidthPx);
-  const c = Math.min(w, columnMaxPx);
-  const o = (w - c) / 2;
-  return ((o + (leftPctColumn / 100) * c) / w) * 100;
+  const outerC = Math.min(w, columnMaxPx);
+  const inset = Math.max(0, Math.min(contentInsetXPx, Math.floor(outerC / 2)));
+  const innerW = Math.max(1, outerC - 2 * inset);
+  const outerLeft = (w - outerC) / 2;
+  const innerLeft = outerLeft + inset;
+  const x = innerLeft + (leftPctColumn / 100) * innerW;
+  return (x / w) * 100;
 }
 
 /** 由 host 內水平像素（錨點）反算欄百分比，與 {@link floatingIconColumnLeftPctToHostLeftPct} 互逆（數值可超出 0–100）。 */
 export function floatingIconHostXToColumnLeftPct(
   xFromHostLeftPx: number,
   hostWidthPx: number,
-  columnMaxPx: number = LAYOUT_DESIGN_CANVAS_WIDTH_PX
+  columnMaxPx: number = LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+  contentInsetXPx: number = 0
 ): number {
   const w = Math.max(1, hostWidthPx);
-  const c = Math.min(w, columnMaxPx);
-  const o = (w - c) / 2;
-  return ((xFromHostLeftPx - o) / c) * 100;
+  const outerC = Math.min(w, columnMaxPx);
+  const inset = Math.max(0, Math.min(contentInsetXPx, Math.floor(outerC / 2)));
+  const innerW = Math.max(1, outerC - 2 * inset);
+  const outerLeft = (w - outerC) / 2;
+  const innerLeft = outerLeft + inset;
+  return ((xFromHostLeftPx - innerLeft) / innerW) * 100;
 }
 
 /**
@@ -71,7 +86,7 @@ export function parsePageBackgroundExtensionColor(value: unknown): string | null
 export type HeroFloatingIcon = {
   id: string;
   imageUrl: string;
-  /** 水平百分比（中心錨點）：相對置中內容欄（寬至多 {@link LAYOUT_DESIGN_CANVAS_WIDTH_PX}），可小於 0 或大於 100 以延伸至左右留白 */
+  /** 水平百分比（中心錨點）：相對置中內容欄（見 {@link floatingIconColumnLeftPctToHostLeftPct} 之 contentInsetXPx），可小於 0 或大於 100 以延伸至左右留白 */
   leftPct: number;
   /** 0–100，相對 Hero 容器高度 */
   topPct: number;
@@ -214,7 +229,7 @@ export type FrontendSettings = {
   layoutBlocks: LayoutBlock[];
   /**
    * 全頁裝飾層（中心錨點；隨頁面捲動，與後台畫布對齊）。
-   * 橫向 leftPct 為「置中 max-w-7xl 欄」之百分比（見 {@link floatingIconColumnLeftPctToHostLeftPct}），可小於 0 或超過 100 以置於左右留白；垂直為根容器高度百分比。
+   * 橫向 leftPct 為「置中內容欄」百分比（換算時 contentInsetXPx＝0）；可小於 0 或超過 100 以置於左右留白；垂直為根容器高度百分比。
    */
   viewportFloatingIcons: HeroFloatingIcon[];
   /** 精選課程分館列表（後台可編輯） */
