@@ -34,7 +34,7 @@ const HeroFloatingIconsEditor = dynamic(
 );
 
 const CAROUSEL_INTERVAL_MS = 4000;
-const ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX = 22;
+const ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX = 0;
 
 function normalizeFloatingImageKey(raw: string | null | undefined): string {
   const t = String(raw ?? "").trim();
