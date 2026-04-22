@@ -641,8 +641,9 @@ export default function BranchSiteHomeView({
     !!admin;
 
   const heroInner = hasMainHeroVisual ? (
-    <section className="relative w-full pt-0 pb-4" style={getBlockStyle("hero")}>
-      <div className="relative w-full">
+    <section className="relative w-full pt-0 pb-4">
+      {/* minHeight／背景在此層：裝飾圖 absolute 以此層為參考，勿只加在外層 section */}
+      <div className="relative w-full min-h-0" style={getBlockStyle("hero")}>
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
           <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
           {heroImageTrimmed ? (
@@ -716,12 +717,14 @@ export default function BranchSiteHomeView({
 
   /** 與 heroInner 同高度，主圖 URL 尚未載入時佔位，避免下方精選／輪播先排版再被主圖推擠 */
   const heroPlaceholderInner = (
-    <section className="w-full pt-0 pb-4" style={getBlockStyle("hero")}>
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
-        <div
-          className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50 animate-pulse"
-          aria-hidden
-        />
+    <section className="w-full pt-0 pb-4">
+      <div className="relative w-full min-h-0" style={getBlockStyle("hero")}>
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
+          <div
+            className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50 animate-pulse"
+            aria-hidden
+          />
+        </div>
       </div>
     </section>
   );
