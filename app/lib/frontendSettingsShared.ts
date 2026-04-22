@@ -177,7 +177,7 @@ export type FrontendSettings = {
   /** 畫布區塊（含順序、高度、背景圖）；有值時前台依此渲染，否則用 layoutOrder */
   layoutBlocks: LayoutBlock[];
   /**
-   * 全頁裝飾層（相對首頁根容器寬高之百分比座標，中心錨點；隨頁面捲動，與後台畫布對齊）；
+   * 全頁裝飾層（相對首頁根容器**全寬**與高度之百分比座標，中心錨點；可置於主內容欄左右留白區；隨頁面捲動，與後台畫布對齊）；
    * 與各區塊內裝飾圖分開。
    */
   viewportFloatingIcons: HeroFloatingIcon[];
