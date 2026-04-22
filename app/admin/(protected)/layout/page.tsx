@@ -1261,7 +1261,7 @@ export default function AdminLayoutPage() {
       const result = await updateLayoutBlocks(blocks, viewportFloatingIcons);
       if (result.success) {
         setMessage({ type: "success", text: result.message ?? "已儲存" });
-        /** 與 DB／前台解析結果對齊：避免儲存後本地 state 與 `parseHeroFloatingIcons` 或手機 iframe 回傳短暫不一致 */
+        /** 與 DB／前台解析結果對齊：避免儲存後桌機畫布本地 state 與 `getFrontendSettings` 解析後不一致 */
         try {
           const s = await getFrontendSettings();
           setViewportFloatingIcons(s.viewportFloatingIcons ?? []);
