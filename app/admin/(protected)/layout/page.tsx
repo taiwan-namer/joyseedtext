@@ -107,10 +107,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-/** 側欄不顯示「裝飾圖座標／上傳裝飾圖」的區塊（與全螢幕裝飾或固定版型一致） */
+/** 側欄不顯示「裝飾圖座標／上傳裝飾圖」的區塊（主圖／輪播主圖除外；其餘多為固定版型或網格） */
 const LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL = new Set<string>([
-  "hero",
-  "hero_carousel",
   "featured_categories",
   "carousel",
   "carousel_2",
