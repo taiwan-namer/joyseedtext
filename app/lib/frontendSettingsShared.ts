@@ -147,17 +147,19 @@ export function serializeFloatingIconsForPersist(icons: HeroFloatingIcon[] | und
   return (icons ?? []).map((ic) => ({
     id: ic.id,
     imageUrl: ic.imageUrl,
+    /** 勿對 leftPct 取整數：拖曳為小數時 Math.round 會在「儲存版面」後與畫布／前台錯位 */
     leftPct: clampFloatingLeftPct(
-      Math.round(typeof ic.leftPct === "number" && Number.isFinite(ic.leftPct) ? ic.leftPct : 50)
+      typeof ic.leftPct === "number" && Number.isFinite(ic.leftPct) ? ic.leftPct : 50
     ),
-    topPct: ic.topPct,
+    topPct:
+      typeof ic.topPct === "number" && Number.isFinite(ic.topPct) ? clampPct(ic.topPct) : 50,
     widthPx: ic.widthPx,
     ...(typeof ic.heightPx === "number" && ic.heightPx >= 16 ? { heightPx: ic.heightPx } : {}),
     ...(typeof ic.leftPctMobile === "number" && Number.isFinite(ic.leftPctMobile)
-      ? { leftPctMobile: clampFloatingLeftPct(Math.round(ic.leftPctMobile)) }
+      ? { leftPctMobile: clampFloatingLeftPct(ic.leftPctMobile) }
       : {}),
     ...(typeof ic.topPctMobile === "number" && Number.isFinite(ic.topPctMobile)
-      ? { topPctMobile: Math.min(100, Math.max(0, ic.topPctMobile)) }
+      ? { topPctMobile: clampPct(ic.topPctMobile) }
       : {}),
     ...(typeof ic.widthPxMobile === "number" && ic.widthPxMobile >= 16 ? { widthPxMobile: Math.round(ic.widthPxMobile) } : {}),
     ...(typeof ic.heightPxMobile === "number" && ic.heightPxMobile >= 16 ? { heightPxMobile: Math.round(ic.heightPxMobile) } : {}),
