@@ -197,6 +197,9 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
                       onBlockResizeHeight,
                       onBlockFloatingIconsChange,
                       floatingIconsCoordinateMode: coordMode,
+                      ...(coordMode === "mobile"
+                        ? { mobileFloatingScaleReferenceWidthPx: designWidthPx }
+                        : {}),
                       selectedFloatingIconId,
                       onSelectFloatingIcon,
                       canvasPreviewScale: scale,
@@ -259,6 +262,9 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
                     onBlockResizeHeight,
                     onBlockFloatingIconsChange,
                     floatingIconsCoordinateMode: coordMode,
+                    ...(coordMode === "mobile"
+                      ? { mobileFloatingScaleReferenceWidthPx: designWidthPx }
+                      : {}),
                     selectedFloatingIconId,
                     onSelectFloatingIcon,
                     canvasPreviewScale: scale,

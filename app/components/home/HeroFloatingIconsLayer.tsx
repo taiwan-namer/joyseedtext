@@ -71,13 +71,15 @@ export default function HeroFloatingIconsLayer({
   const rowGroups = horizontalRowGroups1Based ?? [];
   const nudgeMap = verticalNudgePxBySlot1Based ?? {};
   /**
-   * 手機座標＋內容欄換算：儲存之 px 與後台手機畫布均以 {@link LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX} 為基準；
-   * 訪客若仍用 1280 會讓裝飾圖比編輯畫布小約 390/1280。
+   * 手機＋內容欄：訪客傳入之縮放基準仍為 1280，此處改為 {@link LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX}；
+   * 後台手機 iframe 則傳實際 `designWidthPx`（如 428），須沿用該值，否則與畫布標示寬度不一致。
    */
   const scaleBaseRaw = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
   const scaleBase =
     resolvedMode === "mobile" && horizontalLayout === "content-column-in-viewport"
-      ? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX
+      ? scaleBaseRaw === LAYOUT_DESIGN_CANVAS_WIDTH_PX
+        ? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX
+        : scaleBaseRaw
       : scaleBaseRaw;
   const iconScale =
     hostWidth != null ? Math.max(0.2, hostWidth / scaleBase) : 1;

@@ -213,8 +213,8 @@ export default function BranchSiteHomeView({
   const floatingCoordinateViewport =
     admin != null ? coordMode : (previewCoordinateViewport ?? undefined);
   const floatingScaleReferenceWidthPx =
-    isAdminCanvas && coordMode === "mobile"
-      ? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX
+    isAdminCanvas && admin != null && coordMode === "mobile"
+      ? admin.mobileFloatingScaleReferenceWidthPx ?? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX
       : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
   const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
   const isEditingViewportFloatingInAdmin = !!(isAdminCanvas && admin?.selectedViewportFloatingIconId);

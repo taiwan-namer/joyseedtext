@@ -8,6 +8,8 @@ export type AdminLayoutCanvasConfig = {
   onBlockFloatingIconsChange: (blockId: string, next: HeroFloatingIcon[]) => void;
   /** 後台桌機／手機畫布：裝飾圖座標分別儲存 */
   floatingIconsCoordinateMode?: "desktop" | "mobile";
+  /** 手機畫布專用：與 LayoutCanvas 的 `designWidthPx`（iframe 實際設計寬）一致，供裝飾圖縮放；未傳時前台預設 390。 */
+  mobileFloatingScaleReferenceWidthPx?: number;
   selectedFloatingIconId?: string | null;
   onSelectFloatingIcon?: (blockId: string, iconId: string) => void;
   /** 桌機畫布目前縮放（0.25–1）；區塊高度拖曳與顯示依此換算為前台設計 px */
