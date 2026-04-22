@@ -447,7 +447,7 @@ export default function BranchSiteHomeView({
   /**
    * 訪客與後台皆顯示裝飾圖層；僅後台且選取該積木時顯示編輯器。
    * 座標與首頁大圖一致：百分比相對「mx-auto max-w-7xl px-4」內之寬高（見 hero 主圖外層），
-   * 勿以全螢幕寬 section 為基準，否則與後台／前台共用之 LAYOUT_DESIGN_CANVAS_WIDTH_PX（max-w-7xl）欄位對不齊。
+   * 與 LAYOUT_DESIGN_CANVAS_WIDTH_PX（max-w-7xl）及 HeroFloatingIconsLayer 縮放一致。
    */
   const renderBlockFloatingIconsOverlay = (blockId: string): ReactNode => {
     if (!isAdminCanvas && (viewportFloatingIcons?.length ?? 0) > 0) {
@@ -1210,8 +1210,8 @@ export default function BranchSiteHomeView({
     <div
       className={
         isAdminCanvas
-          ? "relative min-h-min bg-page flex flex-col overflow-x-visible"
-          : "relative min-h-screen bg-page flex flex-col overflow-x-visible"
+          ? "relative min-h-min w-full min-w-0 bg-page flex flex-col overflow-x-visible"
+          : "relative min-h-screen w-full min-w-0 bg-page flex flex-col overflow-x-visible"
       }
       {...(isAdminCanvas
         ? {

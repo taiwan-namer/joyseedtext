@@ -51,7 +51,7 @@ export default async function RootLayout({
   const settings = await getStoreSettings();
   return (
     <html lang="zh-TW">
-      <body className="antialiased">
+      <body className="antialiased min-w-0 overflow-x-hidden">
         <StoreSettingsProvider initial={settings}>
           <HomeRoutePrefetch />
           <Suspense fallback={null}>{children}</Suspense>

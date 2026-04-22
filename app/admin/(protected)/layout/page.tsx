@@ -31,18 +31,19 @@ import {
 } from "@/app/actions/frontendSettingsActions";
 import { getCoursesForHomepage } from "@/app/actions/productActions";
 import {
+  LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX,
   LAYOUT_SECTION_LABELS,
   DEFAULT_ABOUT_PAGE_URL,
   estimateIntrinsicMinHeightPxForBranchHomeBlock,
   getDefaultLayoutBlocks,
   normalizeAboutPageUrl,
+  type CarouselItem,
   type FeaturedCategory,
   type HeroFloatingIcon,
   type LayoutBlock,
   formatFloatingIconSlotLabel,
 } from "@/app/lib/frontendSettingsShared";
 import { JOYSEED_ISLAND_WEB_URL } from "@/lib/mainSiteCanonical";
-import type { CarouselItem } from "@/app/lib/frontendSettingsShared";
 import type { Activity } from "@/app/lib/homeSectionTypes";
 import { readImageNaturalSizeFromFile } from "@/lib/readImageNaturalSizeFromFile";
 import LayoutCanvas from "./LayoutCanvas";
@@ -327,8 +328,8 @@ export default function AdminLayoutPage() {
   const rightEditorRef = useRef<HTMLDivElement | null>(null);
   const [editorPos, setEditorPos] = useState<{ top: number; left: number }>({ top: 96, left: 0 });
   const [canvasZoomPct, setCanvasZoomPct] = useState(50);
-  /** 桌機畫布模擬視窗寬：依目前可用寬度自動同步（隨使用者螢幕/視窗改變） */
-  const [desktopCanvasViewportWidthPx, setDesktopCanvasViewportWidthPx] = useState(1280);
+  /** 桌機畫布與手機 iframe 同步：固定模擬寬螢幕瀏覽器寬，主內容 max-w-7xl 置中，與前台左右留白一致 */
+  const desktopCanvasViewportWidthPx = LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX;
   /** 手機寬度 iframe 預覽專用，與桌機畫布預覽比例分開；預設 100% 以貼近前台手機 1:1 呈現。 */
   const [mobileCanvasZoomPct, setMobileCanvasZoomPct] = useState(100);
   /** 手機 iframe 目前實際可視寬度（px），用來同步手機版畫布設計寬。 */
@@ -348,22 +349,6 @@ export default function AdminLayoutPage() {
   /** 全螢幕裝飾：下拉選擇後按刪除 */
   const [viewportDeletePick, setViewportDeletePick] = useState<string>("");
   const mobileCanvasSectionRef = useRef<HTMLDivElement | null>(null);
-  useLayoutEffect(() => {
-    const host = canvasWrapRef.current;
-    if (!host) return;
-    const measure = () => {
-      const next = Math.max(390, Math.round(host.clientWidth));
-      setDesktopCanvasViewportWidthPx((prev) => (prev === next ? prev : next));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(host);
-    window.addEventListener("resize", measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [canvasViewportMode]);
   useLayoutEffect(() => {
     const iframe = mobilePreviewIframeRef.current;
     if (!iframe) return;
@@ -2045,7 +2030,7 @@ export default function AdminLayoutPage() {
                   setSelectedFloatingIconId(iconId);
                   handleSelectBlock(blockId, { scrollCanvasIntoView: false });
                 }}
-                designWidthPx={desktopCanvasViewportWidthPx}
+                designWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
                 zoomPercent={canvasZoomPct}
                 heroImageUrl={displayHeroImageUrl}
                 carouselItems={displayCarouselItems}

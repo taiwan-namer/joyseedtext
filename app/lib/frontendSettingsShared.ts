@@ -2,15 +2,12 @@
 
 /**
  * 首頁版面編輯畫布、裝飾圖顯示／拖曳縮放共用之「設計欄寬」(px)。
- * 須與前台主內容 `max-w-7xl`（Tailwind 預設 80rem＝1280px）一致，否則後台座標與前台會偏移。
- * 一般桌面站常見「內容區」寬度約 1140–1280px；本站採 1280 與 Tailwind 預設對齊。
+ * 須與前台主內容 `max-w-7xl`（80rem＝1280px）一致，否則後台座標與前台會偏移。
  */
 export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
 
 /**
- * 後台「首頁版面」畫布模擬的瀏覽器視窗寬度（px）。
- * 須大於 {@link LAYOUT_DESIGN_CANVAS_WIDTH_PX}，畫布內才會出現與前台寬螢幕相同的兩側留白；主內容仍由 `max-w-7xl` 置中。
- * 裝飾圖座標仍為「主圖／區塊框內」百分比，與視窗外側留白無關。
+ * 後台桌機畫布模擬之**瀏覽器視窗寬**（px）：須大於主內容欄寬，預覽才會出現與前台寬螢幕相同的左右留白。
  */
 export const LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX = 1920 as const;
 
@@ -449,11 +446,10 @@ export function layoutBlockForCanvasWrapper(
 }
 
 /**
- * 未設定 `heightPx` 時，首頁該區在桌機、max-w-7xl 內建版型下的**概算**高度（px），供後台側欄對照。
- * 與 {@link BranchSiteHomeView} 之 padding／輪播 12:5 等一致；實際會隨內容、視窗寬度略變。
+ * 未設定 `heightPx` 時，首頁該區在桌機、max-w-7xl 內建版型下之**概算**高度（px），供後台側欄對照。
  */
 export function estimateIntrinsicMinHeightPxForBranchHomeBlock(blockId: string): number | null {
-  const padX = 32; // px-4 左右與 max-w-7xl 內欄一致
+  const padX = 32; // px-4 左右，與主內容欄一致
   const innerW = Math.max(0, LAYOUT_DESIGN_CANVAS_WIDTH_PX - padX);
   switch (blockId) {
     case "carousel":

@@ -73,7 +73,7 @@ const DEFAULT_CAROUSEL = [
 /**
  * 後台畫布：與分站首頁（`BranchSiteHomeView`／`app/page.tsx`）同一套版面與區塊，
  * 外加 `CanvasPageBackground` 與縮放外框。
- * 內層寬度為「模擬瀏覽器視窗」（預設 1920px），主內容仍由 max-w-7xl 置中，與前台寬螢幕兩側留白一致。
+ * 內層寬度為模擬瀏覽器視窗（預設 1920px），主內容由 max-w-7xl 置中，與前台寬螢幕兩側留白一致。
  */
 export default function LayoutCanvas(props: LayoutCanvasProps) {
   const {
