@@ -7,6 +7,33 @@
 export const LAYOUT_DESIGN_CANVAS_WIDTH_PX = 1280 as const;
 
 /**
+ * 全頁裝飾橫向：儲存之 leftPct／leftPctMobile 為「相對置中內容欄（寬 min(host, {@link LAYOUT_DESIGN_CANVAS_WIDTH_PX})）」之百分比（欄左為 0；可小於 0 或超過 100 表示在左右留白）。
+ * 繪製時若 host 為整頁寬，須轉成 host 上之錨點百分比。
+ */
+export function floatingIconColumnLeftPctToHostLeftPct(
+  leftPctColumn: number,
+  hostWidthPx: number,
+  columnMaxPx: number = LAYOUT_DESIGN_CANVAS_WIDTH_PX
+): number {
+  const w = Math.max(1, hostWidthPx);
+  const c = Math.min(w, columnMaxPx);
+  const o = (w - c) / 2;
+  return ((o + (leftPctColumn / 100) * c) / w) * 100;
+}
+
+/** 由 host 內水平像素（錨點）反算欄百分比，與 {@link floatingIconColumnLeftPctToHostLeftPct} 互逆（數值可超出 0–100）。 */
+export function floatingIconHostXToColumnLeftPct(
+  xFromHostLeftPx: number,
+  hostWidthPx: number,
+  columnMaxPx: number = LAYOUT_DESIGN_CANVAS_WIDTH_PX
+): number {
+  const w = Math.max(1, hostWidthPx);
+  const c = Math.min(w, columnMaxPx);
+  const o = (w - c) / 2;
+  return ((xFromHostLeftPx - o) / c) * 100;
+}
+
+/**
  * 後台桌機畫布模擬之**瀏覽器視窗寬**（px）：須大於主內容欄寬，預覽才會出現與前台寬螢幕相同的左右留白。
  */
 export const LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX = 1920 as const;
@@ -44,7 +71,7 @@ export function parsePageBackgroundExtensionColor(value: unknown): string | null
 export type HeroFloatingIcon = {
   id: string;
   imageUrl: string;
-  /** 0–100，相對 Hero 容器寬度 */
+  /** 相對容器寬度之水平百分比（中心錨點）；全頁裝飾時見 {@link floatingIconColumnLeftPctToHostLeftPct} */
   leftPct: number;
   /** 0–100，相對 Hero 容器高度 */
   topPct: number;
@@ -177,8 +204,8 @@ export type FrontendSettings = {
   /** 畫布區塊（含順序、高度、背景圖）；有值時前台依此渲染，否則用 layoutOrder */
   layoutBlocks: LayoutBlock[];
   /**
-   * 全頁裝飾層（相對首頁根容器**全寬**與高度之百分比座標，中心錨點；可置於主內容欄左右留白區；隨頁面捲動，與後台畫布對齊）；
-   * 與各區塊內裝飾圖分開。
+   * 全頁裝飾層（中心錨點；隨頁面捲動，與後台畫布對齊）。
+   * 橫向 leftPct 為「置中 max-w-7xl 欄」之百分比（見 {@link floatingIconColumnLeftPctToHostLeftPct}），可小於 0 或超過 100 以置於左右留白；垂直為根容器高度百分比。
    */
   viewportFloatingIcons: HeroFloatingIcon[];
   /** 精選課程分館列表（後台可編輯） */

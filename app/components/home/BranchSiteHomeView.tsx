@@ -19,7 +19,6 @@ import type { AdminLayoutCanvasConfig } from "@/app/admin/(protected)/layout/adm
 import type { CarouselItem, HeroFloatingIcon, LayoutBlock } from "@/app/lib/frontendSettingsShared";
 import {
   DEFAULT_ABOUT_PAGE_URL,
-  LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
   LAYOUT_SECTION_LABELS,
   layoutBlockForCanvasWrapper,
@@ -147,7 +146,7 @@ export type BranchSiteHomeViewProps = {
    * 後台畫布預覽勿傳，以維持由父層餵入的 activities。
    */
   serverHomeCourses?: { courses: CourseForPublic[]; error: string | null };
-  /** 訪客首頁：全頁裝飾層（相對本頁根容器**全寬**與高度之百分比，與畫布一致、隨捲動）；後台畫布勿傳 */
+  /** 訪客首頁：全頁裝飾層（橫向為置中內容欄座標、可延伸至左右留白；垂直為根容器高度百分比；隨捲動）；後台畫布勿傳 */
   viewportFloatingIcons?: HeroFloatingIcon[] | null;
   /** 非 admin 互動模式下仍可指定以手機座標渲染（供後台手機「前台一致預覽」） */
   previewCoordinateViewport?: "desktop" | "mobile";
@@ -207,9 +206,6 @@ export default function BranchSiteHomeView({
   const isAdminCanvas = admin != null;
   const floatingScaleReferenceWidthPx =
     isAdminCanvas && coordMode === "mobile" ? 390 : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
-  /** 全頁裝飾：百分比與寬度 px 相對「整個頁根寬」，桌機與後台 1920 模擬視窗對齊 */
-  const viewportFloatingScaleReferenceWidthPx =
-    coordMode === "mobile" ? 390 : LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX;
   const hasViewportFloatingIcons = (viewportFloatingIcons?.length ?? 0) > 0;
   const isEditingViewportFloatingInAdmin = !!(isAdminCanvas && admin?.selectedViewportFloatingIconId);
   const viewportRootRef = useRef<HTMLDivElement | null>(null);
@@ -1239,7 +1235,8 @@ export default function BranchSiteHomeView({
               <HeroFloatingIconsLayer
                 icons={viewportFloatingIcons ?? undefined}
                 coordinateViewport={coordMode}
-                scaleReferenceWidthPx={viewportFloatingScaleReferenceWidthPx}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                horizontalLayout="content-column-in-viewport"
               />
             </div>
           </div>
@@ -1259,7 +1256,8 @@ export default function BranchSiteHomeView({
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}
                 coordinateViewport={coordMode}
-                scaleReferenceWidthPx={viewportFloatingScaleReferenceWidthPx}
+                scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                horizontalLayout="content-column-in-viewport"
               />
               <div className="absolute inset-0 z-[33]" data-floating-icon-editor data-viewport-floating-editor>
                 <HeroFloatingIconsEditor
@@ -1269,7 +1267,8 @@ export default function BranchSiteHomeView({
                   onChange={admin.onViewportFloatingIconsChange}
                   selectedIconId={admin.selectedViewportFloatingIconId ?? null}
                   onIconPointerDown={(id) => admin.onSelectViewportFloatingIcon?.(id)}
-                  scaleReferenceWidthPx={viewportFloatingScaleReferenceWidthPx}
+                  scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
+                  horizontalLayout="content-column-in-viewport"
                   /**
                    * 手機 iframe 預覽偶發底層 Layer 尚未就緒，若 overlay 不畫圖會出現「看不到裝飾圖」。
                    * 這裡維持 overlay 同步顯示，確保拖曳編輯時永遠可見。

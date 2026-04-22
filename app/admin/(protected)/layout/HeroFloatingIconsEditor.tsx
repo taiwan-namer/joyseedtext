@@ -6,6 +6,8 @@ import {
   type HeroFloatingIcon,
   effectiveFloatingCoords,
   floatingIconDisplayHeight,
+  floatingIconColumnLeftPctToHostLeftPct,
+  floatingIconHostXToColumnLeftPct,
   formatFloatingIconSlotLabel,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
@@ -41,6 +43,8 @@ type Props = {
   onIconPointerDown?: (id: string) => void;
   /** 與 HeroFloatingIconsLayer 之 scaleReferenceWidthPx 一致 */
   scaleReferenceWidthPx?: number;
+  /** 與 HeroFloatingIconsLayer 之 horizontalLayout 一致（全頁裝飾用） */
+  horizontalLayout?: "host" | "content-column-in-viewport";
   /** 全螢幕裝飾圖：選取時在圖旁顯示寬高／刪除（與側欄區塊裝飾圖邏輯一致，數值為畫布預覽 px） */
   viewportInlineToolbar?: boolean;
   /** 與後台畫布縮放一致，用於寬高輸入與儲存 px 換算 */
@@ -65,6 +69,7 @@ export default function HeroFloatingIconsEditor({
   selectedIconId = null,
   onIconPointerDown,
   scaleReferenceWidthPx = DEFAULT_SCALE_REF,
+  horizontalLayout = "host",
   viewportInlineToolbar = false,
   canvasPreviewScale = 1,
   onRemoveIcon,
@@ -164,7 +169,11 @@ export default function HeroFloatingIconsEditor({
       if (!draggingId || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) return;
-      const leftPct = clampPct(((e.clientX - rect.left) / rect.width) * 100);
+      const x = e.clientX - rect.left;
+      const leftPctRaw =
+        horizontalLayout === "content-column-in-viewport"
+          ? floatingIconHostXToColumnLeftPct(x, rect.width, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+          : clampPct((x / rect.width) * 100);
       const topPct = clampPct(((e.clientY - rect.top) / rect.height) * 100);
       const isMobile = coordinateMode === "mobile";
       if (
@@ -190,8 +199,8 @@ export default function HeroFloatingIconsEditor({
         );
         return;
       }
-      if (isMobile) updateIcon(draggingId, { leftPctMobile: leftPct, topPctMobile: topPct });
-      else updateIcon(draggingId, { leftPct, topPct });
+      if (isMobile) updateIcon(draggingId, { leftPctMobile: leftPctRaw, topPctMobile: topPct });
+      else updateIcon(draggingId, { leftPct: leftPctRaw, topPct });
     },
     [
       draggingId,
@@ -201,6 +210,7 @@ export default function HeroFloatingIconsEditor({
       horizontalRowGroups1Based,
       onChange,
       coordinateMode,
+      horizontalLayout,
     ]
   );
 
@@ -431,7 +441,7 @@ export default function HeroFloatingIconsEditor({
         const rowGroups = horizontalRowGroups1Based ?? [];
         const useAboutRules =
           coordinateMode === "desktop" && (centerSlots.length > 0 || rowGroups.length > 0);
-        const { leftPct, topPct } = useAboutRules
+        const { leftPct: rawLeftPct, topPct } = useAboutRules
           ? getAboutFloatingIconComputedPct(icon, slot1Based, icons, {
               horizontalCenterSlots1Based: centerSlots,
               horizontalRowGroups1Based: rowGroups,
@@ -442,6 +452,10 @@ export default function HeroFloatingIconsEditor({
               const eff = effectiveFloatingCoords(icon, coordinateMode);
               return { leftPct: eff.leftPct, topPct: eff.topPct };
             })();
+        const leftPct =
+          !useAboutRules && horizontalLayout === "content-column-in-viewport" && hostWidth != null
+            ? floatingIconColumnLeftPctToHostLeftPct(rawLeftPct, hostWidth, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+            : rawLeftPct;
         const nudgeY = (nudgeMap[slot1Based] ?? 0) * iconScale;
         const transform =
           nudgeY !== 0 ? `translate(-50%, calc(-50% + ${nudgeY}px))` : "translate(-50%, -50%)";

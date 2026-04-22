@@ -5,6 +5,7 @@ import {
   type HeroFloatingIcon,
   effectiveFloatingCoords,
   floatingIconDisplayHeight,
+  floatingIconColumnLeftPctToHostLeftPct,
   LAYOUT_DESIGN_CANVAS_WIDTH_PX,
 } from "@/app/lib/frontendSettingsShared";
 import { getAboutFloatingIconComputedPct } from "@/app/about/aboutFloatingLayout";
@@ -21,6 +22,10 @@ type Props = {
    * 裝飾圖寬度縮放基準（px）。區塊內預設 1280（與 max-w-7xl 一致）；全頁裝飾層請傳模擬視窗寬（如 1920）。
    */
   scaleReferenceWidthPx?: number;
+  /**
+   * `content-column-in-viewport`：儲存之橫向座標為「置中內容欄」百分比，繪製時 host 為整頁寬，會換算成 host 上之百分比（既有座標不移位，但可拖進左右留白）。
+   */
+  horizontalLayout?: "host" | "content-column-in-viewport";
 };
 
 function useNarrowMaxMd(): boolean {
@@ -46,6 +51,7 @@ export default function HeroFloatingIconsLayer({
   underContent = false,
   wrapperClassName = "",
   scaleReferenceWidthPx = LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+  horizontalLayout = "host",
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scaleBase = scaleReferenceWidthPx > 0 ? scaleReferenceWidthPx : LAYOUT_DESIGN_CANVAS_WIDTH_PX;
@@ -99,7 +105,7 @@ export default function HeroFloatingIconsLayer({
       {list.map((icon) => {
         const slotIdx = full.findIndex((x) => x.id === icon.id);
         const slot1Based = slotIdx >= 0 ? slotIdx + 1 : 0;
-        const { leftPct, topPct } = useAboutRules
+        const { leftPct: rawLeftPct, topPct } = useAboutRules
           ? getAboutFloatingIconComputedPct(icon, slot1Based, full, {
               horizontalCenterSlots1Based: centerSet,
               horizontalRowGroups1Based: rowGroups,
@@ -110,6 +116,10 @@ export default function HeroFloatingIconsLayer({
               const eff = effectiveFloatingCoords(icon, resolvedMode);
               return { leftPct: eff.leftPct, topPct: eff.topPct };
             })();
+        const leftPct =
+          !useAboutRules && horizontalLayout === "content-column-in-viewport"
+            ? floatingIconColumnLeftPctToHostLeftPct(rawLeftPct, hostWidth, LAYOUT_DESIGN_CANVAS_WIDTH_PX)
+            : rawLeftPct;
         const nudgeY = (nudgeMap[slot1Based] ?? 0) * iconScale;
         const transform =
           nudgeY !== 0 ? `translate(-50%, calc(-50% + ${nudgeY}px))` : "translate(-50%, -50%)";
