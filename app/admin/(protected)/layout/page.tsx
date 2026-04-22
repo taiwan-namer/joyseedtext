@@ -1261,6 +1261,18 @@ export default function AdminLayoutPage() {
       const result = await updateLayoutBlocks(blocks, viewportFloatingIcons);
       if (result.success) {
         setMessage({ type: "success", text: result.message ?? "已儲存" });
+        /** 與 DB／前台解析結果對齊：避免儲存後本地 state 與 `parseHeroFloatingIcons` 或手機 iframe 回傳短暫不一致 */
+        try {
+          const s = await getFrontendSettings();
+          setViewportFloatingIcons(s.viewportFloatingIcons ?? []);
+          if (s.layoutBlocks.length > 0) {
+            setBlocks(
+              [...s.layoutBlocks].sort((a, b) => a.order - b.order).map((b, i) => ({ ...b, order: i }))
+            );
+          }
+        } catch {
+          /* 略：保留本地狀態；重新整理後仍會與 DB 一致 */
+        }
       } else {
         setMessage({ type: "error", text: result.error });
       }

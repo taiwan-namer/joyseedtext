@@ -34,7 +34,10 @@ const HeroFloatingIconsEditor = dynamic(
 );
 
 const CAROUSEL_INTERVAL_MS = 4000;
+/** 後台畫布：全頁裝飾層與前台垂直對齊微調（px，正數往下） */
 const ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX = 0;
+/** 後台畫布：全頁裝飾層與前台水平對齊微調（px，正數往右） */
+const ADMIN_VIEWPORT_FLOATING_X_OFFSET_PX = 0;
 
 function normalizeFloatingImageKey(raw: string | null | undefined): string {
   const t = String(raw ?? "").trim();
@@ -1251,7 +1254,9 @@ export default function BranchSiteHomeView({
           >
             <div
               className="relative h-full w-full min-w-0"
-              style={{ transform: `translateY(${ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX}px)` }}
+              style={{
+                transform: `translate(${ADMIN_VIEWPORT_FLOATING_X_OFFSET_PX}px, ${ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX}px)`,
+              }}
             >
               <HeroFloatingIconsLayer
                 icons={admin.viewportFloatingIcons}

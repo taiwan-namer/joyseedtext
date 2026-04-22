@@ -121,6 +121,13 @@ export function formatFloatingIconSlotLabel(zeroBasedIndex: number): string {
   return `編號 ${zeroBasedIndex + 1}`;
 }
 
+/** 裝飾圖水平百分比：全頁裝飾可超出 0–100（置中欄左右留白）；仍做寬鬆夾限避免異常數值 */
+const FLOATING_LEFT_PCT_MIN = -400;
+const FLOATING_LEFT_PCT_MAX = 400;
+function clampFloatingLeftPct(n: number): number {
+  return Math.min(FLOATING_LEFT_PCT_MAX, Math.max(FLOATING_LEFT_PCT_MIN, n));
+}
+
 export function serializeFloatingIconsForPersist(icons: HeroFloatingIcon[] | undefined) {
   return (icons ?? []).map((ic) => ({
     id: ic.id,
@@ -130,7 +137,7 @@ export function serializeFloatingIconsForPersist(icons: HeroFloatingIcon[] | und
     widthPx: ic.widthPx,
     ...(typeof ic.heightPx === "number" && ic.heightPx >= 16 ? { heightPx: ic.heightPx } : {}),
     ...(typeof ic.leftPctMobile === "number" && Number.isFinite(ic.leftPctMobile)
-      ? { leftPctMobile: Math.min(100, Math.max(0, ic.leftPctMobile)) }
+      ? { leftPctMobile: clampFloatingLeftPct(Math.round(ic.leftPctMobile)) }
       : {}),
     ...(typeof ic.topPctMobile === "number" && Number.isFinite(ic.topPctMobile)
       ? { topPctMobile: Math.min(100, Math.max(0, ic.topPctMobile)) }
@@ -303,7 +310,7 @@ export function parseHeroFloatingIcons(raw: unknown): HeroFloatingIcon[] {
     if (!imageUrl) continue;
     const leftPctRaw = pickFirstFiniteNumber(o, "leftPct", "left_pct");
     const topPctRaw = pickFirstFiniteNumber(o, "topPct", "top_pct");
-    const leftPct = leftPctRaw != null ? clampPct(leftPctRaw) : 50;
+    const leftPct = leftPctRaw != null ? clampFloatingLeftPct(leftPctRaw) : 50;
     const topPct = topPctRaw != null ? clampPct(topPctRaw) : 50;
     const rawW = pickFirstFiniteNumber(o, "widthPx", "width_px") ?? NaN;
     const widthPx = Number.isFinite(rawW) && rawW >= 16 ? Math.round(rawW) : 64;
@@ -313,7 +320,7 @@ export function parseHeroFloatingIcons(raw: unknown): HeroFloatingIcon[] {
     const zIndex = zIndexRaw != null ? Math.round(zIndexRaw) : 0;
     const enabled = o.enabled === false ? false : true;
     const lpm = pickFirstFiniteNumber(o, "leftPctMobile", "left_pct_mobile");
-    const leftPctMobile = lpm != null ? clampPct(lpm) : undefined;
+    const leftPctMobile = lpm != null ? clampFloatingLeftPct(lpm) : undefined;
     const tpm = pickFirstFiniteNumber(o, "topPctMobile", "top_pct_mobile");
     const topPctMobile = tpm != null ? clampPct(tpm) : undefined;
     const rawWm = pickFirstFiniteNumber(o, "widthPxMobile", "width_px_mobile") ?? NaN;
