@@ -2,39 +2,79 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 import { getCourseBySlug } from "../../course-data";
 import { getCourseById } from "@/app/actions/productActions";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
+import CoursePostBookingPanel from "@/app/components/course/CoursePostBookingPanel";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../../course-data";
 import { useCourseSlugParam } from "../../useCourseSlugParam";
 import { withCourseFetchTimeout } from "@/lib/courseClientFetch";
+import { COURSE_FORM_GALLERY_SLOT_COUNT, COURSE_FORM_IMAGE_SLOT_COUNT } from "@/lib/constants";
 
 type CourseForDisplay = CourseForPublic | CourseDetail;
+
+/** 後台測試時可能誤留的亂字，內文頁不顯示 */
+const TEST_GIBBERISH = "hghghhjghghghhghg";
+
+function stripTestGibberish(text: string): string {
+  if (!text) return text;
+  return text.split(TEST_GIBBERISH).join("").replace(/\n{3,}/g, "\n\n").trim();
+}
 
 function isCourseDetail(c: CourseForDisplay): c is CourseDetail {
   return "articleParagraphs" in c && Array.isArray((c as CourseDetail).articleParagraphs);
 }
 
-/** 將內文中的 [圖片1]～[圖片5] 替換為實際圖片：圖片1=主圖，圖片2～5=圖1～圖4 */
+function formatNoticeValue(v: unknown): string {
+  if (Array.isArray(v)) return v.map((x) => String(x ?? "")).filter(Boolean).join("、");
+  return String(v ?? "");
+}
+
+function CustomerNoticePanel({ notice }: { notice: CourseForPublic["customerNotice"] }) {
+  if (!notice) return null;
+  return (
+    <section className="rounded-xl border border-gray-100 bg-gray-50/80 p-5 shadow-sm">
+      <h2 className="mb-3 text-base font-bold text-gray-900">客戶須知</h2>
+      <dl className="space-y-3 text-sm leading-relaxed">
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3">
+          <dt className="text-gray-500">活動場域</dt>
+          <dd className="min-w-0 text-gray-800">{formatNoticeValue(notice.活動場域類型)}</dd>
+        </div>
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3">
+          <dt className="text-gray-500">課程時段</dt>
+          <dd className="min-w-0 text-gray-800">{formatNoticeValue(notice.課程時段長度)}</dd>
+        </div>
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3">
+          <dt className="text-gray-500">教學語言</dt>
+          <dd className="min-w-0 text-gray-800">{formatNoticeValue(notice.教學語言)}</dd>
+        </div>
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3">
+          <dt className="text-gray-500">家長陪同</dt>
+          <dd className="min-w-0 text-gray-800">{formatNoticeValue(notice.家長陪同規則)}</dd>
+        </div>
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3">
+          <dt className="text-gray-500">注意事項</dt>
+          <dd className="min-w-0 whitespace-pre-line text-gray-800">{formatNoticeValue(notice.注意事項)}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+/** 將內文中的 [圖片1]～[圖片15] 替換為實際圖片：圖片1=主圖，圖片2 起對應圖庫圖1～圖14 */
 function replaceImagePlaceholders(
   html: string,
   mainImageUrl: string | null | undefined,
   galleryUrls: string[] | null | undefined
 ): string {
-  const urls = [
-    mainImageUrl ?? "",
-    galleryUrls?.[0] ?? "",
-    galleryUrls?.[1] ?? "",
-    galleryUrls?.[2] ?? "",
-    galleryUrls?.[3] ?? "",
-  ];
+  const gallery = (galleryUrls ?? []).slice(0, COURSE_FORM_GALLERY_SLOT_COUNT);
+  const urls = [mainImageUrl ?? "", ...gallery];
   let out = html;
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= COURSE_FORM_IMAGE_SLOT_COUNT; i++) {
     const placeholder = `[圖片${i}]`;
-    const url = urls[i - 1];
+    const url = urls[i - 1] ?? "";
     const imgTag = url
       ? `<img src="${url.replace(/"/g, "&quot;")}" alt="圖${i}" class="my-4 rounded-xl w-full max-w-2xl mx-auto object-cover" loading="lazy" />`
       : `<span class="inline-block py-2 px-3 rounded bg-gray-100 text-gray-500 text-sm">[圖${i}]</span>`;
@@ -43,7 +83,7 @@ function replaceImagePlaceholders(
   return out;
 }
 
-// 部落格全文頁：主圖 + 內文段落（靜態）或 post_content HTML（DB），參考 Rose's Blog 文章版型
+// 課程內文頁：主欄從課程內文起；不顯示主圖／課程簡介；內文僅用 post_content（靜態則用段落）
 export default function CoursePostPage() {
   const slug = useCourseSlugParam();
   const { siteName } = useStoreSettings();
@@ -95,15 +135,16 @@ export default function CoursePostPage() {
     );
   }
 
-  const category = "category" in course ? (course as CourseDetail).category : "課程";
   const rawAgeTags = course.sidebarOptionLabels ?? (course as CourseDetail).ageTags ?? [];
   const ageTags = Array.isArray(rawAgeTags) ? rawAgeTags : [];
   const ageRange = "ageRange" in course ? (course as CourseDetail).ageRange : "";
+  const customerNotice = "customerNotice" in course ? course.customerNotice : undefined;
+  const coursePublicSlug = ("slug" in course && course.slug ? course.slug : slug) ?? "";
 
   return (
     <div className="min-h-screen bg-white">
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
-        <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
+        <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
           <Link href="/" prefetch className="text-xl font-bold text-brand touch-manipulation">
             {siteName}
           </Link>
@@ -120,107 +161,73 @@ export default function CoursePostPage() {
         </div>
       </header>
 
-      <article className="mx-auto max-w-3xl px-4 pt-6 pb-16">
-        <nav className="mb-6 text-sm text-gray-400" aria-label="麵包屑">
-          <ol className="flex flex-wrap items-center gap-1">
-            <li>
-              <Link href="/" prefetch className="hover:text-amber-600 transition-colors touch-manipulation">
-                首頁
-              </Link>
-            </li>
-            <li className="flex items-center gap-1">
-              <ChevronRight className="w-4 h-4 shrink-0" />
-              <Link href="/courses/intro" prefetch className="hover:text-amber-600 transition-colors">
-                課程介紹
-              </Link>
-            </li>
-            <li className="flex items-center gap-1">
-              <ChevronRight className="w-4 h-4 shrink-0" />
-              <span className="text-gray-600">{course.title}</span>
-            </li>
-          </ol>
-        </nav>
+      <main className="mx-auto w-full max-w-[1440px] px-4 pt-6 pb-16">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-12">
+          <article className="min-w-0 w-full lg:col-span-7 lg:justify-self-start">
+            {/* 不顯示主標 / 年齡；全寬垂直佔位（勿加 lg:ml／max-w，避免與左欄內文左右錯位） */}
+            <div className="w-full" aria-hidden>
+              <div className="h-[2.25rem] sm:h-[2.5rem] mb-2" />
+              <div className="h-5 mb-8" />
+            </div>
 
-        <div className="mb-3">
-          <span className="inline-block px-3 py-1 text-xs font-medium text-amber-600 bg-amber-50 rounded-full">
-            {category}
-          </span>
+            {/* 內文頁不顯示主圖、課程簡介與「課程內文」標題；左欄直接顯示內容本體 */}
+            <section className="border-t border-gray-100 pt-8">
+              {isCourseDetail(course) ? (
+                (() => {
+                  const parts = course.articleParagraphs
+                    .map((p) => stripTestGibberish(String(p ?? "")))
+                    .filter(Boolean);
+                  if (parts.length === 0) {
+                    return <p className="text-gray-500">尚無內文。</p>;
+                  }
+                  return (
+                    <div className="space-y-8 text-base leading-relaxed text-gray-700">
+                      {parts.map((cleaned, i) => (
+                        <p key={i} className={i === 0 ? "first:indent-8" : ""}>
+                          {cleaned}
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })()
+              ) : (
+                <div
+                  className="prose prose-gray max-w-[78ch] text-base leading-relaxed"
+                  dangerouslySetInnerHTML={{
+                    __html: replaceImagePlaceholders(
+                      (() => {
+                        const raw =
+                          "postContent" in course &&
+                          course.postContent != null &&
+                          String(course.postContent).trim() !== ""
+                            ? String(course.postContent)
+                            : "";
+                        const cleaned = stripTestGibberish(raw);
+                        return cleaned || "<p>尚無內文。</p>";
+                      })(),
+                      "imageUrl" in course ? course.imageUrl : undefined,
+                      "galleryUrls" in course ? course.galleryUrls : undefined,
+                    ),
+                  }}
+                />
+              )}
+            </section>
+          </article>
+
+          <aside className="lg:col-span-5 lg:-translate-x-[60px]">
+            <div className="lg:sticky lg:top-24 space-y-6">
+              <CoursePostBookingPanel
+                course={course}
+                classId={"id" in course && typeof course.id === "string" ? course.id : null}
+                routeSlug={coursePublicSlug}
+                ageTags={ageTags}
+                ageRange={ageRange}
+              />
+              {customerNotice ? <CustomerNoticePanel notice={customerNotice} /> : null}
+            </div>
+          </aside>
         </div>
-
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 tracking-tight">
-          {course.title}
-        </h1>
-        <p className="text-sm text-gray-500 mb-8">
-          {ageRange}{ageRange && " · "}{ageTags.join("、")}
-        </p>
-
-        {/* 主圖（DB 有 imageUrl 則顯示） */}
-        <div className="aspect-video rounded-2xl bg-gray-200 mb-6 flex items-center justify-center overflow-hidden">
-          {"imageUrl" in course && course.imageUrl ? (
-            <img src={course.imageUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-gray-400 text-sm">課程主圖（部落格首圖）</span>
-          )}
-        </div>
-
-        {/* 課程簡介：主圖下方，與課程詳情頁一致 */}
-        {course.courseIntro && (
-          <section className="mb-10">
-            <h2 className="text-sm font-semibold text-gray-500 mb-2">課程簡介</h2>
-            <p className="text-gray-700 leading-relaxed whitespace-pre-line">{course.courseIntro}</p>
-          </section>
-        )}
-
-        {/* 全文：DB 為 HTML（post_content），靜態為段落 */}
-        {isCourseDetail(course) ? (
-          <div className="space-y-8 text-gray-700 text-base leading-relaxed">
-            {course.articleParagraphs.map((paragraph, i) => (
-              <div key={i}>
-                <p className={i === 0 ? "first:indent-8" : ""}>{paragraph}</p>
-                {i === 1 && (
-                  <div className="my-8 rounded-xl overflow-hidden bg-gray-100 aspect-[16/10] flex items-center justify-center">
-                    <span className="text-gray-400 text-sm">文中插圖</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div
-            className="prose prose-gray max-w-none text-base leading-relaxed"
-            dangerouslySetInnerHTML={{
-              __html: replaceImagePlaceholders(
-                (course.postContent ?? course.courseIntro ?? "") || "<p>尚無內文。</p>",
-                "imageUrl" in course ? course.imageUrl : undefined,
-                "galleryUrls" in course ? course.galleryUrls : undefined,
-              ),
-            }}
-          />
-        )}
-
-        {/* 文末預設圖（僅靜態課程顯示） */}
-        {isCourseDetail(course) && (
-          <div className="mt-10 rounded-xl overflow-hidden bg-gray-100 aspect-[16/9] flex items-center justify-center">
-            <span className="text-gray-400 text-sm">課程情境圖</span>
-          </div>
-        )}
-
-        {/* 文末 CTA */}
-        <section className="mt-12 pt-8 border-t border-gray-100 flex flex-wrap gap-4">
-          <Link
-            href={`/course/${course.slug}`}
-            className="inline-block py-3 px-6 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-medium transition-colors"
-          >
-            查看課程時段 · 立即預約
-          </Link>
-          <Link
-            href="/courses/intro"
-            className="inline-block py-3 px-6 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium transition-colors"
-          >
-            回課程介紹
-          </Link>
-        </section>
-      </article>
+      </main>
     </div>
   );
 }

@@ -24,6 +24,15 @@ export const HOMEPAGE_COURSES_FETCH_LIMIT = 12;
 /** 課程列表頁每頁筆數（與 `getCoursesForListpage` 上限內一致） */
 export const COURSES_LIST_PAGE_SIZE = 12;
 
+/**
+ * 後台課程／`gallery_urls`：圖庫槽位數（表單欄位 `image_1`～`image_n`），不含主圖 `image_main`。
+ * 與前台課程頁右側縮圖、[圖片2]～佔位符數量一致。
+ */
+export const COURSE_FORM_GALLERY_SLOT_COUNT = 14;
+
+/** 主圖 1 + 圖庫 {@link COURSE_FORM_GALLERY_SLOT_COUNT}，合計 15 張 */
+export const COURSE_FORM_IMAGE_SLOT_COUNT = 1 + COURSE_FORM_GALLERY_SLOT_COUNT;
+
 /** 總站主題 API 回傳：去空白、去重，保留首次出現順序 */
 export function dedupeCategoryList(categories: string[]): string[] {
   const seen = new Set<string>();

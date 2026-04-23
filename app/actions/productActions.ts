@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-import { COURSES_LIST_PAGE_SIZE, HOMEPAGE_COURSES_FETCH_LIMIT } from "@/lib/constants";
+import {
+  COURSE_FORM_GALLERY_SLOT_COUNT,
+  COURSES_LIST_PAGE_SIZE,
+  HOMEPAGE_COURSES_FETCH_LIMIT,
+} from "@/lib/constants";
 import { sidebarOptionToDisplayLabels } from "@/lib/sidebarAgeOption";
 import { fetchInventoryResolution } from "@/lib/inventoryClass";
 import { pushInventoryBindToHqListing } from "@/lib/syncListingInventoryFromTeacher";
@@ -566,7 +570,7 @@ export type CustomerNoticeForm = {
 };
 
 /**
- * 新增課程（完整版）：主圖 + 5 張圖、課程介紹、圖文、客戶需知、注意事項。
+ * 新增課程（完整版）：主圖 + 圖庫（最多 14 張）、課程介紹、圖文、客戶需知、注意事項。
  * 需在 Supabase classes 表新增欄位：course_intro, post_content, gallery_urls (jsonb), customer_notice (jsonb), notes (text)。
  */
 export async function createCourseFull(formData: FormData): Promise<
@@ -600,7 +604,7 @@ export async function createCourseFull(formData: FormData): Promise<
     const mainUrl = await uploadOneToR2(formData, "image_main");
     if (!mainUrl) return { success: false, error: "請上傳主圖" };
 
-    const galleryKeys = ["image_1", "image_2", "image_3", "image_4", "image_5"] as const;
+    const galleryKeys = Array.from({ length: COURSE_FORM_GALLERY_SLOT_COUNT }, (_, i) => `image_${i + 1}`);
     const galleryUrls = (
       await Promise.all(galleryKeys.map((key) => uploadOneToR2(formData, key)))
     ).filter((url): url is string => !!url);
@@ -1426,7 +1430,7 @@ export async function updateCourseFull(
     const keepMain = mainUrl ?? existingRow?.image_url ?? null;
     const existingGallery: string[] = Array.isArray(existingRow?.gallery_urls) ? (existingRow.gallery_urls as string[]) : [];
 
-    const galleryKeys = ["image_1", "image_2", "image_3", "image_4"] as const;
+    const galleryKeys = Array.from({ length: COURSE_FORM_GALLERY_SLOT_COUNT }, (_, i) => `image_${i + 1}`);
     const uploadedGallery = await Promise.all(galleryKeys.map((key) => uploadOneToR2(formData, key)));
     const finalGallery = uploadedGallery.map((url, i) => url ?? existingGallery[i]).filter(Boolean) as string[];
 

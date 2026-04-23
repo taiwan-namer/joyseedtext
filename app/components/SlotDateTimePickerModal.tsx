@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight as ChevronRightArrow, X } from "lucide-react";
 import type { SlotRemaining } from "@/app/actions/bookingActions";
 
@@ -82,6 +83,11 @@ export default function SlotDateTimePickerModal({
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState<{ y: number; m: number; d: number } | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [portalMounted, setPortalMounted] = useState(false);
+
+  useEffect(() => {
+    setPortalMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -165,9 +171,10 @@ export default function SlotDateTimePickerModal({
   };
 
   if (!open) return null;
+  if (!portalMounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b p-4">
@@ -307,6 +314,7 @@ export default function SlotDateTimePickerModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

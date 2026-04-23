@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight as ChevronRightArrow, X } from "lucide-react";
@@ -394,12 +394,16 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
   const [selectedAddonIndices, setSelectedAddonIndices] = useState<number[]>([]);
   /** 彈窗內各場次剩餘名額（打開彈窗時重新取得，與訂單庫存連動） */
   const [slotRemainingList, setSlotRemainingList] = useState<SlotRemaining[]>([]);
+  /** 點右側縮圖時覆寫主圖顯示；換課程時清空 */
+  const [heroOverride, setHeroOverride] = useState<string | null>(null);
+  const mobileCarouselRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setCourse(initialCourse);
     setSelectedAddonIndices([]);
     setSelectedDateTime(null);
     setDateTimeModalOpen(false);
+    setHeroOverride(null);
   }, [initialCourse]);
 
   // 打開日期時間彈窗時取得各場次剩餘名額（連動訂單庫存，完成訂單後會變動）
@@ -453,6 +457,49 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
   }, [course]);
 
   const thumbCount = course.thumbnailCount ?? 3;
+
+  const mainImageUrl =
+    "imageUrl" in course && course.imageUrl ? String(course.imageUrl) : "";
+  const galleryList = useMemo(() => {
+    if (!("galleryUrls" in course) || !Array.isArray(course.galleryUrls)) return [];
+    return course.galleryUrls.filter(
+      (u): u is string => typeof u === "string" && String(u).trim() !== ""
+    );
+  }, [course]);
+  const displayHero = heroOverride ?? mainImageUrl;
+  const displayImageUrls = useMemo(
+    () => [mainImageUrl, ...galleryList].filter((url) => typeof url === "string" && url.trim() !== ""),
+    [mainImageUrl, galleryList]
+  );
+  const activeDisplayIndex = useMemo(() => {
+    if (displayImageUrls.length === 0) return 0;
+    const target = displayHero && displayHero.trim() ? displayHero : mainImageUrl;
+    const idx = displayImageUrls.findIndex((url) => url === target);
+    return idx >= 0 ? idx : 0;
+  }, [displayImageUrls, displayHero, mainImageUrl]);
+
+  const selectDisplayImage = (displayIndex: number) => {
+    if (displayIndex <= 0) setHeroOverride(null);
+    else setHeroOverride(displayImageUrls[displayIndex] ?? null);
+    const carouselEl = mobileCarouselRef.current;
+    if (!carouselEl) return;
+    const width = carouselEl.clientWidth;
+    carouselEl.scrollTo({ left: width * displayIndex, behavior: "smooth" });
+  };
+
+  const handleMobileCarouselScroll = () => {
+    const carouselEl = mobileCarouselRef.current;
+    if (!carouselEl) return;
+    const width = carouselEl.clientWidth;
+    if (width <= 0) return;
+    const nextIndex = Math.round(carouselEl.scrollLeft / width);
+    if (nextIndex <= 0) {
+      if (heroOverride !== null) setHeroOverride(null);
+      return;
+    }
+    const nextUrl = displayImageUrls[nextIndex] ?? null;
+    if (nextUrl && nextUrl !== heroOverride) setHeroOverride(nextUrl);
+  };
 
   const basePrice = course.salePrice != null && course.price != null && course.salePrice < course.price
     ? course.salePrice
@@ -536,29 +583,90 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
 
         <div className="md:grid md:grid-cols-12 md:gap-8 lg:gap-10">
           <article className="md:col-span-7 lg:col-span-8">
-            {/* 主圖 + 右側內文照片縮圖（DB 有 image_url / gallery_urls 則顯示） */}
-            <div className="flex gap-3 mb-8">
-              <div className="flex-1 min-w-0 aspect-[4/3] rounded-xl bg-gray-200 overflow-hidden flex items-center justify-center">
-                {"imageUrl" in course && course.imageUrl ? (
-                  <img src={course.imageUrl} alt={course.title} className="w-full h-full object-cover" />
+            {/* 手機版：主圖 carousel（可左右滑）+ 下方縮圖同步 */}
+            <div className="mb-8 md:hidden">
+              <div
+                ref={mobileCarouselRef}
+                onScroll={handleMobileCarouselScroll}
+                className="flex w-full snap-x snap-mandatory overflow-x-auto rounded-xl bg-gray-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {displayImageUrls.length > 0 ? (
+                  displayImageUrls.map((url, i) => (
+                    <div key={`${i}-${url.slice(-24)}`} className="w-full shrink-0 snap-center overflow-hidden">
+                      <img src={url} alt={course.title} className="block w-full h-auto object-contain bg-white" />
+                    </div>
+                  ))
                 ) : (
-                  <span className="text-gray-400 text-sm">課程主圖</span>
+                  <div className="flex min-h-[220px] w-full items-center justify-center">
+                    <span className="text-gray-400 text-sm">課程主圖</span>
+                  </div>
                 )}
               </div>
-              <div className="flex flex-col gap-2 w-20 shrink-0">
-                {"galleryUrls" in course &&
-                Array.isArray(course.galleryUrls) &&
-                course.galleryUrls.length > 0
-                  ? course.galleryUrls.slice(0, 4).map((url, i) => (
-                      <div key={i} className="aspect-square rounded-lg bg-gray-200 overflow-hidden">
-                        <img src={String(url)} alt="" className="w-full h-full object-cover" />
-                      </div>
+              <div className="mt-3 -mx-1 flex gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {displayImageUrls.length > 0
+                  ? displayImageUrls.map((url, i) => (
+                      <button
+                        key={`${i}-${url.slice(-24)}`}
+                        type="button"
+                        onClick={() => selectDisplayImage(i)}
+                        className={`size-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
+                          activeDisplayIndex === i ? "border-brand ring-1 ring-brand" : "border-transparent"
+                        }`}
+                        aria-pressed={activeDisplayIndex === i}
+                        aria-label={i === 0 ? "顯示課程主圖" : `顯示附圖 ${i}`}
+                      >
+                        <img src={url} alt="" className="h-full w-full object-cover" />
+                      </button>
                     ))
                   : Array.from({ length: thumbCount }).map((_, i) => (
-                      <div key={i} className="aspect-square rounded-lg bg-gray-200 flex items-center justify-center">
+                      <div
+                        key={i}
+                        className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-gray-200"
+                      >
                         <span className="text-gray-400 text-xs">圖{i + 1}</span>
                       </div>
                     ))}
+              </div>
+            </div>
+
+            {/* 桌機版：主圖 + 右側直式縮圖欄 */}
+            <div className="hidden gap-3 mb-8 items-start md:flex">
+              <div className="w-full max-w-[420px] min-w-0 aspect-square rounded-none bg-gray-200 overflow-hidden flex items-center justify-center">
+                {displayHero ? (
+                  <img src={displayHero} alt={course.title} className="w-full h-auto object-contain bg-white" />
+                ) : (
+                  <span className="py-16 text-gray-400 text-sm">課程主圖</span>
+                )}
+              </div>
+              <div className="flex w-20 shrink-0 flex-col min-h-0 self-stretch">
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-0.5 [scrollbar-gutter:stable]">
+                  {galleryList.length > 0
+                    ? galleryList.map((url, i) => {
+                        const selected = displayHero === url;
+                        return (
+                          <button
+                            key={`${i}-${url.slice(-24)}`}
+                            type="button"
+                            onClick={() => setHeroOverride(url)}
+                            aria-label={`顯示圖庫第 ${i + 1} 張`}
+                            aria-pressed={selected}
+                            className={`aspect-square w-full shrink-0 rounded-lg bg-gray-200 overflow-hidden ring-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                              selected ? "ring-2 ring-amber-500" : "ring-0"
+                            }`}
+                          >
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        );
+                      })
+                    : Array.from({ length: thumbCount }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="aspect-square w-full shrink-0 rounded-lg bg-gray-200 flex items-center justify-center"
+                        >
+                          <span className="text-gray-400 text-xs">圖{i + 1}</span>
+                        </div>
+                      ))}
+                </div>
               </div>
             </div>
 
