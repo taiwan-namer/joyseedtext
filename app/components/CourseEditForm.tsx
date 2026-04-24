@@ -286,7 +286,6 @@ function DateTimeModal({
                 visibleCount={3}
               />
             </div>
-            <p className="mt-1.5 text-center text-sm text-gray-500">目前：{selectedTime}</p>
           </div>
           <div>
             <h3 className="mb-2 text-sm font-medium text-gray-700">人數名額（單堂）</h3>
@@ -1268,9 +1267,6 @@ export default function CourseEditForm({
                       placeholder="例如：台北市士林區士商路150號"
                       disabled={isPending}
                     />
-                    <p className="mt-1.5 text-xs text-gray-500">
-                      僅需填寫地址；儲存後會依此自動產生地圖（課程頁地圖區塊顯示）。
-                    </p>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">附近大眾運輸</label>
@@ -1299,7 +1295,6 @@ export default function CourseEditForm({
                     + 新增問答
                   </button>
                 </div>
-                <p className="mb-3 text-xs text-gray-500">與全站 FAQ（後台「常見問題」）不同；此處僅屬本課程。</p>
                 <div className="space-y-3">
                   {courseFaqItems.map((item, i) => (
                     <div key={i} className="rounded-lg border border-gray-200 p-3">
