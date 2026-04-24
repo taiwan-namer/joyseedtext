@@ -166,6 +166,7 @@ export default function CoursePostPage() {
           <article className="min-w-0 w-full lg:col-span-7 lg:justify-self-start">
             {/* 內文頁不顯示主圖、課程簡介與「課程內文」標題；左欄直接顯示內容本體 */}
             <section className="border-t border-gray-100 pt-8 lg:border-t-0 lg:pt-0">
+              <div className="mx-auto w-full max-w-[860px]">
               {isCourseDetail(course) ? (
                 (() => {
                   const parts = course.articleParagraphs
@@ -175,7 +176,7 @@ export default function CoursePostPage() {
                     return <p className="text-gray-500">尚無內文。</p>;
                   }
                   return (
-                    <div className="space-y-8 text-base leading-relaxed text-gray-700">
+                    <div className="prose prose-gray max-w-none space-y-8 text-base leading-relaxed text-gray-700">
                       {parts.map((cleaned, i) => (
                         <p key={i} className={i === 0 ? "first:indent-8" : ""}>
                           {cleaned}
@@ -186,7 +187,7 @@ export default function CoursePostPage() {
                 })()
               ) : (
                 <div
-                  className="prose prose-gray max-w-[78ch] text-base leading-relaxed"
+                  className="prose prose-gray w-full max-w-none text-base leading-relaxed text-gray-700"
                   dangerouslySetInnerHTML={{
                     __html: replaceImagePlaceholders(
                       (() => {
@@ -205,6 +206,7 @@ export default function CoursePostPage() {
                   }}
                 />
               )}
+              </div>
             </section>
           </article>
 
