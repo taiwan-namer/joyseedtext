@@ -868,8 +868,8 @@ export default function CourseEditForm({
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <form id="course-edit-form" onSubmit={handleSubmit} className="space-y-6">
+      <div className="mx-auto min-w-0 max-w-5xl overflow-x-clip px-4 py-6">
+        <form id="course-edit-form" onSubmit={handleSubmit} className="min-w-0 space-y-6">
           {!showHqCourseAdminUi && courseId && initialData ? (
             <>
               <input type="hidden" name="store_category" value={initialData.store_category ?? ""} />
@@ -897,11 +897,11 @@ export default function CourseEditForm({
             </div>
           )}
 
-          <div className="md:grid md:grid-cols-12 md:gap-8 lg:gap-10">
-            <article className="md:col-span-7 lg:col-span-8 space-y-6">
+          <div className="min-w-0 md:grid md:grid-cols-12 md:gap-8 lg:gap-10">
+            <article className="min-w-0 w-full max-w-full space-y-6 md:col-span-7 lg:col-span-8">
               {/* 主圖在左、縮圖在右；手機橫滑、桌機直向捲動＋按鈕；❌ 僅釋放 blob 預覽 */}
-              <div className="flex flex-col gap-3 md:flex-row md:items-start">
-                <div className="flex-1 min-w-0">
+              <div className="flex w-full min-w-0 max-w-full flex-col gap-3 md:flex-row md:items-start">
+                <div className="min-w-0 w-full max-w-full flex-1 md:min-w-0">
                   {!isEdit ? (
                     <p className="mb-1 text-xs text-gray-500">
                       課程主圖（建議尺寸 {COURSE_PAGE_HERO_IMAGE_MAX_PX} × {COURSE_PAGE_HERO_IMAGE_MAX_PX} px，1:1，與課程頁主圖顯示一致）
@@ -915,7 +915,7 @@ export default function CourseEditForm({
                     )}
                   </div>
                 </div>
-                <div className="flex min-w-0 flex-col self-start md:w-[5.25rem]">
+                <div className="flex w-full min-w-0 max-w-full flex-col self-stretch overflow-x-hidden md:w-[5.25rem] md:max-w-none md:shrink-0 md:overflow-x-visible md:self-start">
                   <div className="mb-1 hidden shrink-0 items-center justify-center md:flex">
                     <button
                       type="button"
@@ -929,7 +929,7 @@ export default function CourseEditForm({
                   </div>
                   <div
                     ref={thumbScrollRef}
-                    className="flex max-h-[6.5rem] flex-row gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-0.5 pb-1 [scrollbar-gutter:stable] snap-x snap-mandatory touch-pan-x md:max-h-[min(33rem,calc(100vh-14rem))] md:flex-1 md:min-h-0 md:flex-col md:overflow-y-auto md:overflow-x-hidden md:snap-y md:snap-mandatory md:touch-pan-y md:pr-0.5"
+                    className="flex w-full min-w-0 max-w-full max-h-[6.5rem] flex-row gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-0.5 pb-1 [scrollbar-gutter:stable] snap-x snap-mandatory touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:max-h-[min(33rem,calc(100vh-14rem))] md:w-full md:flex-1 md:min-h-0 md:flex-col md:overflow-y-auto md:overflow-x-hidden md:snap-y md:snap-mandatory md:touch-pan-y md:pr-0.5"
                   >
                     {COURSE_IMAGE_SLOT_LABELS.map((label, i) => (
                       <div
@@ -1345,7 +1345,7 @@ export default function CourseEditForm({
             </article>
 
             {/* 右欄：反白，選項 0-3、標題、選擇時間及人數 */}
-            <aside className="mt-8 md:mt-0 md:col-span-5 lg:col-span-4">
+            <aside className="min-w-0 w-full max-w-full mt-8 md:mt-0 md:col-span-5 lg:col-span-4">
               <div className="md:sticky md:top-24 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
                   <label className="mb-2 block text-sm font-medium text-gray-700">適齡區間（歲）</label>
@@ -1719,7 +1719,7 @@ export default function CourseEditForm({
             </aside>
 
             {/* 手機版：主內容與右欄（含適齡等）之後，儲存鈕置於最底；桌機與主欄寬同列對齊 */}
-            <div className="mt-2 flex w-full max-w-full justify-end border-t border-gray-200 pt-4 sm:pt-4 md:col-span-7 md:mt-0 md:border-0 md:pt-0 lg:col-span-8">
+            <div className="mt-2 flex w-full min-w-0 max-w-full justify-end border-t border-gray-200 pt-4 sm:pt-4 md:col-span-7 md:mt-0 md:border-0 md:pt-0 lg:col-span-8">
               <button
                 type="submit"
                 disabled={isPending}
