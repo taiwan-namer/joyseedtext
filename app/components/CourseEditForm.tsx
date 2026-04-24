@@ -39,12 +39,16 @@ import {
   寵物攜帶規定選項,
   未達人數處置選項,
 } from "@/lib/courseFormOptions";
+import { CITY_REGIONS, dedupeCategoryList } from "@/lib/constants";
 import {
-  CITY_REGIONS,
-  COURSE_FORM_GALLERY_SLOT_COUNT,
-  COURSE_FORM_IMAGE_SLOT_COUNT,
-  dedupeCategoryList,
-} from "@/lib/constants";
+  COURSE_GALLERY_MAX,
+  COURSE_IMAGE_SLOT_LABELS,
+  COURSE_IMAGE_SLOT_TOTAL,
+  COURSE_INLINE_EDITOR_IMG_CLASS,
+  COURSE_SLOT_IMAGE_DATA_ATTR,
+  COURSE_SLOT_IMAGE_DATA_ATTR_LEGACY,
+  COURSE_SLOT_IMAGE_DISPLAY_CLASS,
+} from "@/lib/courseImageSlots";
 import {
   parseInitialAgeFromSidebar,
   buildSidebarOptionFromForm,
@@ -65,12 +69,6 @@ const WHEEL_ITEM_HEIGHT = 44;
 
 /** 側欄縮圖同時可見約數（其餘捲動；不影響上傳格數上限） */
 const COURSE_THUMB_GAP_PX = 8;
-const COURSE_IMAGE_SLOT_TOTAL = COURSE_FORM_IMAGE_SLOT_COUNT;
-
-/** 編輯區內課程槽位圖 `img` 標記，與 serialize／同步 src 共用 */
-const DATA_COURSE_IMAGE_SLOT = "data-course-image-slot";
-/** 與內文頁預覽圖風格一致（供 insertHTML） */
-const COURSE_POST_BODY_IMG_CLASS = "max-w-full h-auto rounded-lg border border-gray-200 block mx-auto";
 
 function revokePreviewIfBlob(preview: string) {
   if (preview.startsWith("blob:")) {
@@ -325,11 +323,11 @@ type ImageSlot = { file: File | null; preview: string };
 const emptySlot = (): ImageSlot => ({ file: null, preview: "" });
 
 function initImageSlots(d?: CourseForEdit | null): ImageSlot[] {
-  const slots = Array(COURSE_FORM_IMAGE_SLOT_COUNT).fill(null).map(emptySlot);
+  const slots = Array(COURSE_IMAGE_SLOT_TOTAL).fill(null).map(emptySlot);
   if (!d) return slots;
   if (d.image_url) slots[0] = { file: null, preview: d.image_url };
   const gallery = d.gallery_urls ?? [];
-  for (let i = 0; i < COURSE_FORM_GALLERY_SLOT_COUNT && i < gallery.length; i++) {
+  for (let i = 0; i < COURSE_GALLERY_MAX && i < gallery.length; i++) {
     slots[i + 1] = { file: null, preview: gallery[i] };
   }
   return slots;
@@ -352,7 +350,7 @@ function expandCourseImagePlaceholdersInHtml(html: string, slots: ImageSlot[]): 
     const url = slots[n - 1]?.preview ?? "";
     if (!isValidImageUrl(url)) continue;
     const safe = escapeHtmlAttr(url);
-    const block = `<p class="my-3"><img src="${safe}" alt="" ${DATA_COURSE_IMAGE_SLOT}="${n}" class="${COURSE_POST_BODY_IMG_CLASS}" draggable="false" contenteditable="false" /></p>`;
+    const block = `<p class="m-0 min-h-0"><img src="${safe}" alt="" ${COURSE_SLOT_IMAGE_DATA_ATTR}="${n}" class="${COURSE_SLOT_IMAGE_DISPLAY_CLASS}" draggable="false" contenteditable="false" /></p>`;
     out = out.split(placeholder).join(block);
   }
   return out;
@@ -361,9 +359,9 @@ function expandCourseImagePlaceholdersInHtml(html: string, slots: ImageSlot[]): 
 /** 編輯區 DOM → 寫入資料庫用 HTML（課程槽位圖還原為 `[圖片n]`） */
 function serializePostContentFromEditor(root: HTMLElement): string {
   const clone = root.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll(`img[${DATA_COURSE_IMAGE_SLOT}]`).forEach((node) => {
+  clone.querySelectorAll("img").forEach((node) => {
     const img = node as HTMLImageElement;
-    const raw = img.getAttribute(DATA_COURSE_IMAGE_SLOT);
+    const raw = img.getAttribute(COURSE_SLOT_IMAGE_DATA_ATTR) ?? img.getAttribute(COURSE_SLOT_IMAGE_DATA_ATTR_LEGACY);
     const n = raw ? parseInt(raw, 10) : NaN;
     if (!Number.isInteger(n) || n < 1 || n > COURSE_IMAGE_SLOT_TOTAL) return;
     img.replaceWith(document.createTextNode(`[圖片${n}]`));
@@ -454,11 +452,6 @@ export default function CourseEditForm({
     if (cur && !list.includes(cur)) return [...list, cur];
     return list;
   }, [remoteGlobalCategories, initialData?.marketplace_category]);
-
-  const courseImageSlotLabels = useMemo(
-    () => ["主圖", ...Array.from({ length: COURSE_FORM_GALLERY_SLOT_COUNT }, (_, j) => `圖${j + 1}`)],
-    []
-  );
 
   /** 由主圖起連續已有預覽／網址的格數；下拉「圖片1～n」僅顯示到此（與上方上傳順序一致） */
   const courseImageInsertMax = useMemo(() => {
@@ -608,7 +601,7 @@ export default function CourseEditForm({
   };
 
   const setMainFromThumb = (thumbIndex: number) => {
-    if (thumbIndex < 1 || thumbIndex > COURSE_FORM_GALLERY_SLOT_COUNT) return;
+    if (thumbIndex < 1 || thumbIndex > COURSE_GALLERY_MAX) return;
     setImageSlots((prev) => {
       const next = [...prev];
       [next[0], next[thumbIndex]] = [next[thumbIndex], next[0]];
@@ -634,9 +627,9 @@ export default function CourseEditForm({
   useEffect(() => {
     const root = editorRef.current;
     if (!root) return;
-    root.querySelectorAll(`img[${DATA_COURSE_IMAGE_SLOT}]`).forEach((node) => {
+    root.querySelectorAll("img").forEach((node) => {
       const img = node as HTMLImageElement;
-      const raw = img.getAttribute(DATA_COURSE_IMAGE_SLOT);
+      const raw = img.getAttribute(COURSE_SLOT_IMAGE_DATA_ATTR) ?? img.getAttribute(COURSE_SLOT_IMAGE_DATA_ATTR_LEGACY);
       const n = raw ? parseInt(raw, 10) : NaN;
       if (!Number.isInteger(n) || n < 1 || n > COURSE_IMAGE_SLOT_TOTAL) return;
       const url = imageSlots[n - 1]?.preview ?? "";
@@ -703,7 +696,7 @@ export default function CourseEditForm({
       return;
     }
     if (imageSlots[0].file) formData.set("image_main", imageSlots[0].file as File);
-    for (let i = 1; i <= COURSE_FORM_GALLERY_SLOT_COUNT; i++) {
+    for (let i = 1; i <= COURSE_GALLERY_MAX; i++) {
       if (imageSlots[i].file) formData.set(`image_${i}`, imageSlots[i].file as File);
     }
     const postHtml = editorRef.current ? serializePostContentFromEditor(editorRef.current) : "";
@@ -748,7 +741,7 @@ export default function CourseEditForm({
       if (result.success) {
         setSuccess(result.message ?? (isEdit ? "課程已更新" : "課程已新增"));
         if (!isEdit) {
-          setImageSlots(Array(COURSE_FORM_IMAGE_SLOT_COUNT).fill(null).map(emptySlot));
+          setImageSlots(Array(COURSE_IMAGE_SLOT_TOTAL).fill(null).map(emptySlot));
           setScheduledSlots([]);
           setAddonItems([]);
           setCourseFaqItems([{ question: "", answer: "" }]);
@@ -789,11 +782,11 @@ export default function CourseEditForm({
     const url = slot?.preview ?? "";
     if (!isValidImageUrl(url)) return;
     const safe = escapeHtmlAttr(url);
-    const html = `<p class="my-3"><img src="${safe}" alt="" ${DATA_COURSE_IMAGE_SLOT}="${num}" class="${COURSE_POST_BODY_IMG_CLASS}" draggable="false" contenteditable="false" /></p>`;
+    const html = `<p class="m-0 min-h-0"><img src="${safe}" alt="" ${COURSE_SLOT_IMAGE_DATA_ATTR}="${num}" class="${COURSE_SLOT_IMAGE_DISPLAY_CLASS}" draggable="false" contenteditable="false" /></p>`;
     document.execCommand("insertHTML", false, html);
     syncPostContentHiddenFromEditor();
     requestAnimationFrame(() => {
-      const imgs = el.querySelectorAll(`img[${DATA_COURSE_IMAGE_SLOT}="${num}"]`);
+      const imgs = el.querySelectorAll(`img[${COURSE_SLOT_IMAGE_DATA_ATTR}="${num}"]`);
       const last = imgs[imgs.length - 1] as HTMLElement | undefined;
       last?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
@@ -822,7 +815,7 @@ export default function CourseEditForm({
     if (!el) return;
     const id = crypto.randomUUID();
     const safe = escapeHtmlAttr(result.url);
-    const html = `<p class="my-3"><img src="${safe}" alt="" data-post-inline-id="${id}" class="${COURSE_POST_BODY_IMG_CLASS}" draggable="false" contenteditable="false" /></p>`;
+    const html = `<p class="m-0 min-h-0"><img src="${safe}" alt="" data-post-inline-id="${id}" class="${COURSE_INLINE_EDITOR_IMG_CLASS}" draggable="false" contenteditable="false" /></p>`;
     document.execCommand("insertHTML", false, html);
     syncPostContentHiddenFromEditor();
     el.focus();
@@ -900,9 +893,9 @@ export default function CourseEditForm({
               <div className="flex flex-col gap-3 md:flex-row md:items-start">
                 <div className="flex-1 min-w-0">
                   {!isEdit ? (
-                    <p className="mb-1 text-xs text-gray-500">課程主圖（建議尺寸 1200 x 900，4:3）</p>
+                    <p className="mb-1 text-xs text-gray-500">課程主圖（建議尺寸 1200 x 1200，1:1）</p>
                   ) : null}
-                  <div className="aspect-[4/3] rounded-xl bg-gray-200 overflow-hidden flex items-center justify-center border border-gray-300">
+                  <div className="aspect-square rounded-xl bg-gray-200 overflow-hidden flex items-center justify-center border border-gray-300">
                     {isValidImageUrl(imageSlots[0].preview) ? (
                       <img src={imageSlots[0].preview} alt="主圖" className="w-full h-full object-cover" />
                     ) : (
@@ -926,7 +919,7 @@ export default function CourseEditForm({
                     ref={thumbScrollRef}
                     className="flex max-h-[6.5rem] flex-row gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-0.5 pb-1 [scrollbar-gutter:stable] snap-x snap-mandatory touch-pan-x md:max-h-[min(33rem,calc(100vh-14rem))] md:flex-1 md:min-h-0 md:flex-col md:overflow-y-auto md:overflow-x-hidden md:snap-y md:snap-mandatory md:touch-pan-y md:pr-0.5"
                   >
-                    {courseImageSlotLabels.map((label, i) => (
+                    {COURSE_IMAGE_SLOT_LABELS.map((label, i) => (
                       <div
                         key={i}
                         data-thumb-slot
@@ -1012,32 +1005,56 @@ export default function CourseEditForm({
                 </button>
               </div>
 
-              {/* 圖文編輯：工具列（字體大小、插入課程圖片下拉＋確定）+ 編輯區 */}
-              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">圖文編輯</h3>
-                <div className="mb-2 space-y-2 border-b border-gray-200 pb-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select className="rounded border border-gray-300 px-2 py-1 text-sm" onFocus={() => editorRef.current?.focus()} onChange={(e) => applyFormat("fontSize", e.target.value)} disabled={isPending}>
+              {/* 圖文編輯：工具列 + 編輯區；緊湊單一區塊、全寬控制項、響應式排列 */}
+              <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+                <h3 className="mb-2 text-sm font-semibold text-gray-700">圖文編輯</h3>
+                <div className="mb-3 space-y-2.5 rounded-lg border border-gray-100 bg-gray-50/80 p-2 sm:p-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <span className="w-full text-[11px] font-medium text-gray-500 sm:hidden">文字</span>
+                    <select
+                      className="h-8 min-w-0 flex-1 basis-[5.5rem] rounded-md border border-gray-300 bg-white px-2 text-sm sm:flex-none sm:basis-auto"
+                      onFocus={() => editorRef.current?.focus()}
+                      onChange={(e) => applyFormat("fontSize", e.target.value)}
+                      disabled={isPending}
+                    >
                       <option value="1">字體小</option>
                       <option value="2">字體中</option>
                       <option value="3">字體大</option>
                       <option value="4">字體特大</option>
                     </select>
-                    <button type="button" className="rounded border border-gray-300 px-2 py-1 text-sm hover:bg-gray-100" onClick={() => applyFormat("bold")} disabled={isPending}>粗體</button>
-                    <button type="button" className="rounded border border-gray-300 px-2 py-1 text-sm hover:bg-gray-100" onClick={() => applyFormat("italic")} disabled={isPending}>斜體</button>
-                    <span className="text-gray-300">|</span>
-                    <div className="flex items-center gap-1.5" onMouseDown={(e) => e.preventDefault()}>
-                      <span className="text-sm text-gray-600">字體顏色</span>
+                    <button
+                      type="button"
+                      className="h-8 rounded-md border border-gray-300 bg-white px-2.5 text-sm hover:bg-gray-100 disabled:opacity-50"
+                      onClick={() => applyFormat("bold")}
+                      disabled={isPending}
+                    >
+                      粗體
+                    </button>
+                    <button
+                      type="button"
+                      className="h-8 rounded-md border border-gray-300 bg-white px-2.5 text-sm hover:bg-gray-100 disabled:opacity-50"
+                      onClick={() => applyFormat("italic")}
+                      disabled={isPending}
+                    >
+                      斜體
+                    </button>
+                    <span className="hidden text-gray-200 sm:inline" aria-hidden>
+                      |
+                    </span>
+                    <div
+                      className="flex h-8 min-w-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-1.5"
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      <span className="hidden text-xs text-gray-600 sm:inline">顏色</span>
                       <input
                         type="color"
-                        className="h-7 w-8 cursor-pointer rounded border border-gray-300 p-0.5"
+                        className="h-6 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
                         defaultValue="#000000"
                         onChange={(e) => applyFormat("foreColor", e.target.value)}
                         disabled={isPending}
+                        title="字體顏色"
                       />
                     </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
                     <input
                       ref={editorImageInputRef}
                       type="file"
@@ -1048,69 +1065,70 @@ export default function CourseEditForm({
                     />
                     <button
                       type="button"
-                      className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                      className="h-8 flex-1 min-w-0 rounded-md border border-amber-300 bg-amber-50 px-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 sm:flex-none"
                       onClick={() => editorImageInputRef.current?.click()}
                       disabled={isPending || editorImageUploading}
                     >
                       {editorImageUploading ? "上傳中…" : "上傳圖片"}
                     </button>
-                    <div className="flex w-full min-w-0 flex-col gap-2">
-                      <div className="flex min-w-0 flex-wrap items-end gap-2">
-                        <div className="flex min-w-0 flex-col gap-0.5">
-                          <label htmlFor="insert-course-image-slot" className="text-xs font-medium text-gray-600">
-                            插入課程圖片（依上方已上傳張數）
-                          </label>
-                          <select
-                            id="insert-course-image-slot"
-                            className="max-w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm sm:min-w-[12rem]"
-                            value={courseImageInsertMax >= 1 ? pendingInsertImageNum : ""}
-                            onChange={(e) => setPendingInsertImageNum(Number(e.target.value))}
-                            disabled={isPending || editorImageUploading || courseImageInsertMax < 1}
-                          >
-                            {courseImageInsertMax < 1 ? (
-                              <option value="">請先由主圖起連續上傳課程圖片</option>
-                            ) : (
-                              Array.from({ length: courseImageInsertMax }, (_, i) => {
-                                const num = i + 1;
-                                const slotLabel = courseImageSlotLabels[i];
-                                return (
-                                  <option key={num} value={num}>
-                                    圖片{num}（{slotLabel}）
-                                  </option>
-                                );
-                              })
-                            )}
-                          </select>
-                        </div>
+                  </div>
+
+                  <div className="border-t border-gray-200/80 pt-2.5 sm:border-t-0 sm:pt-0">
+                    <div className="flex flex-col gap-2 sm:gap-2 md:flex-row md:items-end md:gap-2">
+                      <div className="min-w-0 flex-1 md:max-w-md lg:max-w-lg">
+                        <label htmlFor="insert-course-image-slot" className="mb-0.5 block text-xs text-gray-600 sm:mb-0 sm:sr-only">
+                          插入課程圖片
+                        </label>
+                        <select
+                          id="insert-course-image-slot"
+                          className="h-9 w-full rounded-md border border-gray-300 bg-white px-2 text-sm"
+                          value={courseImageInsertMax >= 1 ? pendingInsertImageNum : ""}
+                          onChange={(e) => setPendingInsertImageNum(Number(e.target.value))}
+                          disabled={isPending || editorImageUploading || courseImageInsertMax < 1}
+                        >
+                          {courseImageInsertMax < 1 ? (
+                            <option value="">請先上傳主圖與連續附圖</option>
+                          ) : (
+                            Array.from({ length: courseImageInsertMax }, (_, i) => {
+                              const num = i + 1;
+                                const slotLabel = COURSE_IMAGE_SLOT_LABELS[i];
+                              return (
+                                <option key={num} value={num}>
+                                  圖片{num}（{slotLabel}）
+                                </option>
+                              );
+                            })
+                          )}
+                        </select>
+                      </div>
+                      <input
+                        ref={postContentInlineInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          void insertPostContentInlineImage(e.target.files?.[0]);
+                          e.target.value = "";
+                        }}
+                        disabled={isPending || editorImageUploading}
+                      />
+                      <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:gap-2">
                         <button
                           type="button"
                           onClick={commitInsertCourseImage}
                           disabled={isPending || editorImageUploading || courseImageInsertMax < 1}
-                          className="rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+                          className="h-9 rounded-lg bg-amber-500 px-2.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 sm:min-w-[5.5rem] sm:px-3"
                         >
                           確定插入
                         </button>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
-                        <input
-                          ref={postContentInlineInputRef}
-                          type="file"
-                          accept="image/jpeg,image/png,image/gif,image/webp"
-                          className="hidden"
-                          onChange={(e) => {
-                            void insertPostContentInlineImage(e.target.files?.[0]);
-                            e.target.value = "";
-                          }}
-                          disabled={isPending || editorImageUploading}
-                        />
                         <button
                           type="button"
                           onClick={() => postContentInlineInputRef.current?.click()}
                           disabled={isPending || editorImageUploading}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60"
+                          className="inline-flex h-9 min-w-0 items-center justify-center gap-1 rounded-lg border border-gray-300 bg-white px-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60 sm:gap-1.5 sm:px-3 sm:text-sm"
                         >
-                          <ImagePlus className="h-4 w-4 shrink-0" aria-hidden />
-                          插入其他圖片
+                          <ImagePlus className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
+                          <span className="min-w-0 text-center leading-tight">插入其他圖片</span>
                         </button>
                       </div>
                     </div>

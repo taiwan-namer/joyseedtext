@@ -11,7 +11,12 @@ import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../../course-data";
 import { useCourseSlugParam } from "../../useCourseSlugParam";
 import { withCourseFetchTimeout } from "@/lib/courseClientFetch";
-import { COURSE_FORM_GALLERY_SLOT_COUNT, COURSE_FORM_IMAGE_SLOT_COUNT } from "@/lib/constants";
+import {
+  COURSE_GALLERY_MAX,
+  COURSE_IMAGE_SLOT_TOTAL,
+  COURSE_SLOT_IMAGE_DATA_ATTR,
+  COURSE_SLOT_IMAGE_DISPLAY_CLASS,
+} from "@/lib/courseImageSlots";
 
 type CourseForDisplay = CourseForPublic | CourseDetail;
 
@@ -69,14 +74,14 @@ function replaceImagePlaceholders(
   mainImageUrl: string | null | undefined,
   galleryUrls: string[] | null | undefined
 ): string {
-  const gallery = (galleryUrls ?? []).slice(0, COURSE_FORM_GALLERY_SLOT_COUNT);
+  const gallery = (galleryUrls ?? []).slice(0, COURSE_GALLERY_MAX);
   const urls = [mainImageUrl ?? "", ...gallery];
   let out = html;
-  for (let i = 1; i <= COURSE_FORM_IMAGE_SLOT_COUNT; i++) {
+  for (let i = 1; i <= COURSE_IMAGE_SLOT_TOTAL; i++) {
     const placeholder = `[圖片${i}]`;
     const url = urls[i - 1] ?? "";
     const imgTag = url
-      ? `<img src="${url.replace(/"/g, "&quot;")}" alt="圖${i}" class="my-4 rounded-xl w-full max-w-2xl mx-auto object-cover" loading="lazy" />`
+      ? `<img src="${url.replace(/"/g, "&quot;")}" alt="圖${i}" class="${COURSE_SLOT_IMAGE_DISPLAY_CLASS}" ${COURSE_SLOT_IMAGE_DATA_ATTR}="${i}" loading="lazy" />`
       : `<span class="inline-block py-2 px-3 rounded bg-gray-100 text-gray-500 text-sm">[圖${i}]</span>`;
     out = out.split(placeholder).join(imgTag);
   }
@@ -187,7 +192,7 @@ export default function CoursePostPage() {
                 })()
               ) : (
                 <div
-                  className="prose prose-gray w-full max-w-none text-base leading-relaxed text-gray-700"
+                  className="prose prose-gray w-full max-w-none text-base leading-relaxed text-gray-700 [&_img]:!max-w-[min(100%,1200px)] [&_img]:!w-full [&_img]:!h-auto"
                   dangerouslySetInnerHTML={{
                     __html: replaceImagePlaceholders(
                       (() => {
@@ -210,7 +215,7 @@ export default function CoursePostPage() {
             </section>
           </article>
 
-          <aside className="lg:col-span-5 lg:-translate-x-[60px]">
+          <aside className="lg:col-span-5">
             <div className="lg:sticky lg:top-24 space-y-6">
               <CoursePostBookingPanel
                 course={course}

@@ -95,7 +95,7 @@ export default function CourseIntroPostPage() {
           )}
           {post.post_content && (
             <div
-              className="prose prose-gray max-w-none text-gray-700"
+              className="prose prose-gray max-w-none text-gray-700 [&_img]:!max-w-[min(100%,1200px)] [&_img]:!w-full [&_img]:!h-auto"
               dangerouslySetInnerHTML={{ __html: post.post_content }}
             />
           )}

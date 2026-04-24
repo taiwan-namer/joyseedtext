@@ -13,6 +13,7 @@ import { HeaderMember } from "@/app/components/HeaderMember";
 import type { CustomerNotice } from "../course-data";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../course-data";
+import { COURSE_SLOT_IMAGE_FRAME_CLASS, COURSE_SLOT_IMAGE_SIZE_CLASS } from "@/lib/courseImageSlots";
 // 取得某年某月日曆格（含前面空白格），週以日為首
 function getCalendarDays(year: number, month: number): (number | null)[] {
   const first = new Date(year, month - 1, 1);
@@ -588,16 +589,25 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
               <div
                 ref={mobileCarouselRef}
                 onScroll={handleMobileCarouselScroll}
-                className="flex w-full snap-x snap-mandatory overflow-x-auto rounded-xl bg-gray-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className={`mx-auto flex snap-x snap-mandatory items-stretch overflow-x-auto rounded-xl bg-gray-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${COURSE_SLOT_IMAGE_SIZE_CLASS}`}
               >
                 {displayImageUrls.length > 0 ? (
                   displayImageUrls.map((url, i) => (
-                    <div key={`${i}-${url.slice(-24)}`} className="w-full shrink-0 snap-center overflow-hidden">
-                      <img src={url} alt={course.title} className="block w-full h-auto object-contain bg-white" />
+                    <div
+                      key={`${i}-${url.slice(-24)}`}
+                      className="relative h-full min-h-0 w-full min-w-0 shrink-0 snap-center [flex:0_0_100%] self-stretch overflow-hidden"
+                    >
+                      <img
+                        src={url}
+                        alt={course.title}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        sizes="100vw"
+                        decoding="async"
+                      />
                     </div>
                   ))
                 ) : (
-                  <div className="flex min-h-[220px] w-full items-center justify-center">
+                  <div className="flex h-full w-full min-w-0 shrink-0 [flex:0_0_100%] items-center justify-center self-stretch">
                     <span className="text-gray-400 text-sm">課程主圖</span>
                   </div>
                 )}
@@ -609,13 +619,13 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
                         key={`${i}-${url.slice(-24)}`}
                         type="button"
                         onClick={() => selectDisplayImage(i)}
-                        className={`size-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
+                        className={`relative size-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
                           activeDisplayIndex === i ? "border-brand ring-1 ring-brand" : "border-transparent"
                         }`}
                         aria-pressed={activeDisplayIndex === i}
                         aria-label={i === 0 ? "顯示課程主圖" : `顯示附圖 ${i}`}
                       >
-                        <img src={url} alt="" className="h-full w-full object-cover" />
+                        <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" decoding="async" />
                       </button>
                     ))
                   : Array.from({ length: thumbCount }).map((_, i) => (
@@ -629,44 +639,50 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
               </div>
             </div>
 
-            {/* 桌機版：主圖 + 右側直式縮圖欄 */}
-            <div className="hidden gap-3 mb-8 items-start md:flex">
-              <div className="w-full max-w-[420px] min-w-0 aspect-square rounded-none bg-gray-200 overflow-hidden flex items-center justify-center">
+            {/* 桌機版：全寬正方形主圖（與 READ MORE 同寬）+ 下方橫向縮圖 */}
+            <div className="mb-8 hidden md:block">
+              <div className={COURSE_SLOT_IMAGE_FRAME_CLASS}>
                 {displayHero ? (
-                  <img src={displayHero} alt={course.title} className="w-full h-auto object-contain bg-white" />
+                  <img
+                    src={displayHero}
+                    alt={course.title}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    sizes="(min-width: 768px) 50vw, 100vw"
+                    decoding="async"
+                  />
                 ) : (
-                  <span className="py-16 text-gray-400 text-sm">課程主圖</span>
+                  <div className="flex h-full w-full items-center justify-center">
+                    <span className="text-gray-400 text-sm">課程主圖</span>
+                  </div>
                 )}
               </div>
-              <div className="flex w-20 shrink-0 flex-col min-h-0 self-stretch">
-                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-0.5 [scrollbar-gutter:stable]">
-                  {galleryList.length > 0
-                    ? galleryList.map((url, i) => {
-                        const selected = displayHero === url;
-                        return (
-                          <button
-                            key={`${i}-${url.slice(-24)}`}
-                            type="button"
-                            onClick={() => setHeroOverride(url)}
-                            aria-label={`顯示圖庫第 ${i + 1} 張`}
-                            aria-pressed={selected}
-                            className={`aspect-square w-full shrink-0 rounded-lg bg-gray-200 overflow-hidden ring-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                              selected ? "ring-2 ring-amber-500" : "ring-0"
-                            }`}
-                          >
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                          </button>
-                        );
-                      })
-                    : Array.from({ length: thumbCount }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="aspect-square w-full shrink-0 rounded-lg bg-gray-200 flex items-center justify-center"
+              <div className="mt-3 -mx-1 flex gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {displayImageUrls.length > 0
+                  ? displayImageUrls.map((url, i) => {
+                      const selected = activeDisplayIndex === i;
+                      return (
+                        <button
+                          key={`dt-${i}-${url.slice(-24)}`}
+                          type="button"
+                          onClick={() => selectDisplayImage(i)}
+                          className={`relative size-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
+                            selected ? "border-brand ring-1 ring-brand" : "border-transparent"
+                          }`}
+                          aria-pressed={selected}
+                          aria-label={i === 0 ? "顯示課程主圖" : `顯示附圖 ${i}`}
                         >
-                          <span className="text-gray-400 text-xs">圖{i + 1}</span>
-                        </div>
-                      ))}
-                </div>
+                          <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" decoding="async" />
+                        </button>
+                      );
+                    })
+                  : Array.from({ length: thumbCount }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-gray-200"
+                      >
+                        <span className="text-gray-400 text-xs">圖{i + 1}</span>
+                      </div>
+                    ))}
               </div>
             </div>
 
