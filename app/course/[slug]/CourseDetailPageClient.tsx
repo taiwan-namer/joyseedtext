@@ -612,14 +612,14 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
                   </div>
                 )}
               </div>
-              <div className="mt-3 -mx-1 flex gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="mx-auto mt-3 flex w-full max-w-[13rem] snap-x snap-mandatory gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {displayImageUrls.length > 0
                   ? displayImageUrls.map((url, i) => (
                       <button
                         key={`${i}-${url.slice(-24)}`}
                         type="button"
                         onClick={() => selectDisplayImage(i)}
-                        className={`relative size-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
+                        className={`relative size-16 shrink-0 snap-start overflow-hidden rounded-lg border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
                           activeDisplayIndex === i ? "border-brand ring-1 ring-brand" : "border-transparent"
                         }`}
                         aria-pressed={activeDisplayIndex === i}
@@ -631,7 +631,7 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
                   : Array.from({ length: thumbCount }).map((_, i) => (
                       <div
                         key={i}
-                        className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-gray-200"
+                        className="flex size-16 shrink-0 snap-start items-center justify-center rounded-lg bg-gray-200"
                       >
                         <span className="text-gray-400 text-xs">圖{i + 1}</span>
                       </div>

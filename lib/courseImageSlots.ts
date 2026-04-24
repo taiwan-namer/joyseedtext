@@ -58,7 +58,13 @@ export const COURSE_SLOT_IMAGE_DATA_ATTR = "data-course-slot-image";
 export const COURSE_SLOT_IMAGE_DATA_ATTR_LEGACY = "data-course-image-slot";
 
 /**
- * 課程「頁面」主圖／輪播槽位：1:1、邊長上限 900px、以 cover 裁切（內文圖不套用此常數；靜態字串供 Tailwind 掃到）
+ * 課程「頁面」主圖／輪播之顯示邊長上限（px）；須與 {@link COURSE_SLOT_IMAGE_SIZE_CLASS} 內的 `min(100%,…px)` 一致。
+ * 表單「建議尺寸」文案以此為準，勿硬編成其他數字。
+ */
+export const COURSE_PAGE_HERO_IMAGE_MAX_PX = 900 as const;
+
+/**
+ * 課程「頁面」主圖／輪播槽位：1:1、邊長上限 {@link COURSE_PAGE_HERO_IMAGE_MAX_PX}、以 cover 裁切（內文圖不套用此常數；靜態字串供 Tailwind 掃到）
  */
 export const COURSE_SLOT_IMAGE_SIZE_CLASS = "w-full max-w-[min(100%,900px)] aspect-square";
 

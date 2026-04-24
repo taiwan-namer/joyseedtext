@@ -13,6 +13,8 @@ function markPortraitImage(img: HTMLImageElement) {
   if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
   const isPortrait = img.naturalHeight > img.naturalWidth;
   img.classList.toggle(PORTRAIT_CLASS, isPortrait);
+  img.style.aspectRatio = isPortrait ? "1 / 1" : "";
+  img.style.objectFit = isPortrait ? "cover" : "";
 }
 
 /**

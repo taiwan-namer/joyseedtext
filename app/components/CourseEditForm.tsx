@@ -45,6 +45,7 @@ import {
   COURSE_IMAGE_SLOT_LABELS,
   COURSE_IMAGE_SLOT_TOTAL,
   COURSE_INLINE_EDITOR_IMG_CLASS,
+  COURSE_PAGE_HERO_IMAGE_MAX_PX,
   COURSE_POST_BODY_COLUMN_MAX_W_CLASS,
   COURSE_PROSE_PORTRAIT_AWARE_IMAGE_CLASS,
   COURSE_SLOT_IMAGE_DATA_ATTR,
@@ -58,7 +59,6 @@ import {
 } from "@/lib/sidebarAgeOption";
 import { getDistrictsForCity } from "@/lib/taiwanDistricts";
 import { slugifyCourseTitle } from "@/lib/courseSlug";
-import { googleMapsIframeHtmlFromAddress } from "@/lib/googleMapsEmbed";
 import { isValidImageUrl } from "@/lib/safeMedia";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -71,6 +71,8 @@ function applyEditorPortraitClass(img: HTMLImageElement) {
   if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
   const isPortrait = img.naturalHeight > img.naturalWidth;
   img.classList.toggle(EDITOR_PORTRAIT_IMAGE_CLASS, isPortrait);
+  img.style.aspectRatio = isPortrait ? "1 / 1" : "";
+  img.style.objectFit = isPortrait ? "cover" : "";
 }
 
 /** 側欄縮圖同時可見約數（其餘捲動；不影響上傳格數上限） */
@@ -401,9 +403,6 @@ export default function CourseEditForm({
   });
   const [ageMin, setAgeMin] = useState(() => parseInitialAgeFromSidebar(initialData?.sidebar_option).min);
   const [ageMax, setAgeMax] = useState(() => parseInitialAgeFromSidebar(initialData?.sidebar_option).max);
-  const [adultAccompany, setAdultAccompany] = useState(
-    () => parseInitialAgeFromSidebar(initialData?.sidebar_option).adultAccompany
-  );
   const [cityRegion, setCityRegion] = useState(() => initialData?.city_region ?? "");
   const [cityDistrict, setCityDistrict] = useState(() => initialData?.city_district ?? "");
   const [hasSale, setHasSale] = useState(() => !!initialData?.sale_price);
@@ -418,26 +417,18 @@ export default function CourseEditForm({
   });
   const [activityAddress, setActivityAddress] = useState(() => initialData?.activity_address ?? "");
   const [nearbyTransport, setNearbyTransport] = useState(() => initialData?.nearby_transport ?? "");
-  const [mapEmbedHtml, setMapEmbedHtml] = useState(() => initialData?.map_embed_html ?? "");
   const [slugInput, setSlugInput] = useState(() => initialData?.slug ?? slugifyCourseTitle(initialData?.title ?? ""));
   const slugManuallyEditedRef = useRef(false);
   const slugSuggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mapEmbedAutoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** true＝使用者曾編輯過「地圖嵌入 HTML」，地址變更不再自動覆寫（清空該欄後恢復） */
-  const mapEmbedUserEditedRef = useRef(false);
   const [merchants, setMerchants] = useState<MerchantSummaryRow[]>([]);
   const [selectedCreateMerchantId, setSelectedCreateMerchantId] = useState(siteHqMerchantId);
   const districtOptions = useMemo(() => getDistrictsForCity(cityRegion), [cityRegion]);
   const sidebarPreviewLabels = useMemo(
     () =>
       sidebarOptionToDisplayLabels(
-        buildSidebarOptionFromForm(
-          ageMin.trim() === "" ? null : Number(ageMin),
-          ageMax.trim() === "" ? null : Number(ageMax),
-          adultAccompany
-        )
+        buildSidebarOptionFromForm(ageMin.trim() === "" ? null : Number(ageMin), ageMax.trim() === "" ? null : Number(ageMax), false)
       ),
-    [ageMin, ageMax, adultAccompany]
+    [ageMin, ageMax]
   );
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const thumbScrollRef = useRef<HTMLDivElement>(null);
@@ -482,7 +473,6 @@ export default function CourseEditForm({
     const p = parseInitialAgeFromSidebar(initialData?.sidebar_option);
     setAgeMin(p.min);
     setAgeMax(p.max);
-    setAdultAccompany(p.adultAccompany);
   }, [initialData?.sidebar_option]);
 
   useEffect(() => {
@@ -493,25 +483,7 @@ export default function CourseEditForm({
   useEffect(() => {
     setActivityAddress(initialData?.activity_address ?? "");
     setNearbyTransport(initialData?.nearby_transport ?? "");
-    const dbMap = (initialData?.map_embed_html ?? "").trim();
-    const addr = (initialData?.activity_address ?? "").trim();
-    if (dbMap) {
-      setMapEmbedHtml(initialData?.map_embed_html ?? "");
-      mapEmbedUserEditedRef.current = true;
-    } else if (addr) {
-      setMapEmbedHtml(googleMapsIframeHtmlFromAddress(addr) ?? "");
-      mapEmbedUserEditedRef.current = false;
-    } else {
-      setMapEmbedHtml("");
-      mapEmbedUserEditedRef.current = false;
-    }
-  }, [initialData?.activity_address, initialData?.nearby_transport, initialData?.map_embed_html]);
-
-  useEffect(() => {
-    return () => {
-      if (mapEmbedAutoTimerRef.current != null) clearTimeout(mapEmbedAutoTimerRef.current);
-    };
-  }, []);
+  }, [initialData?.activity_address, initialData?.nearby_transport]);
 
   useEffect(() => {
     setSlugInput(initialData?.slug ?? slugifyCourseTitle(initialData?.title ?? ""));
@@ -744,11 +716,7 @@ export default function CourseEditForm({
     }
     const postHtml = editorRef.current ? serializePostContentFromEditor(editorRef.current) : "";
     formData.set("post_content", postHtml);
-    const sidebarPayload = buildSidebarOptionFromForm(
-      hasMin ? Number(ageMin) : null,
-      hasMax ? Number(ageMax) : null,
-      adultAccompany
-    );
+    const sidebarPayload = buildSidebarOptionFromForm(hasMin ? Number(ageMin) : null, hasMax ? Number(ageMax) : null, false);
     formData.set("sidebar_option", JSON.stringify(sidebarPayload));
     formData.set("city_region", cityRegion);
     formData.set("city_district", cityDistrict);
@@ -772,7 +740,8 @@ export default function CourseEditForm({
     );
     formData.set("activity_address", activityAddress.trim());
     formData.set("nearby_transport", nearbyTransport.trim());
-    formData.set("map_embed_html", mapEmbedHtml.trim());
+    /** 空字串時 create/updateCourseFull 會依活動詳細地址自動產生 iframe（後台不再手填） */
+    formData.set("map_embed_html", "");
     formData.set("course_slug", slugInput.trim());
     if (!isEdit) {
       formData.set("merchant_id", showHqCourseAdminUi ? selectedCreateMerchantId : siteHqMerchantId);
@@ -790,12 +759,10 @@ export default function CourseEditForm({
           setCourseFaqItems([{ question: "", answer: "" }]);
           setActivityAddress("");
           setNearbyTransport("");
-          setMapEmbedHtml("");
           setSlugInput(slugifyCourseTitle(""));
           slugManuallyEditedRef.current = false;
           setAgeMin("");
           setAgeMax("");
-          setAdultAccompany(false);
           setCityRegion("");
           setCityDistrict("");
           form.reset();
@@ -936,7 +903,9 @@ export default function CourseEditForm({
               <div className="flex flex-col gap-3 md:flex-row md:items-start">
                 <div className="flex-1 min-w-0">
                   {!isEdit ? (
-                    <p className="mb-1 text-xs text-gray-500">課程主圖（建議尺寸 900 x 900，1:1）</p>
+                    <p className="mb-1 text-xs text-gray-500">
+                      課程主圖（建議尺寸 {COURSE_PAGE_HERO_IMAGE_MAX_PX} × {COURSE_PAGE_HERO_IMAGE_MAX_PX} px，1:1，與課程頁主圖顯示一致）
+                    </p>
                   ) : null}
                   <div className="aspect-square rounded-xl bg-gray-200 overflow-hidden flex items-center justify-center border border-gray-300">
                     {isValidImageUrl(imageSlots[0].preview) ? (
@@ -1283,7 +1252,7 @@ export default function CourseEditForm({
                 <textarea name="notes" rows={6} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900" placeholder={注意事項範例} disabled={isPending} defaultValue={initialData?.notes ?? ""} />
               </section>
 
-              {/* 活動地點與交通（classes.activity_address / map_embed_html / nearby_transport，與總站共用 DB） */}
+              {/* 活動地點與交通（activity_address、nearby_transport；儲存時由後台依地址寫入 map_embed_html，與總站共用 DB） */}
               <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">活動地點與交通</h2>
                 <div className="space-y-4">
@@ -1293,46 +1262,14 @@ export default function CourseEditForm({
                       type="text"
                       value={activityAddress}
                       onChange={(e) => {
-                        const v = e.target.value;
-                        setActivityAddress(v);
-                        if (mapEmbedAutoTimerRef.current != null) clearTimeout(mapEmbedAutoTimerRef.current);
-                        mapEmbedAutoTimerRef.current = setTimeout(() => {
-                          mapEmbedAutoTimerRef.current = null;
-                          if (mapEmbedUserEditedRef.current) return;
-                          const t = v.trim();
-                          setMapEmbedHtml(t ? googleMapsIframeHtmlFromAddress(t) ?? "" : "");
-                        }, 450);
+                        setActivityAddress(e.target.value);
                       }}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
                       placeholder="例如：台北市士林區士商路150號"
                       disabled={isPending}
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      僅填地址即可：下方「地圖嵌入 HTML」會自動帶入 Google 地圖 iframe，前台優先顯示；亦可自行改貼官方嵌入碼。
-                    </p>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">地圖嵌入 HTML（選填，可自動產生）</label>
-                    <textarea
-                      value={mapEmbedHtml}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!val.trim()) {
-                          mapEmbedUserEditedRef.current = false;
-                          const a = activityAddress.trim();
-                          setMapEmbedHtml(a ? googleMapsIframeHtmlFromAddress(a) ?? "" : "");
-                        } else {
-                          mapEmbedUserEditedRef.current = true;
-                          setMapEmbedHtml(val);
-                        }
-                      }}
-                      rows={5}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm text-gray-900"
-                      placeholder="留空時會依「活動詳細地址」自動產生；或貼上 Google Maps iframe（需含 https）"
-                      disabled={isPending}
-                    />
-                    <p className="mt-1.5 text-xs text-gray-500">
-                      與總站共用欄位；儲存時若此欄為空且有地址，後台仍會寫入自動產生的嵌入碼。
+                      僅需填寫地址；儲存後會依此自動產生地圖（課程頁地圖區塊顯示）。
                     </p>
                   </div>
                   <div>
@@ -1362,9 +1299,7 @@ export default function CourseEditForm({
                     + 新增問答
                   </button>
                 </div>
-                <p className="mb-3 text-xs text-gray-500">
-                  與全站 FAQ（後台「常見問題」）不同；此處僅屬本課程。
-                </p>
+                <p className="mb-3 text-xs text-gray-500">與全站 FAQ（後台「常見問題」）不同；此處僅屬本課程。</p>
                 <div className="space-y-3">
                   {courseFaqItems.map((item, i) => (
                     <div key={i} className="rounded-lg border border-gray-200 p-3">
@@ -1407,17 +1342,6 @@ export default function CourseEditForm({
                   ))}
                 </div>
               </section>
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-3 font-medium text-white hover:bg-amber-600 disabled:opacity-60 touch-manipulation min-h-[44px] min-w-[120px]"
-                >
-                  {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-                  {isPending ? "儲存中…" : courseId ? "儲存變更" : "儲存課程"}
-                </button>
-              </div>
             </article>
 
             {/* 右欄：反白，選項 0-3、標題、選擇時間及人數 */}
@@ -1455,16 +1379,6 @@ export default function CourseEditForm({
                     />
                     <span className="text-sm text-gray-600">歲</span>
                   </div>
-                  <label className="mt-3 flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={adultAccompany}
-                      onChange={(e) => setAdultAccompany(e.target.checked)}
-                      className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                      disabled={isPending}
-                    />
-                    <span className="text-sm text-gray-800">可大人陪同</span>
-                  </label>
                   {sidebarPreviewLabels.length > 0 && (
                     <p className="mt-2 text-sm text-gray-600">已選：{sidebarPreviewLabels.join("、")}</p>
                   )}
@@ -1803,6 +1717,18 @@ export default function CourseEditForm({
                 </div>
               </div>
             </aside>
+
+            {/* 手機版：主內容與右欄（含適齡等）之後，儲存鈕置於最底；桌機與主欄寬同列對齊 */}
+            <div className="mt-2 flex w-full max-w-full justify-end border-t border-gray-200 pt-4 sm:pt-4 md:col-span-7 md:mt-0 md:border-0 md:pt-0 lg:col-span-8">
+              <button
+                type="submit"
+                disabled={isPending}
+                className="inline-flex w-full min-h-[44px] min-w-0 max-w-md items-center justify-center gap-2 rounded-lg bg-amber-500 px-6 py-3 font-medium text-white hover:bg-amber-600 disabled:opacity-60 touch-manipulation sm:min-w-[120px] md:max-w-none md:w-auto"
+              >
+                {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+                {isPending ? "儲存中…" : courseId ? "儲存變更" : "儲存課程"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
