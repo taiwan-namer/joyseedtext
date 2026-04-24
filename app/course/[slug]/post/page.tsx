@@ -164,14 +164,8 @@ export default function CoursePostPage() {
       <main className="mx-auto w-full max-w-[1440px] px-4 pt-6 pb-16">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-12 lg:items-start">
           <article className="min-w-0 w-full lg:col-span-7 lg:justify-self-start">
-            {/* 不顯示主標 / 年齡；全寬垂直佔位（勿加 lg:ml／max-w，避免與左欄內文左右錯位） */}
-            <div className="w-full" aria-hidden>
-              <div className="h-[2.25rem] sm:h-[2.5rem] mb-2" />
-              <div className="h-5 mb-8" />
-            </div>
-
             {/* 內文頁不顯示主圖、課程簡介與「課程內文」標題；左欄直接顯示內容本體 */}
-            <section className="border-t border-gray-100 pt-8">
+            <section className="border-t border-gray-100 pt-8 lg:border-t-0 lg:pt-0">
               {isCourseDetail(course) ? (
                 (() => {
                   const parts = course.articleParagraphs
