@@ -64,10 +64,8 @@ const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
 const WHEEL_ITEM_HEIGHT = 44;
 
 /** 側欄縮圖同時可見約數（其餘捲動；不影響上傳格數上限） */
-const COURSE_THUMB_STRIP_VISIBLE = 5;
 const COURSE_THUMB_GAP_PX = 8;
 const COURSE_IMAGE_SLOT_TOTAL = COURSE_FORM_IMAGE_SLOT_COUNT;
-const COURSE_GALLERY_MAX = COURSE_FORM_GALLERY_SLOT_COUNT;
 
 /** 編輯區內課程槽位圖 `img` 標記，與 serialize／同步 src 共用 */
 const DATA_COURSE_IMAGE_SLOT = "data-course-image-slot";
@@ -380,6 +378,7 @@ export default function CourseEditForm({
   courseId?: string;
   initialData?: CourseForEdit | null;
 }) {
+  const isEdit = !!courseId;
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -898,20 +897,21 @@ export default function CourseEditForm({
           <div className="md:grid md:grid-cols-12 md:gap-8 lg:gap-10">
             <article className="md:col-span-7 lg:col-span-8 space-y-6">
               {/* 主圖在左、縮圖在右；手機橫滑、桌機直向捲動＋按鈕；❌ 僅釋放 blob 預覽 */}
-              <div className="flex flex-col gap-3 md:flex-row md:items-stretch">
-                <div className="flex-1 min-w-0 aspect-[4/3] rounded-xl bg-gray-200 overflow-hidden flex items-center justify-center border border-gray-300">
-                  {isValidImageUrl(imageSlots[0].preview) ? (
-                    <img src={imageSlots[0].preview} alt="主圖" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-gray-400 text-sm">課程主圖</span>
-                  )}
+              <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                <div className="flex-1 min-w-0">
+                  {!isEdit ? (
+                    <p className="mb-1 text-xs text-gray-500">課程主圖（建議尺寸 1200 x 900，4:3）</p>
+                  ) : null}
+                  <div className="aspect-[4/3] rounded-xl bg-gray-200 overflow-hidden flex items-center justify-center border border-gray-300">
+                    {isValidImageUrl(imageSlots[0].preview) ? (
+                      <img src={imageSlots[0].preview} alt="主圖" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-gray-400 text-sm">課程主圖</span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex min-w-0 flex-col self-stretch md:w-[5.25rem]">
-                  <p className="text-xs text-gray-500 mb-1 shrink-0">
-                    共 {COURSE_IMAGE_SLOT_TOTAL} 格（主圖＋附圖 {COURSE_GALLERY_MAX}）。側欄約 {COURSE_THUMB_STRIP_VISIBLE}{" "}
-                    格可見、其餘捲動。上傳後可點附圖與主圖對調；錯誤可點 ❌ 刪除。
-                  </p>
-                  <div className="mb-1 hidden shrink-0 flex-col items-center gap-0.5 md:flex">
+                <div className="flex min-w-0 flex-col self-start md:w-[5.25rem]">
+                  <div className="mb-1 hidden shrink-0 items-center justify-center md:flex">
                     <button
                       type="button"
                       onClick={() => scrollThumbStrip(-1)}
@@ -920,15 +920,6 @@ export default function CourseEditForm({
                       aria-label="縮圖向上捲動"
                     >
                       <ChevronUp className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => scrollThumbStrip(1)}
-                      disabled={isPending}
-                      className="rounded-md border border-gray-300 bg-white p-1 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                      aria-label="縮圖向下捲動"
-                    >
-                      <ChevronDown className="h-4 w-4" />
                     </button>
                   </div>
                   <div
@@ -993,6 +984,17 @@ export default function CourseEditForm({
                         <span className="text-[10px] font-medium text-gray-600">{label}</span>
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-1 hidden shrink-0 items-center justify-center md:flex">
+                    <button
+                      type="button"
+                      onClick={() => scrollThumbStrip(1)}
+                      disabled={isPending}
+                      className="rounded-md border border-gray-300 bg-white p-1 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                      aria-label="縮圖向下捲動"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1088,17 +1090,6 @@ export default function CourseEditForm({
                         >
                           確定插入
                         </button>
-                        <span className="max-w-md text-xs leading-snug text-gray-500">
-                          游標放在內文欲插入處；選單只列出<strong className="font-semibold text-gray-700">主圖起連續已上傳</strong>
-                          {courseImageInsertMax >= 1 ? (
-                            <>
-                              {" "}
-                              的圖（目前共 {courseImageInsertMax} 張），插入後編輯區會顯示與前台相同版型的預覽圖；儲存時仍寫入 [圖片1]～[圖片{courseImageInsertMax}] 占位。中間留空會截斷可選張數。
-                            </>
-                          ) : (
-                            <>（目前尚無連續上傳的課程圖片）。中間留空會截斷可選張數。</>
-                          )}
-                        </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
                         <input
@@ -1121,9 +1112,6 @@ export default function CourseEditForm({
                           <ImagePlus className="h-4 w-4 shrink-0" aria-hidden />
                           插入其他圖片
                         </button>
-                        <span className="text-xs text-gray-500">
-                          自訂圖檔插入編輯區（非主圖／附圖槽位）；可多次選圖。上傳至雲端後即插入為圖片網址（與「上傳圖片」相同流程）。
-                        </span>
                       </div>
                     </div>
                   </div>
