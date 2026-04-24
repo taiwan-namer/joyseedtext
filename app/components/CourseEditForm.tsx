@@ -45,6 +45,8 @@ import {
   COURSE_IMAGE_SLOT_LABELS,
   COURSE_IMAGE_SLOT_TOTAL,
   COURSE_INLINE_EDITOR_IMG_CLASS,
+  COURSE_POST_BODY_COLUMN_MAX_W_CLASS,
+  COURSE_PROSE_PORTRAIT_AWARE_IMAGE_CLASS,
   COURSE_SLOT_IMAGE_DATA_ATTR,
   COURSE_SLOT_IMAGE_DATA_ATTR_LEGACY,
   COURSE_SLOT_IMAGE_DISPLAY_CLASS,
@@ -59,13 +61,17 @@ import { slugifyCourseTitle } from "@/lib/courseSlug";
 import { googleMapsIframeHtmlFromAddress } from "@/lib/googleMapsEmbed";
 import { isValidImageUrl } from "@/lib/safeMedia";
 
-/** 與課程內文頁左欄 `app/course/[slug]/post/page.tsx` 的 `max-w-[860px]` 一致，編輯時寬度與前台相同 */
-const COURSE_POST_CONTENT_MAX_W = "max-w-[860px]";
-
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i + 9); // 9～21
 const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
 const WHEEL_ITEM_HEIGHT = 44;
+const EDITOR_PORTRAIT_IMAGE_CLASS = "is-portrait-image";
+
+function applyEditorPortraitClass(img: HTMLImageElement) {
+  if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+  const isPortrait = img.naturalHeight > img.naturalWidth;
+  img.classList.toggle(EDITOR_PORTRAIT_IMAGE_CLASS, isPortrait);
+}
 
 /** 側欄縮圖同時可見約數（其餘捲動；不影響上傳格數上限） */
 const COURSE_THUMB_GAP_PX = 8;
@@ -637,6 +643,43 @@ export default function CourseEditForm({
     });
   }, [imageSlots]);
 
+  /** 編輯區圖片依實際比例標記直圖 class，供樣式套用 1:1 cover */
+  useEffect(() => {
+    const root = editorRef.current;
+    if (!root) return;
+    const imageCleanup = new Map<HTMLImageElement, () => void>();
+    const syncEditorImages = () => {
+      const images = Array.from(root.querySelectorAll("img")) as HTMLImageElement[];
+      for (const img of images) {
+        applyEditorPortraitClass(img);
+        if (imageCleanup.has(img)) continue;
+        const onLoad = () => applyEditorPortraitClass(img);
+        img.addEventListener("load", onLoad);
+        imageCleanup.set(img, () => img.removeEventListener("load", onLoad));
+      }
+      imageCleanup.forEach((dispose, img) => {
+        if (root.contains(img)) return;
+        dispose();
+        imageCleanup.delete(img);
+      });
+    };
+    syncEditorImages();
+    const observer = new MutationObserver(() => {
+      syncEditorImages();
+    });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["src"],
+    });
+    return () => {
+      observer.disconnect();
+      imageCleanup.forEach((dispose) => dispose());
+      imageCleanup.clear();
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       const root = editorRef.current;
@@ -893,7 +936,7 @@ export default function CourseEditForm({
               <div className="flex flex-col gap-3 md:flex-row md:items-start">
                 <div className="flex-1 min-w-0">
                   {!isEdit ? (
-                    <p className="mb-1 text-xs text-gray-500">課程主圖（建議尺寸 1200 x 1200，1:1）</p>
+                    <p className="mb-1 text-xs text-gray-500">課程主圖（建議尺寸 900 x 900，1:1）</p>
                   ) : null}
                   <div className="aspect-square rounded-xl bg-gray-200 overflow-hidden flex items-center justify-center border border-gray-300">
                     {isValidImageUrl(imageSlots[0].preview) ? (
@@ -1134,12 +1177,12 @@ export default function CourseEditForm({
                     </div>
                   </div>
                 </div>
-                <div className={`mx-auto w-full ${COURSE_POST_CONTENT_MAX_W}`}>
+                <div className={`mx-auto ${COURSE_POST_BODY_COLUMN_MAX_W_CLASS}`}>
                   <div
                     ref={editorRef}
                     contentEditable={!isPending}
                     onInput={syncPostContentHiddenFromEditor}
-                    className="prose prose-gray min-h-[min(50vh,28rem)] w-full max-w-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-base leading-relaxed text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500/30 sm:px-4 sm:py-4"
+                    className={`prose prose-gray min-h-[min(50vh,28rem)] w-full max-w-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-base leading-relaxed text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500/30 sm:px-4 sm:py-4 ${COURSE_PROSE_PORTRAIT_AWARE_IMAGE_CLASS}`}
                     data-placeholder="輸入內文；「插入課程圖片／插入其他圖片」會在編輯區顯示與前台版型一致的圖；儲存後課程圖以 [圖片n] 寫入資料庫、附圖上傳至雲端。"
                   />
                 </div>

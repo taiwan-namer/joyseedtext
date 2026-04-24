@@ -7,13 +7,18 @@ import { getCourseById } from "@/app/actions/productActions";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import CoursePostBookingPanel from "@/app/components/course/CoursePostBookingPanel";
+import PortraitAwareHtml from "@/app/components/PortraitAwareHtml";
 import type { CourseForPublic } from "@/app/actions/productActions";
 import type { CourseDetail } from "../../course-data";
 import { useCourseSlugParam } from "../../useCourseSlugParam";
 import { withCourseFetchTimeout } from "@/lib/courseClientFetch";
+import { stripGoogleFontsFromHtml } from "@/lib/stripGoogleFontsFromHtml";
 import {
   COURSE_GALLERY_MAX,
   COURSE_IMAGE_SLOT_TOTAL,
+  COURSE_POST_BODY_COLUMN_MAX_W_CLASS,
+  COURSE_PROSE_PORTRAIT_AWARE_IMAGE_CLASS,
+  COURSE_PROSE_POST_BODY_IMG_OVERRIDES,
   COURSE_SLOT_IMAGE_DATA_ATTR,
   COURSE_SLOT_IMAGE_DISPLAY_CLASS,
 } from "@/lib/courseImageSlots";
@@ -171,7 +176,7 @@ export default function CoursePostPage() {
           <article className="min-w-0 w-full lg:col-span-7 lg:justify-self-start">
             {/* 內文頁不顯示主圖、課程簡介與「課程內文」標題；左欄直接顯示內容本體 */}
             <section className="border-t border-gray-100 pt-8 lg:border-t-0 lg:pt-0">
-              <div className="mx-auto w-full max-w-[860px]">
+              <div className={`mx-auto ${COURSE_POST_BODY_COLUMN_MAX_W_CLASS}`}>
               {isCourseDetail(course) ? (
                 (() => {
                   const parts = course.articleParagraphs
@@ -191,10 +196,10 @@ export default function CoursePostPage() {
                   );
                 })()
               ) : (
-                <div
-                  className="prose prose-gray w-full max-w-none text-base leading-relaxed text-gray-700 [&_img]:!max-w-[min(100%,1200px)] [&_img]:!w-full [&_img]:!h-auto"
-                  dangerouslySetInnerHTML={{
-                    __html: replaceImagePlaceholders(
+                <PortraitAwareHtml
+                  className={`prose prose-gray w-full max-w-none text-base leading-relaxed text-gray-700 [&>:first-child]:!mt-0 ${COURSE_PROSE_POST_BODY_IMG_OVERRIDES} ${COURSE_PROSE_PORTRAIT_AWARE_IMAGE_CLASS}`}
+                  html={stripGoogleFontsFromHtml(
+                    replaceImagePlaceholders(
                       (() => {
                         const raw =
                           "postContent" in course &&
@@ -208,14 +213,14 @@ export default function CoursePostPage() {
                       "imageUrl" in course ? course.imageUrl : undefined,
                       "galleryUrls" in course ? course.galleryUrls : undefined,
                     ),
-                  }}
+                  )}
                 />
               )}
               </div>
             </section>
           </article>
 
-          <aside className="lg:col-span-5">
+          <aside className="lg:col-span-5 lg:-translate-x-[60px]">
             <div className="lg:sticky lg:top-24 space-y-6">
               <CoursePostBookingPanel
                 course={course}

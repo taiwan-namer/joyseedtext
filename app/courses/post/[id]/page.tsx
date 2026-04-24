@@ -7,6 +7,9 @@ import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import { getCourseIntroPostById, type CourseIntroPost } from "@/app/actions/courseIntroActions";
 import { useParams } from "next/navigation";
+import PortraitAwareHtml from "@/app/components/PortraitAwareHtml";
+import { stripGoogleFontsFromHtml } from "@/lib/stripGoogleFontsFromHtml";
+import { COURSE_PROSE_PORTRAIT_AWARE_IMAGE_CLASS, COURSE_PROSE_POST_BODY_IMG_OVERRIDES } from "@/lib/courseImageSlots";
 
 /** 手動新增的課程介紹文章詳情（無對應課程時點 READ MORE 進入此頁） */
 export default function CourseIntroPostPage() {
@@ -94,9 +97,9 @@ export default function CourseIntroPostPage() {
             </div>
           )}
           {post.post_content && (
-            <div
-              className="prose prose-gray max-w-none text-gray-700 [&_img]:!max-w-[min(100%,1200px)] [&_img]:!w-full [&_img]:!h-auto"
-              dangerouslySetInnerHTML={{ __html: post.post_content }}
+            <PortraitAwareHtml
+              className={`prose prose-gray max-w-none text-gray-700 ${COURSE_PROSE_POST_BODY_IMG_OVERRIDES} ${COURSE_PROSE_PORTRAIT_AWARE_IMAGE_CLASS}`}
+              html={stripGoogleFontsFromHtml(post.post_content)}
             />
           )}
           <div className="mt-8 pt-6 border-t border-gray-100">
