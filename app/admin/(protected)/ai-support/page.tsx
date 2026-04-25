@@ -81,6 +81,7 @@ export default async function AdminAiSupportPage() {
       <AdminAiSupportClient
         initialAiChatEnabled={settings.aiChatEnabled}
         initialAiChatWelcomeMessage={settings.aiChatWelcomeMessage ?? ""}
+        initialAiChatAvatarUrl={settings.aiChatAvatarUrl ?? null}
       />
     </div>
   );

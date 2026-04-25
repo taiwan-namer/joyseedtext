@@ -3,6 +3,7 @@
 import { cache } from "react";
 import { unstable_noStore } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { uploadOneToR2WithPrefix } from "@/app/actions/productActions";
 import { FAQ_DATA } from "@/app/data/faq";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { GLOBAL_CATEGORIES_SOURCE_MERCHANT_ID } from "@/lib/constants";
@@ -40,6 +41,8 @@ export type StoreSettings = {
   aiChatEnabled: boolean;
   /** AI 客服歡迎訊息，null 時用預設 */
   aiChatWelcomeMessage: string | null;
+  /** AI 客服右下角按鈕頭像 URL，null 時顯示預設圖示 */
+  aiChatAvatarUrl: string | null;
   /** 發票品項設定，null 時開立發票用預設一筆「課程預約」 */
   invoiceItems: InvoiceItemSetting[] | null;
   /** 發票開立廠商：'ecpay' 綠界、'ezpay' 藍新 ezPay（選 ezpay 尚未串接時會略過開立） */
@@ -74,7 +77,7 @@ const STORE_SETTINGS_SELECT_LEGACY =
   "site_name, primary_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address";
 
 const STORE_SETTINGS_SELECT_FULL =
-  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address, ai_chat_enabled, ai_chat_welcome_message, invoice_items, invoice_provider";
+  "site_name, primary_color, background_color, about_section_background_color, social_fb_url, social_ig_url, social_line_url, contact_email, contact_phone, contact_address, ai_chat_enabled, ai_chat_welcome_message, ai_chat_avatar_url, invoice_items, invoice_provider";
 
 function parseInvoiceItems(raw: unknown): InvoiceItemSetting[] | null {
   if (!Array.isArray(raw) || raw.length === 0) return null;
@@ -110,6 +113,7 @@ function parseStoreSettingsRow(raw: Record<string, unknown>): StoreSettings {
     contactAddress: trim(raw.contact_address),
     aiChatEnabled: raw.ai_chat_enabled === false ? false : true,
     aiChatWelcomeMessage: typeof raw.ai_chat_welcome_message === "string" && raw.ai_chat_welcome_message.trim() ? raw.ai_chat_welcome_message.trim() : null,
+    aiChatAvatarUrl: typeof raw.ai_chat_avatar_url === "string" && raw.ai_chat_avatar_url.trim() ? raw.ai_chat_avatar_url.trim() : null,
     invoiceItems: parseInvoiceItems(raw.invoice_items),
     invoiceProvider: raw.invoice_provider === "ezpay" ? "ezpay" : "ecpay",
   };
@@ -129,6 +133,7 @@ const loadStoreSettingsForCurrentMerchant = cache(async (): Promise<StoreSetting
     contactAddress: "",
     aiChatEnabled: true,
     aiChatWelcomeMessage: null,
+    aiChatAvatarUrl: null,
     invoiceItems: null,
     invoiceProvider: "ecpay",
   });
@@ -397,7 +402,8 @@ export async function updateStoreSettings(
 /** 更新 AI 客服設定（開關、歡迎訊息） */
 export async function updateAiChatSettings(
   aiChatEnabled: boolean,
-  aiChatWelcomeMessage: string | null
+  aiChatWelcomeMessage: string | null,
+  aiChatAvatarUrl?: string | null
 ): Promise<{ success: true; message?: string } | { success: false; error: string }> {
   try {
     await verifyAdminSession();
@@ -406,11 +412,18 @@ export async function updateAiChatSettings(
       return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
     }
     const supabase = createServerSupabase();
+    const avatarValue =
+      aiChatAvatarUrl === undefined
+        ? undefined
+        : typeof aiChatAvatarUrl === "string" && aiChatAvatarUrl.trim()
+          ? aiChatAvatarUrl.trim()
+          : null;
     const { error } = await supabase
       .from("store_settings")
       .update({
         ai_chat_enabled: !!aiChatEnabled,
         ai_chat_welcome_message: typeof aiChatWelcomeMessage === "string" && aiChatWelcomeMessage.trim() ? aiChatWelcomeMessage.trim() : null,
+        ...(avatarValue !== undefined ? { ai_chat_avatar_url: avatarValue } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("merchant_id", merchantId);
@@ -420,6 +433,26 @@ export async function updateAiChatSettings(
     return { success: true, message: "AI 客服設定已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+/** 上傳 AI 客服頭像（右下角按鈕）到 R2 */
+export async function uploadAiChatAvatarImage(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "ai_chat_avatar", "ai-chat-avatar");
+    if (!url) {
+      return {
+        success: false,
+        error: "請選擇有效的圖片檔案（JPEG／PNG／GIF／WebP，10MB 以下）",
+      };
+    }
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
     return { success: false, error: msg };
   }
 }

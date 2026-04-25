@@ -32,8 +32,8 @@ type ChatMessage =
 
 const ChatButton = React.forwardRef<
   HTMLButtonElement,
-  { onClick: () => void; ariaExpanded: boolean; primaryColor: string }
->(function ChatButton({ onClick, ariaExpanded, primaryColor }, ref) {
+  { onClick: () => void; ariaExpanded: boolean; primaryColor: string; avatarUrl?: string | null }
+>(function ChatButton({ onClick, ariaExpanded, primaryColor, avatarUrl }, ref) {
   return (
     <button
       ref={ref}
@@ -48,7 +48,12 @@ const ChatButton = React.forwardRef<
         border: "none",
       }}
     >
-      <MessageCircle className="h-6 w-6" aria-hidden />
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatarUrl} alt="AI 客服" className="h-full w-full rounded-full object-cover" />
+      ) : (
+        <MessageCircle className="h-6 w-6" aria-hidden />
+      )}
     </button>
   );
 });
@@ -269,7 +274,7 @@ function ChatWindow({
 
 export default function ChatWidget() {
   const pathname = usePathname();
-  const { primaryColor, aiChatEnabled, aiChatWelcomeMessage } = useStoreSettings();
+  const { primaryColor, aiChatEnabled, aiChatWelcomeMessage, aiChatAvatarUrl } = useStoreSettings();
   const welcomeText = (aiChatWelcomeMessage && aiChatWelcomeMessage.trim()) || WELCOME_MESSAGE;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -328,6 +333,7 @@ export default function ChatWidget() {
           onClick={() => setIsOpen(true)}
           ariaExpanded={false}
           primaryColor={primaryColor}
+          avatarUrl={aiChatAvatarUrl}
         />
       )}
       <ChatWindow
