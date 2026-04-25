@@ -1554,24 +1554,6 @@ export default function AdminLayoutPage() {
       </div>
     ) : null;
 
-  const blockFloatingIconsEditorBlock =
-    selectedBlock && !LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL.has(selectedBlock.id) ? (
-      <BlockFloatingIconsPanel
-        block={selectedBlock}
-        heroFloatUploading={heroFloatUploading}
-        onUploadClick={() => heroFloatFileRef.current?.click()}
-        editViewport={floatingEditViewport}
-        previewPxFromStored={previewPxFromStored}
-        storedPxFromPreview={storedPxFromPreview}
-        onPatchIcon={(iconId, patch) => patchFloatingIcon(selectedBlock.id, iconId, patch)}
-        onRemoveIcon={(iconId) => {
-          updateBlockFloatingIcons(selectedBlock.id, (prev) => prev.filter((x) => x.id !== iconId));
-          setSelectedFloatingIconId((cur) => (cur === iconId ? null : cur));
-          setBlockDeletePick((cur) => (cur === iconId ? "" : cur));
-        }}
-        focusedIconId={selectedFloatingIconId}
-      />
-    ) : null;
 
   useEffect(() => {
     setSelectedFloatingIconId(null);
@@ -2070,6 +2052,9 @@ export default function AdminLayoutPage() {
               <span className="text-center sm:text-left flex-1 min-w-[120px] text-gray-500">
                 桌機預覽
               </span>
+              <span className="text-[11px] text-amber-700">
+                使用mac 裝飾圖定位會有些許誤差
+              </span>
               <div className="flex flex-wrap items-center gap-1.5 justify-center">
                 <span className="text-gray-500 shrink-0">預覽比例</span>
                 {[40, 50, 75, 100].map((pct) => (
@@ -2166,9 +2151,7 @@ export default function AdminLayoutPage() {
             <div className="px-3 py-2 bg-gray-200 border-b border-gray-300 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
               <div className="space-y-0.5 min-w-0 flex-1">
                 <span className="font-medium text-gray-800">手機寬度預覽</span>
-                <p className="text-gray-600 leading-snug">
-                  寬度 {mobilePreviewViewportWidthPx}px；可在此 iframe 內點區塊、拖曳裝飾圖（寫入手機專用座標，與桌機分開）。下方比例僅影響此預覽。
-                </p>
+                <p className="text-amber-700 leading-snug">使用mac 裝飾圖定位會有些許誤差</p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 justify-end shrink-0">
                 <span className="text-gray-500 shrink-0">手機預覽比例</span>
@@ -2281,7 +2264,6 @@ export default function AdminLayoutPage() {
               {heroImageEditorBlock}
               {headerAssetEditorBlock}
               {carouselSlidesEditorBlock}
-              {blockFloatingIconsEditorBlock}
 
               {editLink && (
                 <Link
@@ -2432,7 +2414,6 @@ export default function AdminLayoutPage() {
             {heroImageEditorBlock}
             {headerAssetEditorBlock}
             {carouselSlidesEditorBlock}
-            {blockFloatingIconsEditorBlock}
 
             {editLink && (
               <Link

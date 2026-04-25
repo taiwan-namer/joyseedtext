@@ -137,7 +137,7 @@ export default function HeroFloatingIconsLayer({
             ? floatingIconColumnLeftPctToHostLeftPct(
                 rawLeftPct,
                 hostWidth,
-                LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+                scaleBase,
                 columnContentInsetXPx
               )
             : rawLeftPct;

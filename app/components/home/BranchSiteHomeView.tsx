@@ -313,7 +313,8 @@ export default function BranchSiteHomeView({
     const mark = () => {
       if (settled) return;
       settled = true;
-      const h = Math.max(host.scrollHeight, Math.round(host.getBoundingClientRect().height));
+      // 避免把絕對定位覆蓋層本身高度再算回去，造成畫布高度被循環撐大（灰底越來越高）
+      const h = Math.round(host.getBoundingClientRect().height);
       setAdminViewportLayerHeightPx(h > 0 ? h : null);
     };
     const queue = () => {
@@ -523,6 +524,14 @@ export default function BranchSiteHomeView({
                 columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                 scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                 canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                viewportInlineToolbar
+                onRemoveIcon={(id) => {
+                  admin.onBlockFloatingIconsChange(
+                    blockId,
+                    (sourceIcons ?? []).filter((x) => x.id !== id)
+                  );
+                  admin.onSelectFloatingIcon?.(blockId, "");
+                }}
               />
             </div>
           ) : null}
@@ -732,6 +741,14 @@ export default function BranchSiteHomeView({
                     columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                    viewportInlineToolbar
+                    onRemoveIcon={(id) => {
+                      admin.onBlockFloatingIconsChange(
+                        heroEditBlockId,
+                        (heroIconsForEditor ?? []).filter((x) => x.id !== id)
+                      );
+                      admin.onSelectFloatingIcon?.(heroEditBlockId, "");
+                    }}
                   />
                 </div>
               ) : null}
@@ -787,6 +804,14 @@ export default function BranchSiteHomeView({
                     columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                    viewportInlineToolbar
+                    onRemoveIcon={(id) => {
+                      admin.onBlockFloatingIconsChange(
+                        "hero_carousel",
+                        (heroCarouselBlock.floatingIcons ?? []).filter((x) => x.id !== id)
+                      );
+                      admin.onSelectFloatingIcon?.("hero_carousel", "");
+                    }}
                   />
                 </div>
               ) : null}
@@ -869,6 +894,14 @@ export default function BranchSiteHomeView({
                     columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                    viewportInlineToolbar
+                    onRemoveIcon={(id) => {
+                      admin.onBlockFloatingIconsChange(
+                        "carousel",
+                        (carouselBlock?.floatingIcons ?? []).filter((x) => x.id !== id)
+                      );
+                      admin.onSelectFloatingIcon?.("carousel", "");
+                    }}
                   />
                 </div>
               ) : null}
@@ -1143,6 +1176,14 @@ export default function BranchSiteHomeView({
                     columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                     scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                     canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                    viewportInlineToolbar
+                    onRemoveIcon={(id) => {
+                      admin.onBlockFloatingIconsChange(
+                        blockId,
+                        (b?.floatingIcons ?? []).filter((x) => x.id !== id)
+                      );
+                      admin.onSelectFloatingIcon?.(blockId, "");
+                    }}
                   />
                 </div>
               ) : null}
@@ -1249,6 +1290,14 @@ export default function BranchSiteHomeView({
                           columnContentInsetXPx={LAYOUT_CONTENT_COLUMN_INSET_X_PX}
                           scaleReferenceWidthPx={floatingScaleReferenceWidthPx}
                           canvasPreviewScale={admin.canvasPreviewScale ?? 1}
+                          viewportInlineToolbar
+                          onRemoveIcon={(id) => {
+                            admin.onBlockFloatingIconsChange(
+                              "full_width_image",
+                              (b?.floatingIcons ?? []).filter((x) => x.id !== id)
+                            );
+                            admin.onSelectFloatingIcon?.("full_width_image", "");
+                          }}
                         />
                       </div>
                     ) : null}

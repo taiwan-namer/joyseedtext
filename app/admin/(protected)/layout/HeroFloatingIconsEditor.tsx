@@ -123,17 +123,14 @@ export default function HeroFloatingIconsEditor({
       return;
     }
     const rect = btn.getBoundingClientRect();
-    const panelW = 248;
-    const panelH = 168;
+    const panelW = Math.min(248, window.innerWidth * 0.92);
+    const panelH = 184;
     const margin = 8;
-    let left = rect.right + margin;
-    if (left + panelW > window.innerWidth - margin) {
-      left = Math.max(margin, rect.left - panelW - margin);
-    }
+    let left = rect.left + rect.width / 2 - panelW / 2;
     left = Math.max(margin, Math.min(left, window.innerWidth - panelW - margin));
-    let top = rect.top;
+    let top = rect.bottom + margin;
     if (top + panelH > window.innerHeight - margin) {
-      top = Math.max(margin, rect.bottom - panelH);
+      top = rect.top - panelH - margin;
     }
     top = Math.max(margin, Math.min(top, window.innerHeight - panelH - margin));
     setToolbarPos({ top, left });
@@ -185,7 +182,7 @@ export default function HeroFloatingIconsEditor({
               floatingIconHostXToColumnLeftPct(
                 xLayout,
                 layoutW,
-                LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+                scaleBase,
                 columnContentInsetXPx
               )
             )
@@ -474,7 +471,7 @@ export default function HeroFloatingIconsEditor({
             ? floatingIconColumnLeftPctToHostLeftPct(
                 rawLeftPct,
                 hostWidth,
-                LAYOUT_DESIGN_CANVAS_WIDTH_PX,
+                scaleBase,
                 columnContentInsetXPx
               )
             : rawLeftPct;
