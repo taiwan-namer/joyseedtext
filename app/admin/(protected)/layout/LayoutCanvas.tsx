@@ -129,7 +129,14 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
   useLayoutEffect(() => {
     const el = innerRef.current;
     if (!el) return;
-    const measure = () => setInnerHeight(el.offsetHeight);
+    const measure = () => {
+      /**
+       * 以「實際可視高度」為準：縮放時若只用 offsetHeight * scale，
+       * 在某些版面（含 sticky/overlay）會殘留多算高度，導致底部灰空白。
+       */
+      const visualH = Math.round(el.getBoundingClientRect().height);
+      setInnerHeight(visualH > 0 ? visualH : 0);
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -151,7 +158,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     headerBackgroundMobileUrl,
   ]);
 
-  const scaledH = innerHeight > 0 ? Math.ceil(innerHeight * scale) : Math.ceil(480 * scale);
+  const scaledH = innerHeight > 0 ? Math.ceil(innerHeight) : 1;
 
   if (!stretchContainer) {
     return (
