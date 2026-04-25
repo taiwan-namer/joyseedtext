@@ -133,7 +133,9 @@ export default function HeroFloatingIconsLayer({
               return { leftPct: eff.leftPct, topPct: eff.topPct };
             })();
         const leftPct =
-          !useAboutRules && horizontalLayout === "content-column-in-viewport"
+          !useAboutRules &&
+          resolvedMode !== "mobile" &&
+          horizontalLayout === "content-column-in-viewport"
             ? floatingIconColumnLeftPctToHostLeftPct(
                 rawLeftPct,
                 hostWidth,

@@ -176,8 +176,13 @@ export default function HeroFloatingIconsEditor({
       if (rect.width < 0.5 || rect.height < 0.5) return;
       const xLayout = ((e.clientX - rect.left) / rect.width) * layoutW;
       const yLayout = ((e.clientY - rect.top) / rect.height) * layoutH;
+      const isMobile = coordinateMode === "mobile";
+      /**
+       * 手機模式一律使用 host 百分比（單一座標系）。
+       * 避免 content-column 換算在不同寬度/縮放路徑下產生累積誤差。
+       */
       const leftPctRaw =
-        horizontalLayout === "content-column-in-viewport"
+        !isMobile && horizontalLayout === "content-column-in-viewport"
           ? clampFloatingLeftPct(
               floatingIconHostXToColumnLeftPct(
                 xLayout,
@@ -188,7 +193,6 @@ export default function HeroFloatingIconsEditor({
             )
           : clampPct((xLayout / layoutW) * 100);
       const topPct = clampPct((yLayout / layoutH) * 100);
-      const isMobile = coordinateMode === "mobile";
       if (
         horizontalCenterSlots1Based?.length &&
         isAboutFloatingSlotHorizontalCenter1Based(icons, draggingId, horizontalCenterSlots1Based)
@@ -467,7 +471,10 @@ export default function HeroFloatingIconsEditor({
               return { leftPct: eff.leftPct, topPct: eff.topPct };
             })();
         const leftPct =
-          !useAboutRules && horizontalLayout === "content-column-in-viewport" && hostWidth != null
+          !useAboutRules &&
+          coordinateMode !== "mobile" &&
+          horizontalLayout === "content-column-in-viewport" &&
+          hostWidth != null
             ? floatingIconColumnLeftPctToHostLeftPct(
                 rawLeftPct,
                 hostWidth,
