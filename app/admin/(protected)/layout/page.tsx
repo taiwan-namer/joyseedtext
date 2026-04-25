@@ -207,87 +207,89 @@ function BlockFloatingIconsPanel({
                 alt=""
                 className="h-10 w-10 shrink-0 rounded bg-gray-50 object-contain"
               />
-              {isFocused ? (
-                <>
-                  <label className="flex items-center gap-1">
-                    寬
-                    <input
-                      type="number"
-                      step={1}
-                      value={
-                        dimFocus === dimKey(ic.id, "w")
-                          ? (dimDrafts[dimKey(ic.id, "w")] ?? String(previewPxFromStored(wStored)))
-                          : previewPxFromStored(wStored)
-                      }
-                      onFocus={() => {
-                        const k = dimKey(ic.id, "w");
-                        setDimFocus(k);
-                        setDimDrafts((d) => ({ ...d, [k]: String(previewPxFromStored(wStored)) }));
-                      }}
-                      onChange={(e) => {
-                        setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "w")]: e.target.value }));
-                      }}
-                      onBlur={() => {
-                        const k = dimKey(ic.id, "w");
-                        const raw = dimDrafts[k] ?? String(previewPxFromStored(wStored));
-                        setDimFocus((f) => (f === k ? null : f));
-                        setDimDrafts((d) => {
-                          const n = { ...d };
-                          delete n[k];
-                          return n;
-                        });
-                        const v = parseInt(String(raw).trim(), 10);
-                        if (Number.isFinite(v)) {
-                          onPatchIcon(ic.id, { widthPx: storedPxFromPreview(Math.max(16, v)) });
+              <div className="basis-full pl-[4.5rem]">
+                {isFocused ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-1">
+                      寬
+                      <input
+                        type="number"
+                        step={1}
+                        value={
+                          dimFocus === dimKey(ic.id, "w")
+                            ? (dimDrafts[dimKey(ic.id, "w")] ?? String(previewPxFromStored(wStored)))
+                            : previewPxFromStored(wStored)
                         }
-                      }}
-                      className="w-20 rounded border border-gray-300 px-1 py-0.5"
-                    />
-                    px(畫布)
-                  </label>
-                  <label className="flex items-center gap-1">
-                    高
-                    <input
-                      type="number"
-                      step={1}
-                      value={
-                        dimFocus === dimKey(ic.id, "h")
-                          ? (dimDrafts[dimKey(ic.id, "h")] ?? String(previewPxFromStored(hStored)))
-                          : previewPxFromStored(hStored)
-                      }
-                      onFocus={() => {
-                        const k = dimKey(ic.id, "h");
-                        setDimFocus(k);
-                        setDimDrafts((d) => ({
-                          ...d,
-                          [k]: String(previewPxFromStored(hStored)),
-                        }));
-                      }}
-                      onChange={(e) => {
-                        setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "h")]: e.target.value }));
-                      }}
-                      onBlur={() => {
-                        const k = dimKey(ic.id, "h");
-                        const raw = dimDrafts[k] ?? String(previewPxFromStored(hStored));
-                        setDimFocus((f) => (f === k ? null : f));
-                        setDimDrafts((d) => {
-                          const n = { ...d };
-                          delete n[k];
-                          return n;
-                        });
-                        const v = parseInt(String(raw).trim(), 10);
-                        if (Number.isFinite(v)) {
-                          onPatchIcon(ic.id, { heightPx: storedPxFromPreview(Math.max(16, v)) });
+                        onFocus={() => {
+                          const k = dimKey(ic.id, "w");
+                          setDimFocus(k);
+                          setDimDrafts((d) => ({ ...d, [k]: String(previewPxFromStored(wStored)) }));
+                        }}
+                        onChange={(e) => {
+                          setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "w")]: e.target.value }));
+                        }}
+                        onBlur={() => {
+                          const k = dimKey(ic.id, "w");
+                          const raw = dimDrafts[k] ?? String(previewPxFromStored(wStored));
+                          setDimFocus((f) => (f === k ? null : f));
+                          setDimDrafts((d) => {
+                            const n = { ...d };
+                            delete n[k];
+                            return n;
+                          });
+                          const v = parseInt(String(raw).trim(), 10);
+                          if (Number.isFinite(v)) {
+                            onPatchIcon(ic.id, { widthPx: storedPxFromPreview(Math.max(16, v)) });
+                          }
+                        }}
+                        className="w-20 rounded border border-gray-300 px-1 py-0.5"
+                      />
+                      px(畫布)
+                    </label>
+                    <label className="flex items-center gap-1">
+                      高
+                      <input
+                        type="number"
+                        step={1}
+                        value={
+                          dimFocus === dimKey(ic.id, "h")
+                            ? (dimDrafts[dimKey(ic.id, "h")] ?? String(previewPxFromStored(hStored)))
+                            : previewPxFromStored(hStored)
                         }
-                      }}
-                      className="w-20 rounded border border-gray-300 px-1 py-0.5"
-                    />
-                    px(畫布)
-                  </label>
-                </>
-              ) : (
-                <span className="text-[11px] text-gray-500">點選畫布裝飾圖後可編輯尺寸</span>
-              )}
+                        onFocus={() => {
+                          const k = dimKey(ic.id, "h");
+                          setDimFocus(k);
+                          setDimDrafts((d) => ({
+                            ...d,
+                            [k]: String(previewPxFromStored(hStored)),
+                          }));
+                        }}
+                        onChange={(e) => {
+                          setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "h")]: e.target.value }));
+                        }}
+                        onBlur={() => {
+                          const k = dimKey(ic.id, "h");
+                          const raw = dimDrafts[k] ?? String(previewPxFromStored(hStored));
+                          setDimFocus((f) => (f === k ? null : f));
+                          setDimDrafts((d) => {
+                            const n = { ...d };
+                            delete n[k];
+                            return n;
+                          });
+                          const v = parseInt(String(raw).trim(), 10);
+                          if (Number.isFinite(v)) {
+                            onPatchIcon(ic.id, { heightPx: storedPxFromPreview(Math.max(16, v)) });
+                          }
+                        }}
+                        className="w-20 rounded border border-gray-300 px-1 py-0.5"
+                      />
+                      px(畫布)
+                    </label>
+                  </div>
+                ) : (
+                  <span className="mt-1 block text-[11px] text-gray-500">點選畫布裝飾圖後可編輯尺寸</span>
+                )}
+              </div>
               <button
                 type="button"
                 className="ml-auto text-red-600 hover:underline"
