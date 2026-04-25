@@ -33,7 +33,7 @@ export type LoginModalProps = {
   onBeforeGoogleRedirect?: () => void;
 };
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 function translateAuthErrorMessage(message: string | null | undefined): string {
   const raw = String(message ?? "").trim();
@@ -66,6 +66,8 @@ export default function LoginModal({
   const [registerLoading, setRegisterLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -76,6 +78,7 @@ export default function LoginModal({
     if (isOpen) {
       setStep(initialStep ?? 1);
       setFormError(null);
+      setForgotEmail("");
     }
   }, [isOpen, initialStep]);
 
@@ -180,6 +183,31 @@ export default function LoginModal({
     }
   }, [onClose, onSuccess]);
 
+  const handleForgotPasswordSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormError(null);
+    const email = forgotEmail.trim().toLowerCase();
+    if (!email) {
+      setFormError("請先輸入註冊時的電子信箱");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const supabase = createClient();
+      const origin = typeof location !== "undefined" ? location.origin : "";
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${origin}/reset-password`,
+      });
+      if (error) {
+        setFormError(translateAuthErrorMessage(error.message));
+        return;
+      }
+      setFormError("已寄出重設密碼信，請前往信箱點擊連結。");
+    } finally {
+      setForgotLoading(false);
+    }
+  }, [forgotEmail]);
+
   const { siteName } = useStoreSettings();
   function ModalHeader({ title }: { title?: string }) {
     return (
@@ -282,7 +310,15 @@ export default function LoginModal({
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label htmlFor="login-password" className="block text-sm font-medium text-gray-900">密碼</label>
-                    <button type="button" className="text-sm text-gray-500 hover:text-amber-600" onClick={() => setFormError("忘記密碼功能將由後端提供")}>
+                    <button
+                      type="button"
+                      className="text-sm text-gray-500 hover:text-amber-600"
+                      onClick={() => {
+                        setFormError(null);
+                        setForgotEmail("");
+                        setStep(4);
+                      }}
+                    >
                       忘記密碼?
                     </button>
                   </div>
@@ -424,6 +460,64 @@ export default function LoginModal({
                   onClick={() => { setFormError(null); setStep(1); }}
                 >
                   使用其他方式
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* 圖4：忘記密碼（寄送 Supabase Reset Password 信） */}
+        {step === 4 && (
+          <>
+            <div className="px-6 pt-4">
+              <ModalHeader title="忘記密碼" />
+            </div>
+            <div className="px-6 pb-6">
+              {formError && (
+                <div
+                  className={`rounded-lg px-3 py-2 text-sm mb-4 border ${
+                    formError.includes("已寄出")
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                      : "bg-red-50 text-red-700 border-red-100"
+                  }`}
+                  role="alert"
+                >
+                  {formError}
+                </div>
+              )}
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-900 mb-1">
+                    註冊信箱
+                  </label>
+                  <input
+                    id="forgot-email"
+                    name="forgotEmail"
+                    type="email"
+                    placeholder="請輸入註冊時的電子郵件"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-2.5 rounded-lg font-medium text-gray-800 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 transition-colors touch-manipulation min-h-[48px]"
+                >
+                  {forgotLoading ? "傳送中…" : "寄送重設密碼連結"}
+                </button>
+              </form>
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  className="w-full text-center text-sm text-amber-600 hover:underline"
+                  onClick={() => {
+                    setFormError(null);
+                    setStep(2);
+                  }}
+                >
+                  返回登入
                 </button>
               </div>
             </div>

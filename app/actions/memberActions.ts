@@ -1,13 +1,49 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createAnonOnlySupabase } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { mapSupabaseAuthErrorToZh } from "@/lib/auth/supabaseAuthErrorZh";
 
 function envTrim(key: string): string {
   const raw = process.env[key];
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+/**
+ * 註冊流程：寄送 Email OTP（不寫入瀏覽器 session）。
+ * 實際驗證由前端 `verifyOtp` 完成。
+ */
+export async function sendRegistrationOtp(
+  email: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const url = envTrim("NEXT_PUBLIC_SUPABASE_URL");
+    const anon = envTrim("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    if (!url || !anon) {
+      return { success: false, error: "系統未設定驗證服務" };
+    }
+    const trimmed = (email ?? "").trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      return { success: false, error: "請填寫有效的電子信箱" };
+    }
+    const supabase = createAnonOnlySupabase(url, anon, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error } = await supabase.auth.signInWithOtp({
+      email: trimmed,
+      options: { shouldCreateUser: true },
+    });
+    if (error) {
+      return { success: false, error: mapSupabaseAuthErrorToZh(error.message) };
+    }
+    return { success: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "傳送失敗";
+    return { success: false, error: mapSupabaseAuthErrorToZh(message) };
+  }
 }
 
 /**
@@ -119,13 +155,12 @@ export async function ensureMemberForBooking(params: {
 
 /**
  * 前台註冊／加入會員：寫入 members 表。
- * 防濫用：須已登入（Supabase session），且以登入者信箱寫入，不接受任意 email。
+ * 防濫用：須已登入（Supabase session），以登入者信箱寫入 members。
  * merchant_id 強制使用 process.env.NEXT_PUBLIC_CLIENT_ID，確保綁定當前店家。
  */
 export async function registerMember(formData: {
   name: string;
   phone: string;
-  email: string;
 }): Promise<
   | { success: true; message?: string }
   | { success: false; error: string }
@@ -152,7 +187,7 @@ export async function registerMember(formData: {
     );
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user?.email) {
-      return { success: false, error: "請先登入後再填寫會員資料" };
+      return { success: false, error: "請先完成信箱驗證並登入，再送出會員資料" };
     }
 
     const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
