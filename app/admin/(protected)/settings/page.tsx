@@ -189,9 +189,6 @@ export default function AdminSettingsPage() {
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-gray-500">關於我們區塊底色</span>
-              <span className="text-sm font-bold" style={{ color: primaryColor }}>
-                {siteName || "童趣島"}
-              </span>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:flex sm:flex-wrap sm:gap-2">
               <span className="font-medium text-gray-700">關於我們</span>
@@ -206,7 +203,7 @@ export default function AdminSettingsPage() {
             style={{ backgroundColor }}
           >
             <p className="text-xs text-gray-500 mb-2">頁面底色</p>
-            <div className="flex flex-wrap items-center gap-3 mb-2">
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <span
                 className="inline-block rounded-lg px-3 py-1.5 text-sm font-medium text-white"
                 style={{ backgroundColor: primaryColor }}
@@ -214,13 +211,14 @@ export default function AdminSettingsPage() {
                 主色按鈕
               </span>
               <span className="text-sm text-gray-700" style={{ color: primaryColor }}>
-                主色連結 · {siteName || "網站名稱"}
+                主色連結
               </span>
             </div>
-            <p className="text-sm text-gray-600">上方為關於我們區塊底色、下方為頁面底色，可感受兩種配色的變化。</p>
+            <p className="mt-2 text-sm font-bold" style={{ color: primaryColor }}>
+              {siteName || "童趣島"}
+            </p>
           </div>
         </div>
-        <p className="mt-3 text-xs text-gray-500">上方為關於我們區塊底色、下方為頁面底色，可感受兩種配色的變化。</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">

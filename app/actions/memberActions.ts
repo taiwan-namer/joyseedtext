@@ -112,8 +112,8 @@ export async function syncAuthUserToMembers(): Promise<
 }
 
 /**
- * 結帳時無痛辦帳號：若該 email 尚未在 members 則寫入，已存在則不覆蓋。
- * 供 checkout 在 createBooking 前呼叫，確保客人有會員紀錄可於後台查詢。
+ * 結帳時無痛辦帳號：若該 email 尚未在 members 則寫入；已存在時若本次有填電話則同步回寫。
+ * 供 checkout 在 createBooking 前呼叫，確保客人有會員紀錄可於後台查詢，且電話維持最新。
  */
 export async function ensureMemberForBooking(params: {
   name: string;
@@ -126,13 +126,13 @@ export async function ensureMemberForBooking(params: {
 
     const name = (params.name ?? "").trim();
     const phone = (params.phone ?? "").trim();
-    const email = (params.email ?? "").trim();
+    const email = (params.email ?? "").trim().toLowerCase();
     if (!email) return { success: false, error: "請填寫電子信箱" };
 
     const supabase = createServerSupabase();
     const { data: existing } = await supabase
       .from("members")
-      .select("id")
+      .select("id, phone")
       .eq("merchant_id", merchantId)
       .eq("email", email)
       .maybeSingle();
@@ -145,6 +145,16 @@ export async function ensureMemberForBooking(params: {
         email,
       });
       if (insertErr) return { success: false, error: insertErr.message };
+    } else if (phone) {
+      const existingPhone = (existing.phone ?? "").toString().trim();
+      if (existingPhone !== phone) {
+        const { error: updateErr } = await supabase
+          .from("members")
+          .update({ phone })
+          .eq("id", existing.id)
+          .eq("merchant_id", merchantId);
+        if (updateErr) return { success: false, error: updateErr.message };
+      }
     }
     return { success: true };
   } catch (e) {
