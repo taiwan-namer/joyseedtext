@@ -1554,6 +1554,25 @@ export default function AdminLayoutPage() {
       </div>
     ) : null;
 
+  const blockFloatingIconsEditorBlock =
+    selectedBlock && !LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL.has(selectedBlock.id) ? (
+      <BlockFloatingIconsPanel
+        block={selectedBlock}
+        heroFloatUploading={heroFloatUploading}
+        onUploadClick={() => heroFloatFileRef.current?.click()}
+        editViewport={floatingEditViewport}
+        previewPxFromStored={previewPxFromStored}
+        storedPxFromPreview={storedPxFromPreview}
+        onPatchIcon={(iconId, patch) => patchFloatingIcon(selectedBlock.id, iconId, patch)}
+        onRemoveIcon={(iconId) => {
+          updateBlockFloatingIcons(selectedBlock.id, (prev) => prev.filter((x) => x.id !== iconId));
+          setSelectedFloatingIconId((cur) => (cur === iconId ? null : cur));
+          setBlockDeletePick((cur) => (cur === iconId ? "" : cur));
+        }}
+        focusedIconId={selectedFloatingIconId}
+      />
+    ) : null;
+
   useEffect(() => {
     setSelectedFloatingIconId(null);
   }, [selectedBlockId]);
@@ -2262,6 +2281,7 @@ export default function AdminLayoutPage() {
               {heroImageEditorBlock}
               {headerAssetEditorBlock}
               {carouselSlidesEditorBlock}
+              {blockFloatingIconsEditorBlock}
 
               {editLink && (
                 <Link
@@ -2412,6 +2432,7 @@ export default function AdminLayoutPage() {
             {heroImageEditorBlock}
             {headerAssetEditorBlock}
             {carouselSlidesEditorBlock}
+            {blockFloatingIconsEditorBlock}
 
             {editLink && (
               <Link
