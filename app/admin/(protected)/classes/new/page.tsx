@@ -1,16 +1,8 @@
 import CourseEditForm from "@/app/components/CourseEditForm";
-import VendorBindingGatePanel from "@/app/components/admin/VendorBindingGatePanel";
-import { resolveVendorBindingGate } from "@/lib/vendorBindingStatus";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
 export default async function NewClassPage() {
-  const gate = await resolveVendorBindingGate();
-
-  if (gate.kind !== "ok") {
-    return <VendorBindingGatePanel gate={gate} />;
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">

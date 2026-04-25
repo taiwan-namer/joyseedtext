@@ -1,28 +1,35 @@
-import Link from "next/link";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { resolveVendorBindingGate } from "@/lib/vendorBindingStatus";
+import VendorLoginEntryClient from "@/app/vendor/VendorLoginEntryClient";
 
-export default function VendorLoginPage() {
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+export default async function VendorLoginPage() {
+  const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+  const gate = await resolveVendorBindingGate();
+  let hasStoreProfile = false;
+  let initialSiteName = "";
+
+  if (merchantId) {
+    const supabase = createServerSupabase();
+    const { data } = await supabase
+      .from("store_settings")
+      .select("merchant_id, site_name")
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
+    hasStoreProfile = Boolean(data?.merchant_id);
+    initialSiteName = typeof data?.site_name === "string" ? data.site_name : "";
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-sm bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-        <div className="text-center">
-          <h1 className="text-xl font-bold text-gray-800">供應商後台</h1>
-          <p className="text-sm text-gray-500 mt-1">供應商後台登入</p>
-        </div>
-
-        <Link
-          href="/api/vendor/branch/line-login"
-          className="block w-full text-center py-3 rounded-lg font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors"
-        >
-          使用 LINE 登入後台
-        </Link>
-
-        <Link
-          href="/admin/login?next=/admin"
-          className="block w-full text-center py-3 rounded-lg font-medium text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors"
-        >
-          使用帳號密碼登入
-        </Link>
-      </div>
-    </div>
+    <VendorLoginEntryClient
+      merchantId={merchantId || "(未設定)"}
+      hasStoreProfile={hasStoreProfile}
+      initialSiteName={initialSiteName}
+      gate={gate}
+    />
   );
 }
