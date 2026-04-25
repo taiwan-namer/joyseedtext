@@ -309,20 +309,18 @@ export default function BranchSiteHomeView({
     }
     const host = viewportRootRef.current;
     if (!host) return;
-    let settled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let hardTimer: ReturnType<typeof setTimeout> | null = null;
     const mark = () => {
-      if (settled) return;
-      settled = true;
       // 避免把絕對定位覆蓋層本身高度再算回去，造成畫布高度被循環撐大（灰底越來越高）
       const h = Math.round(host.getBoundingClientRect().height);
-      setAdminViewportLayerHeightPx(h > 0 ? h : null);
+      setAdminViewportLayerHeightPx((prev) => {
+        const next = h > 0 ? h : null;
+        return prev === next ? prev : next;
+      });
     };
     const queue = () => {
-      if (settled) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(mark, 320);
+      timer = setTimeout(mark, 80);
     };
     const ro = new ResizeObserver(queue);
     ro.observe(host);
@@ -333,18 +331,18 @@ export default function BranchSiteHomeView({
       img.addEventListener("load", onImgDone, { once: true });
       img.addEventListener("error", onImgDone, { once: true });
     }
-    hardTimer = setTimeout(mark, 2600);
+    window.addEventListener("resize", queue);
     queue();
     return () => {
       if (timer) clearTimeout(timer);
-      if (hardTimer) clearTimeout(hardTimer);
       ro.disconnect();
+      window.removeEventListener("resize", queue);
       for (const img of imgs) {
         img.removeEventListener("load", onImgDone);
         img.removeEventListener("error", onImgDone);
       }
     };
-  }, [hasAdminViewportFloatingIcons, layoutBlocks.length, carouselList.length, admin?.viewportFloatingIcons]);
+  }, [hasAdminViewportFloatingIcons, layoutBlocks, carouselList, admin?.viewportFloatingIcons]);
 
   useEffect(() => {
     if (carouselList.length === 0) return;
