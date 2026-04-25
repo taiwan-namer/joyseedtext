@@ -885,7 +885,16 @@ export async function updateFrontendSettings(formData: FormData): Promise<
       }
       const visibleRaw = formData.get(`carousel_${i}_visible`);
       const visible = visibleRaw === "0" || String(visibleRaw).toLowerCase() === "false" ? false : true;
-      carouselItems.push({ id, title, subtitle, imageUrl, visible });
+      const prevItem = existing.carouselItems[i];
+      carouselItems.push({
+        id,
+        title,
+        subtitle,
+        imageUrl,
+        visible,
+        linkUrl: prevItem?.linkUrl ?? null,
+        buttonText: prevItem?.buttonText ?? null,
+      });
     }
 
     const navCoursesLabel = (formData.get("nav_courses_label") as string)?.trim() || DEFAULT_NAV.courses;
@@ -921,6 +930,23 @@ export async function updateFrontendSettings(formData: FormData): Promise<
       ? ((formData.get("seo_description") as string)?.trim() || null)
       : existing.seoDescription ?? null;
 
+    const merged: FrontendSettings = {
+      ...existing,
+      heroImageUrl,
+      heroTitle,
+      carouselItems,
+      navAboutLabel,
+      navCoursesLabel,
+      navBookingLabel,
+      navFaqLabel,
+      memberIconGallery,
+      memberIconSelectedIndex,
+      aboutContent,
+      seoTitle,
+      seoKeywords,
+      seoDescription,
+    };
+
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -928,29 +954,7 @@ export async function updateFrontendSettings(formData: FormData): Promise<
       .upsert(
         {
           merchant_id: merchantId,
-          frontend_settings: {
-            heroImageUrl,
-            heroTitle,
-            carouselItems,
-            navAboutLabel,
-            navCoursesLabel,
-            navBookingLabel,
-            navFaqLabel,
-            memberIconGallery,
-            memberIconSelectedIndex,
-            aboutContent,
-            seoTitle,
-            seoKeywords,
-            seoDescription,
-            linePayApi: existing.linePayApi ?? null,
-            thirdPartyApi: existing.thirdPartyApi ?? null,
-            atmBankName: existing.atmBankName ?? null,
-            atmBankAccount: existing.atmBankAccount ?? null,
-            atmBankCode: existing.atmBankCode ?? null,
-            layout_order: existing.layoutOrder,
-            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
-          },
+          frontend_settings: persistFrontendSettingsBase(merged),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "merchant_id" }
@@ -991,6 +995,7 @@ export async function updateAboutPage(formData: FormData): Promise<
     const precautionsFixedHtml = formData.has("precautions_fixed_html")
       ? ((formData.get("precautions_fixed_html") as string)?.trim() || null)
       : (existing.precautionsFixedHtml ?? null);
+    const merged: FrontendSettings = { ...existing, navAboutLabel, aboutContent, precautionsFixedHtml };
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -998,30 +1003,7 @@ export async function updateAboutPage(formData: FormData): Promise<
       .upsert(
         {
           merchant_id: merchantId,
-          frontend_settings: {
-            heroImageUrl: existing.heroImageUrl,
-            heroTitle: existing.heroTitle,
-            carouselItems: existing.carouselItems,
-            navAboutLabel,
-            navCoursesLabel: existing.navCoursesLabel,
-            navBookingLabel: existing.navBookingLabel,
-            navFaqLabel: existing.navFaqLabel,
-            memberIconGallery: existing.memberIconGallery,
-            memberIconSelectedIndex: existing.memberIconSelectedIndex,
-            aboutContent,
-            precautionsFixedHtml,
-            seoTitle: existing.seoTitle ?? null,
-            seoKeywords: existing.seoKeywords ?? null,
-            seoDescription: existing.seoDescription ?? null,
-            linePayApi: existing.linePayApi ?? null,
-            thirdPartyApi: existing.thirdPartyApi ?? null,
-            atmBankName: existing.atmBankName ?? null,
-            atmBankAccount: existing.atmBankAccount ?? null,
-            atmBankCode: existing.atmBankCode ?? null,
-            layout_order: existing.layoutOrder,
-            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
-          },
+          frontend_settings: persistFrontendSettingsBase(merged),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "merchant_id" }
@@ -1126,6 +1108,13 @@ export async function updateSeoSettings(formData: FormData): Promise<
       const url = await uploadOneToR2(formData, "seo_favicon");
       if (url) seoFaviconUrl = url;
     }
+    const merged: FrontendSettings = {
+      ...existing,
+      seoTitle,
+      seoKeywords,
+      seoDescription,
+      seoFaviconUrl,
+    };
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -1133,34 +1122,7 @@ export async function updateSeoSettings(formData: FormData): Promise<
       .upsert(
         {
           merchant_id: merchantId,
-          frontend_settings: {
-            heroImageUrl: existing.heroImageUrl,
-            heroTitle: existing.heroTitle,
-            carouselItems: existing.carouselItems,
-            navAboutLabel: existing.navAboutLabel,
-            navCoursesLabel: existing.navCoursesLabel,
-            navBookingLabel: existing.navBookingLabel,
-            navFaqLabel: existing.navFaqLabel,
-            memberIconGallery: existing.memberIconGallery,
-            memberIconSelectedIndex: existing.memberIconSelectedIndex,
-            aboutContent: existing.aboutContent ?? null,
-            seoTitle,
-            seoKeywords,
-            seoDescription,
-            seoFaviconUrl,
-            linePayApi: existing.linePayApi ?? null,
-            thirdPartyApi: existing.thirdPartyApi ?? null,
-            atmBankName: existing.atmBankName ?? null,
-            atmBankAccount: existing.atmBankAccount ?? null,
-            atmBankCode: existing.atmBankCode ?? null,
-            paymentNewebpayEnabled: existing.paymentNewebpayEnabled ?? false,
-            paymentEcpayEnabled: existing.paymentEcpayEnabled ?? false,
-            paymentLinepayEnabled: existing.paymentLinepayEnabled ?? false,
-            paymentAtmEnabled: existing.paymentAtmEnabled ?? false,
-            layout_order: existing.layoutOrder,
-            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
-          },
+          frontend_settings: persistFrontendSettingsBase(merged),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "merchant_id" }
@@ -1221,6 +1183,16 @@ export async function updatePaymentSettings(formData: FormData): Promise<
     const atmBankAccount = (formData.get("atm_bank_account") as string)?.trim() || null;
     const invoiceProviderRaw = (formData.get("invoice_provider") as string)?.trim().toLowerCase();
     const invoiceProvider = invoiceProviderRaw === "ezpay" ? "ezpay" : "ecpay";
+    const merged: FrontendSettings = {
+      ...existing,
+      atmBankName: paymentAtmEnabled ? atmBankName : (existing.atmBankName ?? null),
+      atmBankCode: paymentAtmEnabled ? atmBankCode : (existing.atmBankCode ?? null),
+      atmBankAccount: paymentAtmEnabled ? atmBankAccount : (existing.atmBankAccount ?? null),
+      paymentNewebpayEnabled,
+      paymentEcpayEnabled,
+      paymentLinepayEnabled,
+      paymentAtmEnabled,
+    };
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -1228,33 +1200,7 @@ export async function updatePaymentSettings(formData: FormData): Promise<
       .upsert(
         {
           merchant_id: merchantId,
-          frontend_settings: {
-            heroImageUrl: existing.heroImageUrl,
-            heroTitle: existing.heroTitle,
-            carouselItems: existing.carouselItems,
-            navAboutLabel: existing.navAboutLabel,
-            navCoursesLabel: existing.navCoursesLabel,
-            navBookingLabel: existing.navBookingLabel,
-            navFaqLabel: existing.navFaqLabel,
-            memberIconGallery: existing.memberIconGallery,
-            memberIconSelectedIndex: existing.memberIconSelectedIndex,
-            aboutContent: existing.aboutContent ?? null,
-            seoTitle: existing.seoTitle ?? null,
-            seoKeywords: existing.seoKeywords ?? null,
-            seoDescription: existing.seoDescription ?? null,
-            linePayApi: existing.linePayApi ?? null,
-            thirdPartyApi: existing.thirdPartyApi ?? null,
-            atmBankName: paymentAtmEnabled ? atmBankName : (existing.atmBankName ?? null),
-            atmBankCode: paymentAtmEnabled ? atmBankCode : (existing.atmBankCode ?? null),
-            atmBankAccount: paymentAtmEnabled ? atmBankAccount : (existing.atmBankAccount ?? null),
-            paymentNewebpayEnabled,
-            paymentEcpayEnabled,
-            paymentLinepayEnabled,
-            paymentAtmEnabled,
-            layout_order: existing.layoutOrder,
-            fullWidthImageUrl: existing.fullWidthImageUrl ?? null,
-            layout_blocks: persistLayoutBlocks(existing.layoutBlocks),
-          },
+          frontend_settings: persistFrontendSettingsBase(merged),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "merchant_id" }
