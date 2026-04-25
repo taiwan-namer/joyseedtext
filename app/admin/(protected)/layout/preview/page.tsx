@@ -24,6 +24,7 @@ function postToParent(msg: Record<string, unknown>) {
 export default function AdminLayoutMobilePreviewPage() {
   const [payload, setPayload] = useState<LayoutPreviewSyncPayload | null>(null);
   const [heroImageBlobUrl, setHeroImageBlobUrl] = useState<string | null>(null);
+  const [heroImageMobileBlobUrl, setHeroImageMobileBlobUrl] = useState<string | null>(null);
 
   const requestSyncFromParent = useCallback(() => {
     postToParent({ type: LAYOUT_PREVIEW_REQUEST_SYNC });
@@ -79,6 +80,25 @@ export default function AdminLayoutMobilePreviewPage() {
     };
   }, [payload?.heroImageFile]);
 
+  useEffect(() => {
+    const file = payload?.heroImageMobileFile;
+    if (!file) {
+      setHeroImageMobileBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    const next = URL.createObjectURL(file);
+    setHeroImageMobileBlobUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return next;
+    });
+    return () => {
+      URL.revokeObjectURL(next);
+    };
+  }, [payload?.heroImageMobileFile]);
+
   const onSelectBlock = useCallback((id: string) => {
     postToParent({ type: LAYOUT_PREVIEW_SELECT_BLOCK, blockId: id });
   }, []);
@@ -125,6 +145,7 @@ export default function AdminLayoutMobilePreviewPage() {
         zoomPercent={payload.mobileCanvasZoomPct}
         adminInteractive
         heroImageUrl={heroImageBlobUrl ?? payload.heroImageUrl}
+        heroImageMobileUrl={heroImageMobileBlobUrl ?? payload.heroImageMobileUrl}
         carouselItems={payload.carouselItems}
         aboutContent={payload.aboutContent}
         navAboutLabel={payload.navAboutLabel}

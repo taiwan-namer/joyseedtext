@@ -177,6 +177,8 @@ export function serializeFloatingIconsForPersist(icons: HeroFloatingIcon[] | und
 
 export type FrontendSettings = {
   heroImageUrl: string | null;
+  /** 首頁主圖：手機專用（可選；未設定則與桌機共用 heroImageUrl；檔名含 `hero_image_mobile`） */
+  heroImageMobileUrl?: string | null;
   /** 首頁主圖背景圖（可選，用於鋪滿 Hero 區塊底層） */
   heroBackgroundUrl?: string | null;
   /** Hero 主圖背景圖：手機專用（可選；未設定則與桌機共用 heroBackgroundUrl；檔名含 `hero_background_mobile`） */
@@ -379,6 +381,7 @@ export function parseHeroFloatingIcons(raw: unknown): HeroFloatingIcon[] {
 export function persistFrontendSettingsBase(existing: FrontendSettings): Record<string, unknown> {
   return {
     heroImageUrl: existing.heroImageUrl,
+    heroImageMobileUrl: existing.heroImageMobileUrl ?? null,
     heroBackgroundUrl: existing.heroBackgroundUrl ?? null,
     heroBackgroundMobileUrl: existing.heroBackgroundMobileUrl ?? null,
     heroTitle: existing.heroTitle,

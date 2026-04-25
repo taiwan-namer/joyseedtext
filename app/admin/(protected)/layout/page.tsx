@@ -17,11 +17,13 @@ import {
   updateLayoutBlocks,
   updateFullWidthImageUrl,
   updateHeroImageUrl,
+  updateHeroImageMobileUrl,
   updateLogoUrl,
   updateHeaderBackgroundUrls,
   updateCarouselItemsPersist,
   uploadFullWidthImage,
   uploadHeroLayoutImage,
+  uploadHeroLayoutMobileImage,
   uploadLogoLayoutImage,
   uploadHeaderBackgroundDesktop,
   uploadHeaderBackgroundMobile,
@@ -331,10 +333,8 @@ export default function AdminLayoutPage() {
   const desktopCanvasViewportWidthPx = LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX;
   /** 手機寬度 iframe 預覽專用，與桌機畫布預覽比例分開；預設 100% 以貼近前台手機 1:1 呈現。 */
   const [mobileCanvasZoomPct, setMobileCanvasZoomPct] = useState(100);
-  /** 手機 iframe 目前實際可視寬度（px），用來同步手機版畫布設計寬。 */
-  const [mobilePreviewViewportWidthPx, setMobilePreviewViewportWidthPx] = useState(
-    LAYOUT_MOBILE_PREVIEW_WIDTH_PX
-  );
+  /** 手機畫布固定基準寬（390px）：避免隨 iframe 實際寬度變動而導致高度與真機觀感不一致。 */
+  const [mobilePreviewViewportWidthPx] = useState(LAYOUT_MOBILE_PREVIEW_WIDTH_PX);
   /** 側欄裝飾圖編輯：與「畫布開關」同步（桌機版／手機版） */
   const [floatingEditViewport, setFloatingEditViewport] = useState<"desktop" | "mobile">("desktop");
   /** 僅顯示一種畫布，避免同時捲動兩段預覽 */
@@ -349,20 +349,7 @@ export default function AdminLayoutPage() {
   const [blockDeletePick, setBlockDeletePick] = useState<string>("");
   const mobileCanvasSectionRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
-    const iframe = mobilePreviewIframeRef.current;
-    if (!iframe) return;
-    const measure = () => {
-      const w = Math.max(320, Math.round(iframe.clientWidth || LAYOUT_MOBILE_PREVIEW_WIDTH_PX));
-      setMobilePreviewViewportWidthPx((prev) => (prev === w ? prev : w));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(iframe);
-    window.addEventListener("resize", measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
+    // 固定 390 基準寬，避免裝置差異與容器寬變動造成高度預覽漂移。
   }, [canvasViewportMode]);
   useEffect(() => {
     setFloatingEditViewport(canvasViewportMode === "mobile" ? "mobile" : "desktop");
@@ -424,6 +411,7 @@ export default function AdminLayoutPage() {
 
   // 畫布用資料（與前台一致）
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  const [heroImageMobileUrl, setHeroImageMobileUrl] = useState<string | null>(null);
   const [carouselItems, setCarouselItems] = useState<CarouselItem[]>([]);
   const [aboutContent, setAboutContent] = useState<string | null>(null);
   const [navAboutLabel, setNavAboutLabel] = useState("關於我們");
@@ -438,9 +426,14 @@ export default function AdminLayoutPage() {
   const fullWidthImageFileRef = useRef<HTMLInputElement | null>(null);
   /** 首頁主圖：選檔預覽，儲存時上傳 R2 */
   const [heroImageDraftUrl, setHeroImageDraftUrl] = useState<string | null>(null);
+  const [heroImageMobileDraftUrl, setHeroImageMobileDraftUrl] = useState<string | null>(null);
   /** 手機 iframe 預覽需跨 document，blob URL 可能不可用，改用 data URL 同步。 */
   const [heroImageDraftMobilePreviewUrl, setHeroImageDraftMobilePreviewUrl] = useState<string | null>(null);
+  const [heroImageMobileDraftMobilePreviewUrl, setHeroImageMobileDraftMobilePreviewUrl] = useState<string | null>(
+    null
+  );
   const [heroImagePendingFile, setHeroImagePendingFile] = useState<File | null>(null);
+  const [heroImageMobilePendingFile, setHeroImageMobilePendingFile] = useState<File | null>(null);
   const heroImageFileRef = useRef<HTMLInputElement | null>(null);
   /** LOGO／頁首背景 */
   const [logoDraftUrl, setLogoDraftUrl] = useState<string | null>(null);
@@ -495,6 +488,7 @@ export default function AdminLayoutPage() {
             : [];
         setBlocks(nextBlocks);
         setHeroImageUrl(s.heroImageUrl);
+        setHeroImageMobileUrl(s.heroImageMobileUrl ?? s.heroImageUrl ?? null);
         setCarouselItems(s.carouselItems.length > 0 ? s.carouselItems : [
           { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
           { id: "w2", title: "新課上架", subtitle: "兒童烘焙工作坊", imageUrl: null, visible: true },
@@ -963,12 +957,22 @@ export default function AdminLayoutPage() {
     () => heroImageDraftUrl ?? heroImageUrl,
     [heroImageDraftUrl, heroImageUrl]
   );
+  const displayHeroImageMobileUrl = useMemo(
+    () => heroImageMobileDraftUrl ?? heroImageMobileUrl ?? heroImageUrl,
+    [heroImageMobileDraftUrl, heroImageMobileUrl, heroImageUrl]
+  );
   const mobilePreviewHeroImageUrl = useMemo(() => {
     if (displayHeroImageUrl?.startsWith("blob:")) {
       return heroImageDraftMobilePreviewUrl;
     }
     return displayHeroImageUrl;
   }, [displayHeroImageUrl, heroImageDraftMobilePreviewUrl]);
+  const mobilePreviewHeroImageMobileUrl = useMemo(() => {
+    if (displayHeroImageMobileUrl?.startsWith("blob:")) {
+      return heroImageMobileDraftMobilePreviewUrl;
+    }
+    return displayHeroImageMobileUrl;
+  }, [displayHeroImageMobileUrl, heroImageMobileDraftMobilePreviewUrl]);
 
   const displayLogoUrl = useMemo(() => logoDraftUrl ?? logoUrl, [logoDraftUrl, logoUrl]);
 
@@ -1021,23 +1025,48 @@ export default function AdminLayoutPage() {
       setMessage({ type: "error", text: "請選擇圖片檔案" });
       return;
     }
-    setHeroImageDraftUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
-    setHeroImageDraftMobilePreviewUrl(null);
-    void readFileAsDataUrl(file)
-      .then((url) => {
-        setHeroImageDraftMobilePreviewUrl(url);
-      })
-      .catch(() => {
-        setMessage({ type: "error", text: "主圖預覽轉換失敗，請重新選擇檔案" });
+    if (canvasViewportMode === "mobile") {
+      setHeroImageMobileDraftUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
       });
-    setHeroImagePendingFile(file);
+      setHeroImageMobileDraftMobilePreviewUrl(null);
+      void readFileAsDataUrl(file)
+        .then((url) => {
+          setHeroImageMobileDraftMobilePreviewUrl(url);
+        })
+        .catch(() => {
+          setMessage({ type: "error", text: "主圖預覽轉換失敗，請重新選擇檔案" });
+        });
+      setHeroImageMobilePendingFile(file);
+    } else {
+      setHeroImageDraftUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
+      setHeroImageDraftMobilePreviewUrl(null);
+      void readFileAsDataUrl(file)
+        .then((url) => {
+          setHeroImageDraftMobilePreviewUrl(url);
+        })
+        .catch(() => {
+          setMessage({ type: "error", text: "主圖預覽轉換失敗，請重新選擇檔案" });
+        });
+      setHeroImagePendingFile(file);
+    }
     setMessage(null);
   };
 
   const clearHeroImageDraft = () => {
+    if (canvasViewportMode === "mobile") {
+      setHeroImageMobileDraftUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setHeroImageMobileDraftMobilePreviewUrl(null);
+      setHeroImageMobilePendingFile(null);
+      return;
+    }
     setHeroImageDraftUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -1191,7 +1220,29 @@ export default function AdminLayoutPage() {
           if (prev) URL.revokeObjectURL(prev);
           return null;
         });
+        setHeroImageDraftMobilePreviewUrl(null);
         setHeroImagePendingFile(null);
+      }
+      if (heroImageMobilePendingFile) {
+        const fd = new FormData();
+        fd.set("hero_image_mobile", heroImageMobilePendingFile);
+        const up = await uploadHeroLayoutMobileImage(fd);
+        if (!up.success) {
+          setMessage({ type: "error", text: up.error });
+          return;
+        }
+        const savedMeta = await updateHeroImageMobileUrl(up.url);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setHeroImageMobileUrl(up.url);
+        setHeroImageMobileDraftUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setHeroImageMobileDraftMobilePreviewUrl(null);
+        setHeroImageMobilePendingFile(null);
       }
 
       const pendingCarouselKeys = Object.keys(carouselSlidePendingFiles);
@@ -1366,7 +1417,8 @@ export default function AdminLayoutPage() {
     selectedBlockId === "hero" || selectedBlockId === "hero_carousel" ? (
       <div className="space-y-2 rounded-lg border border-amber-200/80 bg-white/90 p-3">
         <p className="text-xs text-gray-600 leading-relaxed">
-          首頁主圖：{canvasViewportMode === "mobile" ? HERO_MAIN_IMAGE_SIZE_HINT_MOBILE : HERO_MAIN_IMAGE_SIZE_HINT_DESKTOP}。
+          首頁主圖（{canvasViewportMode === "mobile" ? "手機版" : "桌機版"}）：
+          {canvasViewportMode === "mobile" ? HERO_MAIN_IMAGE_SIZE_HINT_MOBILE : HERO_MAIN_IMAGE_SIZE_HINT_DESKTOP}。
         </p>
         <button
           type="button"
@@ -1374,22 +1426,32 @@ export default function AdminLayoutPage() {
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
         >
           <ImageIcon className="h-4 w-4 shrink-0" />
-          {displayHeroImageUrl ? "更換首頁主圖" : "上傳首頁主圖"}
+          {canvasViewportMode === "mobile"
+            ? displayHeroImageMobileUrl
+              ? "更換首頁主圖（手機）"
+              : "上傳首頁主圖（手機）"
+            : displayHeroImageUrl
+              ? "更換首頁主圖（桌機）"
+              : "上傳首頁主圖（桌機）"}
         </button>
-        {heroImagePendingFile ? (
+        {(canvasViewportMode === "mobile" ? heroImageMobilePendingFile : heroImagePendingFile) ? (
           <p className="text-[11px] text-amber-800">
-            待上傳：{heroImagePendingFile.name}（須按「儲存版面」）
+            待上傳：
+            {canvasViewportMode === "mobile" ? heroImageMobilePendingFile?.name : heroImagePendingFile?.name}
+            （須按「儲存版面」）
           </p>
         ) : null}
-        {displayHeroImageUrl ? (
+        {(canvasViewportMode === "mobile" ? displayHeroImageMobileUrl : displayHeroImageUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={displayHeroImageUrl}
+            src={canvasViewportMode === "mobile" ? displayHeroImageMobileUrl ?? "" : displayHeroImageUrl ?? ""}
             alt=""
             className="w-full max-h-36 rounded-md border border-gray-200 object-cover bg-gray-50"
           />
         ) : null}
-        {heroImagePendingFile || heroImageDraftUrl ? (
+        {(canvasViewportMode === "mobile"
+          ? heroImageMobilePendingFile || heroImageMobileDraftUrl
+          : heroImagePendingFile || heroImageDraftUrl) ? (
           <button
             type="button"
             onClick={clearHeroImageDraft}
@@ -1624,7 +1686,9 @@ export default function AdminLayoutPage() {
       desktopCanvasZoomPct: canvasZoomPct,
       desktopCanvasViewportWidthPx,
       heroImageUrl: mobilePreviewHeroImageUrl,
+      heroImageMobileUrl: mobilePreviewHeroImageMobileUrl,
       heroImageFile: heroImagePendingFile,
+      heroImageMobileFile: heroImageMobilePendingFile,
       carouselItems: displayCarouselItems,
       aboutContent,
       navAboutLabel,
@@ -1668,7 +1732,9 @@ export default function AdminLayoutPage() {
       canvasZoomPct,
       desktopCanvasViewportWidthPx,
       mobilePreviewHeroImageUrl,
+      mobilePreviewHeroImageMobileUrl,
       heroImagePendingFile,
+      heroImageMobilePendingFile,
       displayCarouselItems,
       aboutContent,
       navAboutLabel,
@@ -2093,6 +2159,7 @@ export default function AdminLayoutPage() {
                 designWidthPx={LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX}
                 zoomPercent={canvasZoomPct}
                 heroImageUrl={displayHeroImageUrl}
+                heroImageMobileUrl={displayHeroImageMobileUrl}
                 carouselItems={displayCarouselItems}
                 aboutContent={aboutContent}
                 navAboutLabel={navAboutLabel}
@@ -2180,7 +2247,7 @@ export default function AdminLayoutPage() {
                 ref={mobilePreviewIframeRef}
                 title="首頁版面手機寬度預覽"
                 src="/admin/layout/preview"
-                className="w-full max-w-[430px] border border-gray-300 rounded-lg bg-white shadow"
+                className="w-full max-w-[390px] border border-gray-300 rounded-lg bg-white shadow"
                 style={{ height: "min(78vh, 920px)" }}
                 onLoad={postLayoutPreviewToIframe}
               />

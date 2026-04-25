@@ -47,8 +47,10 @@ export type LayoutPreviewSyncPayload = {
   /** 桌機畫布視窗寬度（px，用於需要與桌機 1:1 同步時）。 */
   desktopCanvasViewportWidthPx: number;
   heroImageUrl: string | null;
+  heroImageMobileUrl: string | null;
   /** 未儲存時同步主圖原檔，讓 iframe 內可自行建立 blob URL 預覽。 */
   heroImageFile?: File | null;
+  heroImageMobileFile?: File | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;
   navAboutLabel: string;

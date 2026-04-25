@@ -51,7 +51,13 @@ export default function HomePageClient({ settings, homeCourses, homeCoursesError
       layoutBlocks={layoutBlocks}
       heroSettingsLoaded
       heroImageUrl={settings.heroImageUrl}
+      heroImageMobileUrl={settings.heroImageMobileUrl ?? null}
       fullWidthImageUrl={settings.fullWidthImageUrl ?? null}
+      previewHeader={{
+        logoUrl: settings.logoUrl ?? null,
+        headerBackgroundUrl: settings.headerBackgroundUrl ?? null,
+        headerBackgroundMobileUrl: settings.headerBackgroundMobileUrl ?? null,
+      }}
       carouselItems={carouselItems}
       aboutContent={settings.aboutContent ?? null}
       navAboutLabel={settings.navAboutLabel || "關於我們"}

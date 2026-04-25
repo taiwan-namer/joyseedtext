@@ -20,6 +20,7 @@ type LayoutCanvasProps = {
   /** 預覽縮放 1–100（例如 50 表示視覺縮為一半，方便一覽整頁） */
   zoomPercent: number;
   heroImageUrl: string | null;
+  heroImageMobileUrl?: string | null;
   carouselItems: CarouselItem[];
   aboutContent: string | null;
   navAboutLabel: string;
@@ -88,6 +89,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
     designWidthPx,
     zoomPercent,
     heroImageUrl,
+    heroImageMobileUrl,
     fullWidthImageUrl,
     logoUrl,
     headerBackgroundUrl,
@@ -178,6 +180,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
             <BranchSiteHomeView
               layoutBlocks={blocks}
               heroImageUrl={heroImageUrl}
+              heroImageMobileUrl={heroImageMobileUrl ?? null}
               fullWidthImageUrl={fullWidthImageUrl ?? null}
               previewHeader={{
                 logoUrl: logoUrl ?? null,
@@ -243,6 +246,7 @@ export default function LayoutCanvas(props: LayoutCanvasProps) {
           <BranchSiteHomeView
             layoutBlocks={blocks}
             heroImageUrl={heroImageUrl}
+            heroImageMobileUrl={heroImageMobileUrl ?? null}
             fullWidthImageUrl={fullWidthImageUrl ?? null}
             previewHeader={{
               logoUrl: logoUrl ?? null,

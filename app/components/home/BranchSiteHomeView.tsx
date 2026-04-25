@@ -139,6 +139,7 @@ export type BranchSiteHomeViewProps = {
    */
   heroSettingsLoaded?: boolean;
   heroImageUrl: string | null;
+  heroImageMobileUrl?: string | null;
   /** 後台畫布：單張大圖區塊預覽用（與前台設定同步） */
   fullWidthImageUrl?: string | null;
   /**
@@ -176,6 +177,7 @@ export default function BranchSiteHomeView({
   layoutBlocks,
   heroSettingsLoaded = true,
   heroImageUrl,
+  heroImageMobileUrl = null,
   fullWidthImageUrl = null,
   previewHeader = null,
   carouselItems,
@@ -540,7 +542,7 @@ export default function BranchSiteHomeView({
     );
   };
 
-  const ph = admin && previewHeader ? previewHeader : null;
+  const ph = previewHeader ?? null;
   const hasPreviewLogo = !!(ph?.logoUrl && ph.logoUrl.trim());
   const deskBg = ph?.headerBackgroundUrl?.trim() || null;
   const mobBg = ph?.headerBackgroundMobileUrl?.trim() || null;
@@ -671,6 +673,12 @@ export default function BranchSiteHomeView({
    * 後台畫布（admin）即使無圖、無裝飾亦顯示佔位，以便預覽版面並在畫布上選檔；訪客首頁無 admin 時無圖無裝飾則不渲染。
    */
   const heroImageTrimmed = heroImageUrl?.trim() || null;
+  const heroImageMobileTrimmed = heroImageMobileUrl?.trim() || null;
+  const resolvedHeroImageMobile = heroImageMobileTrimmed || heroImageTrimmed;
+  const hasSplitHeroByViewport =
+    !!heroImageTrimmed &&
+    !!resolvedHeroImageMobile &&
+    heroImageTrimmed !== resolvedHeroImageMobile;
   const hasMainHeroVisual =
     !!heroImageTrimmed ||
     (iconsForMainHeroSection != null && iconsForMainHeroSection.length > 0) ||
@@ -682,10 +690,19 @@ export default function BranchSiteHomeView({
       <div className="relative w-full min-h-0" style={getBlockStyle("hero")}>
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
           <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
-          {heroImageTrimmed ? (
+          {heroImageTrimmed || resolvedHeroImageMobile ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={heroImageTrimmed} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              {hasSplitHeroByViewport ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={resolvedHeroImageMobile!} alt="" className="absolute inset-0 w-full h-full object-cover md:hidden" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={heroImageTrimmed!} alt="" className="absolute inset-0 hidden w-full h-full object-cover md:block" />
+                </>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={(heroImageTrimmed ?? resolvedHeroImageMobile)!} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              )}
             </>
           ) : (
             <div className="absolute inset-0 bg-amber-50" aria-hidden />
@@ -774,7 +791,7 @@ export default function BranchSiteHomeView({
   );
 
   const heroCarouselStripInner =
-    admin && heroImageUrl && heroBlock && heroCarouselBlock ? (
+    admin && (heroImageTrimmed || resolvedHeroImageMobile) && heroBlock && heroCarouselBlock ? (
       <section className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
         <div className="relative mx-auto max-w-7xl px-4 py-4 min-h-[100px]">
           <p className="text-xs text-center text-gray-600 relative z-0">
@@ -1207,7 +1224,7 @@ export default function BranchSiteHomeView({
         return wrap("hero", heroInner, { blockOverride: heroBlock ?? undefined });
       }
       case "hero_carousel": {
-        if (!admin || !heroImageUrl) return null;
+        if (!admin || (!heroImageTrimmed && !resolvedHeroImageMobile)) return null;
         if (heroBlock && heroCarouselBlock && heroCarouselStripInner) {
           return wrap("hero_carousel", heroCarouselStripInner);
         }

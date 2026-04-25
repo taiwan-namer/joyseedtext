@@ -147,6 +147,7 @@ function applyLegacyHeroFloatingIconsToBlocks(
 function defaultFrontendSettingsWhenMissing(): FrontendSettings {
   return {
     heroImageUrl: null,
+    heroImageMobileUrl: null,
     heroBackgroundUrl: null,
     heroBackgroundMobileUrl: null,
     heroTitle: DEFAULT_HERO_TITLE,
@@ -252,6 +253,14 @@ async function readFrontendSettingsUncached(): Promise<FrontendSettings> {
       heroImageUrl: normalizeUploadedAssetUrl(
         raw.heroImageUrl != null ? String(raw.heroImageUrl) : null,
         "hero_image"
+      ),
+      heroImageMobileUrl: normalizeUploadedAssetUrl(
+        raw.heroImageMobileUrl != null
+          ? String(raw.heroImageMobileUrl)
+          : raw.hero_image_mobile != null
+            ? String(raw.hero_image_mobile)
+            : null,
+        "hero_image_mobile"
       ),
       heroBackgroundUrl: normalizeUploadedAssetUrl(
         raw.heroBackgroundUrl != null ? String(raw.heroBackgroundUrl) : null,
@@ -626,6 +635,21 @@ export async function uploadHeroLayoutImage(formData: FormData): Promise<
   }
 }
 
+/** 上傳首頁主圖（手機）（key：`hero_image_mobile`，路徑：`home-hero-mobile`） */
+export async function uploadHeroLayoutMobileImage(formData: FormData): Promise<
+  { success: true; url: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const url = await uploadOneToR2WithPrefix(formData, "hero_image_mobile", "home-hero-mobile");
+    if (!url) return { success: false, error: "未選擇圖片或檔案無效" };
+    return { success: true, url };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "上傳失敗";
+    return { success: false, error: msg };
+  }
+}
+
 /** 上傳 LOGO（key：`store_logo`，路徑含 `logo` 以利讀取驗證） */
 export async function uploadLogoLayoutImage(formData: FormData): Promise<
   { success: true; url: string } | { success: false; error: string }
@@ -718,6 +742,40 @@ export async function updateHeroImageUrl(url: string | null): Promise<
       );
     if (error) return { success: false, error: error.message };
     return { success: true, message: "首頁主圖已儲存" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "儲存失敗";
+    return { success: false, error: msg };
+  }
+}
+
+export async function updateHeroImageMobileUrl(url: string | null): Promise<
+  { success: true; message?: string } | { success: false; error: string }
+> {
+  try {
+    await verifyAdminSession();
+    const merchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!merchantId) return { success: false, error: "未設定 NEXT_PUBLIC_CLIENT_ID" };
+    const existing = await getFrontendSettings();
+    const value = typeof url === "string" && url.trim() ? url.trim() : null;
+    const merged: FrontendSettings = { ...existing, heroImageMobileUrl: value };
+    const { createServerSupabase } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabase();
+    const frontendSettings: Record<string, unknown> = {
+      ...persistFrontendSettingsBase(merged),
+      heroImageMobileUrl: value,
+    };
+    const { error } = await supabase
+      .from("store_settings")
+      .upsert(
+        {
+          merchant_id: merchantId,
+          frontend_settings: frontendSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "merchant_id" }
+      );
+    if (error) return { success: false, error: error.message };
+    return { success: true, message: "首頁主圖（手機）已儲存" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "儲存失敗";
     return { success: false, error: msg };
@@ -867,6 +925,13 @@ export async function updateFrontendSettings(formData: FormData): Promise<
       const url = await uploadOneToR2(formData, "hero_image");
       if (url) heroImageUrl = url;
     }
+    const heroMobileUrl = (formData.get("hero_image_mobile_url") as string)?.trim() || null;
+    let heroImageMobileUrl = heroMobileUrl || existing.heroImageMobileUrl || existing.heroImageUrl;
+    const heroMobileFile = formData.get("hero_image_mobile") as File | null;
+    if (!heroMobileUrl && heroMobileFile && heroMobileFile instanceof File && heroMobileFile.size > 0) {
+      const url = await uploadOneToR2WithPrefix(formData, "hero_image_mobile", "home-hero-mobile");
+      if (url) heroImageMobileUrl = url;
+    }
 
     const heroTitle = (formData.get("hero_title") as string)?.trim() || DEFAULT_HERO_TITLE;
 
@@ -933,6 +998,7 @@ export async function updateFrontendSettings(formData: FormData): Promise<
     const merged: FrontendSettings = {
       ...existing,
       heroImageUrl,
+      heroImageMobileUrl,
       heroTitle,
       carouselItems,
       navAboutLabel,
