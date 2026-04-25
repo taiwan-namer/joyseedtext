@@ -487,13 +487,13 @@ export default function AdminEnrollmentPage() {
                             return (
                               <li
                                 key={`${s.classId}-${s.time}`}
-                                className="grid grid-cols-[3.2rem_minmax(0,1fr)_max-content] items-baseline gap-x-2"
+                                className="flex w-full items-baseline"
                               >
-                                <span className="font-mono text-amber-800">{s.time}</span>
-                                <span className="min-w-0 truncate pr-6 text-right font-medium text-gray-900">
+                                <span className="w-[3.2rem] shrink-0 font-mono text-amber-800">{s.time}</span>
+                                <span className="min-w-0 truncate pl-1 text-left font-medium text-gray-900">
                                   {s.title || "未命名課程"}
                                 </span>
-                                <span className="justify-self-end whitespace-nowrap text-right text-gray-500">
+                                <span className="ml-auto whitespace-nowrap pl-6 text-right text-gray-500">
                                   剩 {left} / 名額 {s.capacity}
                                 </span>
                               </li>
