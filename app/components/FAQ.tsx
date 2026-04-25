@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { getFaqItems } from "@/app/actions/storeSettingsActions";
 import type { FaqItem } from "@/app/actions/storeSettingsActions";
@@ -92,8 +92,29 @@ export default function FAQ() {
 
   return (
     <>
-      {/* 手機：維持單欄捲動，閱讀順序由上而下 */}
-      <div className="w-full max-w-2xl mx-auto md:hidden">{items.map(row)}</div>
+      {/* 手機：>5 則改為左右滑動分欄，並在右側顯示箭頭提示 */}
+      {!multiColumn ? (
+        <div className="w-full max-w-2xl mx-auto md:hidden">{items.map(row)}</div>
+      ) : (
+        <div className="md:hidden relative">
+          <div className="overflow-x-auto pb-1 snap-x snap-mandatory">
+            <div className="flex gap-3">
+              {columns.map((col, colIndex) => (
+                <div
+                  key={colIndex}
+                  className="w-[calc(100vw-2rem)] max-w-[560px] shrink-0 snap-start rounded-lg bg-white"
+                >
+                  {col.map(row)}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-14 bg-gradient-to-l from-white via-white/80 to-transparent" />
+          <div className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 rounded-full bg-white/95 shadow border border-gray-200 p-1.5">
+            <ChevronRight className="h-4 w-4 text-amber-600" aria-hidden />
+          </div>
+        </div>
+      )}
 
       {/* 桌機：≤5 則維持置中寬度；>5 則每欄最多 5 則、多欄由左填滿 */}
       {!multiColumn ? (
