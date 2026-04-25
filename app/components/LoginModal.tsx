@@ -6,8 +6,11 @@ import { createPortal } from "react-dom";
 import { X, Eye, EyeOff, Mail } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { syncAuthUserToMembers } from "@/app/actions/memberActions";
+import { sendRegistrationOtp, syncAuthUserToMembers } from "@/app/actions/memberActions";
+import { mapSupabaseAuthErrorToZh } from "@/lib/auth/supabaseAuthErrorZh";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
+
+const REGISTER_OTP_COOLDOWN_SEC = 60;
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -64,6 +67,8 @@ export default function LoginModal({
   const [oauthLoading, setOauthLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerOtpSending, setRegisterOtpSending] = useState(false);
+  const [registerOtpCooldown, setRegisterOtpCooldown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -75,10 +80,19 @@ export default function LoginModal({
   }, []);
 
   useEffect(() => {
+    if (registerOtpCooldown <= 0) return;
+    const t = setInterval(() => {
+      setRegisterOtpCooldown((c) => (c <= 1 ? 0 : c - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [registerOtpCooldown]);
+
+  useEffect(() => {
     if (isOpen) {
       setStep(initialStep ?? 1);
       setFormError(null);
       setForgotEmail("");
+      setRegisterOtpCooldown(0);
     }
   }, [isOpen, initialStep]);
 
@@ -133,15 +147,42 @@ export default function LoginModal({
     }
   }, [onClose, onSuccess]);
 
+  const handleSendRegisterOtp = useCallback(async () => {
+    setFormError(null);
+    const input = typeof document !== "undefined" ? (document.getElementById("reg-email") as HTMLInputElement | null) : null;
+    const email = (input?.value ?? "").trim().toLowerCase();
+    if (!email) {
+      setFormError("請先輸入電子郵件，再傳送認證碼");
+      return;
+    }
+    setRegisterOtpSending(true);
+    try {
+      const res = await sendRegistrationOtp(email);
+      if (!res.success) {
+        setFormError(res.error);
+        return;
+      }
+      setRegisterOtpCooldown(REGISTER_OTP_COOLDOWN_SEC);
+      setFormError("已傳送認證碼到您的信箱，請查收後輸入。");
+    } finally {
+      setRegisterOtpSending(false);
+    }
+  }, []);
+
   const handleRegisterSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
     const form = e.currentTarget;
-    const email = (form.querySelector<HTMLInputElement>('[name="email"]')?.value ?? "").trim();
+    const email = (form.querySelector<HTMLInputElement>('[name="email"]')?.value ?? "").trim().toLowerCase();
+    const otp = (form.querySelector<HTMLInputElement>('[name="otp"]')?.value ?? "").trim();
     const password = form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? "";
     const confirm = form.querySelector<HTMLInputElement>('[name="confirmPassword"]')?.value ?? "";
     if (!email || !password) {
       setFormError("請填寫電子郵件與密碼");
+      return;
+    }
+    if (!otp) {
+      setFormError("請填寫信箱認證碼");
       return;
     }
     if (password !== confirm) {
@@ -155,29 +196,32 @@ export default function LoginModal({
     setRegisterLoading(true);
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        const normalized = (error.message ?? "").toLowerCase();
-        if (normalized.includes("user already registered")) {
-          // Supabase Auth 帳號為全域 email 唯一：同 email 在其他分站註冊過時，導向登入並沿用同一帳號。
-          // 登入成功後會呼叫 syncAuthUserToMembers，自動在目前分站 upsert members 紀錄。
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: "email",
+      });
+      if (otpError) {
+        const msg = (otpError.message ?? "").toLowerCase();
+        if (msg.includes("already") && msg.includes("registered")) {
           setStep(2);
           setFormError("此信箱已註冊，請直接登入；登入後會自動綁定到目前分站會員資料。");
           return;
         }
-        setFormError(translateAuthErrorMessage(error.message));
+        setFormError(mapSupabaseAuthErrorToZh(otpError.message));
         return;
       }
-      // Supabase 若已關閉「確認信箱」，signUp 會直接回傳 session，視為註冊完成
-      if (data.session) {
-        onSuccess?.(data.session);
-        onClose();
-        void syncAuthUserToMembers().catch(() => {});
+      const { error: passwordError } = await supabase.auth.updateUser({ password });
+      if (passwordError) {
+        setFormError(mapSupabaseAuthErrorToZh(passwordError.message));
         return;
       }
-      setFormError(null);
-      setStep(2);
-      setFormError("請至信箱收取驗證信完成註冊");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      onSuccess?.(session ?? null);
+      onClose();
+      void syncAuthUserToMembers().catch(() => {});
     } finally {
       setRegisterLoading(false);
     }
@@ -375,7 +419,14 @@ export default function LoginModal({
             </div>
             <div className="px-6 pb-6">
               {formError && (
-                <div className="rounded-lg px-3 py-2 text-sm bg-red-50 text-red-700 border border-red-100 mb-4" role="alert">
+                <div
+                  className={`rounded-lg px-3 py-2 text-sm mb-4 border ${
+                    formError.includes("已傳送") || formError.includes("已寄出")
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                      : "bg-red-50 text-red-700 border-red-100"
+                  }`}
+                  role="alert"
+                >
                   {formError}
                 </div>
               )}
@@ -389,6 +440,32 @@ export default function LoginModal({
                     placeholder="請輸入電子郵件"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
                   />
+                </div>
+                <div>
+                  <label htmlFor="reg-otp" className="block text-sm font-medium text-gray-900 mb-1">認證碼</label>
+                  <div className="flex items-stretch gap-2">
+                    <input
+                      id="reg-otp"
+                      name="otp"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="請輸入信箱認證碼"
+                      className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleSendRegisterOtp()}
+                      disabled={registerLoading || registerOtpSending || registerOtpCooldown > 0}
+                      className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {registerOtpSending
+                        ? "傳送中…"
+                        : registerOtpCooldown > 0
+                          ? `${registerOtpCooldown} 秒後可重送`
+                          : "傳送認證碼"}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label htmlFor="reg-password" className="block text-sm font-medium text-gray-900 mb-1">密碼</label>
@@ -441,7 +518,7 @@ export default function LoginModal({
                 </div>
                 <button
                   type="submit"
-                  disabled={registerLoading}
+                  disabled={registerLoading || registerOtpSending}
                   className="w-full py-2.5 rounded-lg font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 transition-colors touch-manipulation min-h-[48px]"
                 >
                   {registerLoading ? "註冊中…" : "註冊"}
