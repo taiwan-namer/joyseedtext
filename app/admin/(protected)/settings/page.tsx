@@ -177,9 +177,6 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-xl font-bold text-gray-900">基本資料</h1>
-      <p className="text-sm text-gray-600">
-        設定網站名稱、主色系、背景色、頁首導覽文字與會員圖示；前台會依此顯示。下方示範區可先預覽再儲存。
-      </p>
 
       {/* 整合示範區 + 上下配色：一區塊體驗三種配色（頁面底色、關於我們區塊底色、主色） */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -187,13 +184,17 @@ export default function AdminSettingsPage() {
         <div className="rounded-lg border border-gray-200 overflow-hidden min-h-[200px]">
           {/* 上方區塊：對應「關於我們區塊背景色」設定 */}
           <div
-            className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200/80 transition-colors"
+            className="space-y-3 px-4 py-3 border-b border-gray-200/80 transition-colors"
             style={{ backgroundColor: aboutSectionBackgroundColor }}
           >
-            <span className="text-xs text-gray-500 mr-2">關於我們區塊底色</span>
-            <span className="text-sm font-bold" style={{ color: primaryColor }}>{siteName || "童趣島"}</span>
-            <div className="flex gap-2 text-xs flex-wrap justify-end">
-              <span style={{ color: primaryColor }}>關於我們</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-500">關於我們區塊底色</span>
+              <span className="text-sm font-bold" style={{ color: primaryColor }}>
+                {siteName || "童趣島"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:flex sm:flex-wrap sm:gap-2">
+              <span className="font-medium text-gray-700">關於我們</span>
               <span className="text-gray-500">{navCoursesLabel || "課程介紹"}</span>
               <span className="text-gray-500">{navBookingLabel || "課程預約"}</span>
               <span className="text-gray-500">{navFaqLabel || "常見問題"}</span>
@@ -219,7 +220,7 @@ export default function AdminSettingsPage() {
             <p className="text-sm text-gray-600">上方為關於我們區塊底色、下方為頁面底色，可感受兩種配色的變化。</p>
           </div>
         </div>
-        <p className="mt-3 text-xs text-gray-500">滿意後再按「儲存」即可套用至前台。</p>
+        <p className="mt-3 text-xs text-gray-500">上方為關於我們區塊底色、下方為頁面底色，可感受兩種配色的變化。</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -246,7 +247,6 @@ export default function AdminSettingsPage() {
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
             disabled={isPending}
           />
-          <p className="mt-1 text-xs text-gray-500">修改後，全站顯示的網站名稱會一併更新（例如目前為「童趣島」可改為「wonder」）。</p>
         </div>
 
         <div>
@@ -268,7 +268,6 @@ export default function AdminSettingsPage() {
               disabled={isPending}
             />
           </div>
-          <p className="mt-1 text-xs text-gray-500">主色用於按鈕、連結等，與背景色不同。示範區可即時預覽。</p>
         </div>
 
         <div>
@@ -323,12 +322,10 @@ export default function AdminSettingsPage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-xs text-gray-500">點選色票或使用自訂色塊／色碼，可於上方「目前底色示意」即時預覽。</p>
         </div>
 
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-700">關於我們區塊背景色</label>
-          <p className="mb-2 text-xs text-gray-500">首頁「關於我們」區塊的底色，與頁面背景色分開。可於上方「上下配色示意」預覽與導覽列的配色變化。</p>
           <div className="mb-4 rounded-lg border border-gray-200 overflow-hidden">
             <p className="px-3 py-1.5 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">關於我們區塊底色示意</p>
             <div
@@ -377,9 +374,6 @@ export default function AdminSettingsPage() {
 
         <div className="border-t border-gray-200 pt-6">
           <h2 className="text-sm font-semibold text-gray-900 mb-2">導覽列與會員圖示</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            前台頁首右上角連結文字與會員按鈕圖示。「關於我們」文案請至 介紹項 → 關於我們 設定。
-          </p>
           <div className="space-y-4">
             <div>
               <p className="mb-2 text-sm font-medium text-gray-700">會員圖示（擇一）</p>
@@ -480,7 +474,6 @@ export default function AdminSettingsPage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 disabled={isPending}
               />
-              <p className="mt-1 text-xs text-gray-500">填寫後首頁聯絡方式右側會自動顯示該地址的 Google 地圖。</p>
             </div>
           </div>
         </div>
