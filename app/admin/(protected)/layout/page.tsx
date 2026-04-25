@@ -90,7 +90,6 @@ const ALL_ADDABLE_BLOCK_IDS = [...ACTIVE_HOME_BLOCK_IDS, ...OPTIONAL_LAYOUT_BLOC
 /** 首頁版面編輯：圖檔建議尺寸（給店家） */
 const HERO_MAIN_IMAGE_SIZE_HINT_DESKTOP = "建議尺寸：寬 1920 px × 高 600 px";
 const HERO_MAIN_IMAGE_SIZE_HINT_MOBILE = "建議尺寸：寬 1170 px × 高 1755 px";
-const MOBILE_PREVIEW_WIDTH_PRESETS = [390, 393, 412, 430] as const;
 const BLOCK_BACKGROUND_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 800 px";
 /** 與畫布輪播區 aspect 12/5 一致 */
 const CAROUSEL_SLIDE_IMAGE_SIZE_HINT = "建議尺寸：寬 1920 px × 高 800 px";
@@ -334,10 +333,8 @@ export default function AdminLayoutPage() {
   const desktopCanvasViewportWidthPx = LAYOUT_ADMIN_PREVIEW_VIEWPORT_WIDTH_PX;
   /** 手機寬度 iframe 預覽專用，與桌機畫布預覽比例分開；預設 100% 以貼近前台手機 1:1 呈現。 */
   const [mobileCanvasZoomPct, setMobileCanvasZoomPct] = useState(100);
-  /** 手機畫布目標基準寬（可切換裝置常見 CSS 寬）。 */
-  const [mobilePreviewViewportWidthPx, setMobilePreviewViewportWidthPx] = useState(
-    LAYOUT_MOBILE_PREVIEW_WIDTH_PX
-  );
+  /** 手機畫布固定基準寬。 */
+  const [mobilePreviewViewportWidthPx] = useState(LAYOUT_MOBILE_PREVIEW_WIDTH_PX);
   /** 側欄裝飾圖編輯：與「畫布開關」同步（桌機版／手機版） */
   const [floatingEditViewport, setFloatingEditViewport] = useState<"desktop" | "mobile">("desktop");
   /** 僅顯示一種畫布，避免同時捲動兩段預覽 */
@@ -1794,20 +1791,6 @@ export default function AdminLayoutPage() {
     },
     [layoutPreviewPayload]
   );
-  const postLayoutPreviewToIframeWithWidth = useCallback(
-    (nextWidthPx: number) => {
-      const w = mobilePreviewIframeRef.current?.contentWindow;
-      if (!w) return;
-      w.postMessage(
-        {
-          type: LAYOUT_PREVIEW_SYNC_TYPE,
-          payload: { ...layoutPreviewPayload, mobilePreviewViewportWidthPx: nextWidthPx },
-        },
-        window.location.origin
-      );
-    },
-    [layoutPreviewPayload]
-  );
 
   postLayoutPreviewToIframeRef.current = postLayoutPreviewToIframe;
 
@@ -2235,25 +2218,6 @@ export default function AdminLayoutPage() {
                 <p className="text-amber-700 leading-snug">使用mac 裝飾圖定位會有些許誤差</p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 justify-end shrink-0">
-                <span className="text-gray-500 shrink-0">目標寬度</span>
-                {MOBILE_PREVIEW_WIDTH_PRESETS.map((w) => (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => {
-                      setMobilePreviewViewportWidthPx(w);
-                      // 立即同步到 iframe，避免等待 effect。
-                      postLayoutPreviewToIframeWithWidth(w);
-                    }}
-                    className={`rounded-md px-2 py-1 font-medium transition-colors ${
-                      mobilePreviewViewportWidthPx === w
-                        ? "bg-amber-500 text-white"
-                        : "bg-white/90 text-gray-700 border border-gray-300 hover:bg-amber-50"
-                    }`}
-                  >
-                    {w}
-                  </button>
-                ))}
                 <span className="text-gray-500 shrink-0">手機預覽比例</span>
                 {[40, 50, 75, 100].map((pct) => (
                   <button
