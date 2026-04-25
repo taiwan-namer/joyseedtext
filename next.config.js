@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    /**
+     * 遠端圖（R2／CDN 公開 URL）讓瀏覽器直連，不經 Vercel `/_next/image` 轉檔，避免 Image Optimization Transformations 配額。
+     */
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

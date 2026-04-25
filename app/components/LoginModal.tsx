@@ -154,6 +154,14 @@ export default function LoginModal({
       const supabase = createClient();
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) {
+        const normalized = (error.message ?? "").toLowerCase();
+        if (normalized.includes("user already registered")) {
+          // Supabase Auth 帳號為全域 email 唯一：同 email 在其他分站註冊過時，導向登入並沿用同一帳號。
+          // 登入成功後會呼叫 syncAuthUserToMembers，自動在目前分站 upsert members 紀錄。
+          setStep(2);
+          setFormError("此信箱已註冊，請直接登入；登入後會自動綁定到目前分站會員資料。");
+          return;
+        }
         setFormError(translateAuthErrorMessage(error.message));
         return;
       }
