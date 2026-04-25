@@ -244,8 +244,8 @@ function SessionAccordion({
                   <table className="w-full min-w-[520px] text-sm">
                     <thead>
                       <tr className="bg-gray-100/80 border-b border-gray-200">
-                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 whitespace-nowrap">家長姓名</th>
-                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 whitespace-nowrap">小朋友暱稱</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">家長姓名</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友暱稱</th>
                         <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友年齡</th>
                         <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">有無過敏或特殊疾病</th>
                         <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">聯絡電話</th>
@@ -479,13 +479,13 @@ export default function AdminEnrollmentPage() {
                             return (
                               <li
                                 key={`${s.classId}-${s.time}`}
-                                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2"
+                                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3"
                               >
                                 <span className="font-mono text-amber-800">{s.time}</span>
-                                <span className="min-w-0 truncate pr-2 text-right font-medium text-gray-900">
+                                <span className="min-w-0 truncate pr-4 text-right font-medium text-gray-900">
                                   {s.title || "未命名課程"}
                                 </span>
-                                <span className="whitespace-nowrap text-right text-gray-500">
+                                <span className="whitespace-nowrap pl-3 text-right text-gray-500">
                                   剩 {left} / 名額 {s.capacity}
                                 </span>
                               </li>

@@ -152,7 +152,7 @@ export function VendorAttendancePrintSheet({
   sessionData: SessionBookingsResult;
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-2">
+    <div className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap">
       <button
         type="button"
         onClick={() => openPrintWindow(session, sessionData)}
