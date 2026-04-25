@@ -384,9 +384,15 @@ export type CourseDetailPageClientProps = {
   /** 由伺服端 {@link app/course/[slug]/page.tsx} 載入，首屏即顯示（避免進頁後 client 再 fetch） */
   initialCourse: CourseForDisplay;
   slug: string;
+  /** 全站固定注意事項（HTML），顯示於右側客戶須知下方 */
+  globalPrecautionsHtml?: string | null;
 };
 
-export default function CourseDetailPageClient({ initialCourse, slug }: CourseDetailPageClientProps) {
+export default function CourseDetailPageClient({
+  initialCourse,
+  slug,
+  globalPrecautionsHtml = null,
+}: CourseDetailPageClientProps) {
   const router = useRouter();
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay>(initialCourse);
@@ -915,6 +921,15 @@ export default function CourseDetailPageClient({ initialCourse, slug }: CourseDe
                 slotRemainingList={slotRemainingList}
               />
             </div>
+            {globalPrecautionsHtml && globalPrecautionsHtml.trim() !== "" ? (
+              <section className="mt-6 rounded-xl border border-gray-100 bg-gray-50/80 p-6 shadow-sm">
+                <h2 className="mb-3 text-lg font-bold text-gray-900">全站注意事項</h2>
+                <div
+                  className="prose prose-sm max-w-none text-gray-700"
+                  dangerouslySetInnerHTML={{ __html: stripGoogleFontsFromHtml(globalPrecautionsHtml) }}
+                />
+              </section>
+            ) : null}
           </aside>
         </div>
       </div>

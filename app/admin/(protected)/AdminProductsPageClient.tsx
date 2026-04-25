@@ -152,7 +152,67 @@ export default function AdminProductsPageClient() {
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="md:hidden divide-y divide-gray-100">
+          {isLoading ? (
+            <div className="py-12 px-4 text-center text-gray-500 text-sm">資料載入中...</div>
+          ) : error ? (
+            <div className="py-12 px-4 text-center text-red-600 text-sm">{error}</div>
+          ) : classes.length === 0 ? (
+            <div className="py-12 px-4 text-center text-gray-500 text-sm">尚無課程，請點「新增」建立</div>
+          ) : (
+            filteredClasses.map((item) => (
+              <div key={`m-${item.id}`} className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <label className="mt-1 shrink-0 inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelect(item.id)}
+                    />
+                  </label>
+                  <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center shrink-0 overflow-hidden">
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        width={64}
+                        height={64}
+                      />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/admin/classes/edit/${item.id}`}
+                      className="text-amber-700 hover:text-amber-800 font-semibold leading-6 line-clamp-2 block"
+                    >
+                      {item.title ?? "—"}
+                    </Link>
+                    <p className="mt-1 text-xs text-gray-500 font-mono">{item.id.slice(0, 8)}…</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div className="text-gray-500">售價</div>
+                  <div className="text-right font-medium text-gray-800">
+                    {item.price != null ? item.price : "—"}
+                  </div>
+                  <div className="text-gray-500">已報名</div>
+                  <div className="text-right font-medium text-gray-800">
+                    {enrollmentCounts[item.id] ?? 0}
+                  </div>
+                  <div className="text-gray-500">上下架</div>
+                  <div className="text-right text-gray-700">顯示</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full min-w-[800px] text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">

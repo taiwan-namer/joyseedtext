@@ -221,12 +221,14 @@ function SessionAccordion({
             </div>
           ) : sessionData ? (
             <div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-3 sm:px-4">
-                <VendorAttendancePrintSheet session={session} sessionData={sessionData} />
+              <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-3 sm:px-4">
+                <div className="min-w-0 flex-1">
+                  <VendorAttendancePrintSheet session={session} sessionData={sessionData} />
+                </div>
                 <button
                   type="button"
                   onClick={handleExportCsv}
-                  className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
                 >
                   匯出 CSV
                 </button>
@@ -242,8 +244,8 @@ function SessionAccordion({
                   <table className="w-full min-w-[520px] text-sm">
                     <thead>
                       <tr className="bg-gray-100/80 border-b border-gray-200">
-                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">家長姓名</th>
-                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友暱稱</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 whitespace-nowrap">家長姓名</th>
+                        <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700 whitespace-nowrap">小朋友暱稱</th>
                         <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">小朋友年齡</th>
                         <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">有無過敏或特殊疾病</th>
                         <th className="text-left py-3 px-3 sm:px-4 font-medium text-gray-700">聯絡電話</th>
@@ -258,8 +260,8 @@ function SessionAccordion({
                           key={row.id}
                           className="border-b border-gray-100 last:border-0 hover:bg-white/60 transition-colors"
                         >
-                          <td className="py-3 px-3 sm:px-4 text-gray-900">{row.parent_name || "—"}</td>
-                          <td className="py-3 px-3 sm:px-4 text-gray-700">{row.kid_name || "—"}</td>
+                          <td className="py-3 px-3 sm:px-4 text-gray-900 whitespace-nowrap">{row.parent_name || "—"}</td>
+                          <td className="py-3 px-3 sm:px-4 text-gray-700 whitespace-nowrap">{row.kid_name || "—"}</td>
                           <td className="py-3 px-3 sm:px-4 text-gray-700">{row.kid_age || "—"}</td>
                           <td className="py-3 px-3 sm:px-4 text-gray-700">{row.allergy_or_special_note || "—"}</td>
                           <td className="py-3 px-3 sm:px-4 text-gray-700">{row.contact_phone || "—"}</td>
@@ -405,12 +407,9 @@ export default function AdminEnrollmentPage() {
       <h1 className="text-xl font-bold text-gray-900">報名進度查詢（點名簿）</h1>
 
       <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5 shadow-sm space-y-4">
-        <p className="text-sm text-gray-600">
+        <p className="hidden md:block text-sm text-gray-600">
           <span className="hidden md:inline">
             點擊日曆上的日期可查看該日場次與報名明細；場次來自已上架課程之開課日期。
-          </span>
-          <span className="md:hidden">
-            展開下方選單選擇日期，可查看該日場次與報名明細；場次來自已上架課程之開課日期。
           </span>
         </p>
 
@@ -478,12 +477,16 @@ export default function AdminEnrollmentPage() {
                           {sessionsForSelected.map((s) => {
                             const left = Math.max(0, s.capacity - s.enrolledCount);
                             return (
-                              <li key={`${s.classId}-${s.time}`}>
-                                <span className="font-mono text-amber-800">{s.time}</span>{" "}
-                                <span className="font-medium text-gray-900">{s.title || "未命名課程"}</span>
-                                <span className="text-gray-500">
-                                  {" "}
-                                  · 剩 {left} ／ 名額 {s.capacity}
+                              <li
+                                key={`${s.classId}-${s.time}`}
+                                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2"
+                              >
+                                <span className="font-mono text-amber-800">{s.time}</span>
+                                <span className="min-w-0 truncate pr-2 text-right font-medium text-gray-900">
+                                  {s.title || "未命名課程"}
+                                </span>
+                                <span className="whitespace-nowrap text-right text-gray-500">
+                                  剩 {left} / 名額 {s.capacity}
                                 </span>
                               </li>
                             );

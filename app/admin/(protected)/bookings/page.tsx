@@ -412,13 +412,13 @@ export default function AdminBookingsPage() {
           </span>
         </div>
         {/* 一鍵按鈕：不論篩選與否都顯示，操作對象為「目前篩選結果」 */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+        <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pt-2 border-t border-gray-100 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <span className="text-sm font-medium text-gray-700">批次操作</span>
           <button
             type="button"
             onClick={handleBatchPaid}
             disabled={batchPaidLoading || idsForBatchPaid.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {batchPaidLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
             一鍵已付款
@@ -430,7 +430,7 @@ export default function AdminBookingsPage() {
             type="button"
             onClick={handleBatchComplete}
             disabled={batchCompleteLoading || idsForBatchComplete.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {batchCompleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
             一鍵完成課程

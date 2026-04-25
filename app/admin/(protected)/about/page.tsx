@@ -19,12 +19,26 @@ export default function AboutPage() {
   const [codeModalOpen, setCodeModalOpen] = useState(false);
   const [codeInput, setCodeInput] = useState("");
   const [codeFontSize, setCodeFontSize] = useState(14);
+  const [isHtmlSourceMode, setIsHtmlSourceMode] = useState(false);
+  const [precautionsFixedHtml, setPrecautionsFixedHtml] = useState("");
+  const precautionsEditorRef = useRef<HTMLDivElement>(null);
+  const precautionsImageFileRef = useRef<HTMLInputElement>(null);
+  const [isPrecautionsHtmlSourceMode, setIsPrecautionsHtmlSourceMode] = useState(false);
 
   useEffect(() => {
     if (aboutContent !== undefined && aboutEditorRef.current && aboutEditorRef.current.innerHTML !== aboutContent) {
       aboutEditorRef.current.innerHTML = aboutContent;
     }
   }, [aboutContent]);
+  useEffect(() => {
+    if (
+      precautionsFixedHtml !== undefined &&
+      precautionsEditorRef.current &&
+      precautionsEditorRef.current.innerHTML !== precautionsFixedHtml
+    ) {
+      precautionsEditorRef.current.innerHTML = precautionsFixedHtml;
+    }
+  }, [precautionsFixedHtml]);
 
   const execEditorCommand = useCallback((command: string, value?: string) => {
     aboutEditorRef.current?.focus();
@@ -46,6 +60,13 @@ export default function AboutPage() {
     const url = window.prompt("請輸入圖片網址：");
     if (url?.trim()) insertImageHtml(url.trim());
   }, [insertImageHtml]);
+  const insertPrecautionsImageFromUrl = useCallback(() => {
+    const url = window.prompt("請輸入圖片網址：");
+    if (!url?.trim()) return;
+    const safe = url.trim().replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    precautionsEditorRef.current?.focus();
+    document.execCommand("insertHTML", false, `<img src="${safe}" alt="" style="max-width:100%;height:auto;" />`);
+  }, []);
 
   const onAboutImageFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,6 +95,32 @@ export default function AboutPage() {
     },
     [insertImageHtml]
   );
+  const onPrecautionsImageFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      if (file) setMessage({ type: "error", text: "請選擇圖片檔案" });
+      return;
+    }
+    setAboutImageUploading(true);
+    setMessage(null);
+    try {
+      const fd = new FormData();
+      fd.set("about_content_image", file);
+      const result = await uploadAboutPageContentImage(fd);
+      if (result.success) {
+        const safe = result.url.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+        precautionsEditorRef.current?.focus();
+        document.execCommand("insertHTML", false, `<img src="${safe}" alt="" style="max-width:100%;height:auto;" />`);
+      } else {
+        setMessage({ type: "error", text: result.error });
+      }
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "上傳失敗" });
+    } finally {
+      setAboutImageUploading(false);
+    }
+  }, []);
 
   const insertLink = useCallback(() => {
     const url = window.prompt("請輸入連結網址：");
@@ -134,6 +181,7 @@ export default function AboutPage() {
         if (cancelled) return;
         setNavAboutLabel(data.navAboutLabel ?? "關於我們");
         setAboutContent(data.aboutContent ?? "");
+        setPrecautionsFixedHtml(data.precautionsFixedHtml ?? "");
       })
       .catch((err) => {
         if (cancelled) return;
@@ -150,9 +198,16 @@ export default function AboutPage() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMessage(null);
+    const resolvedAboutContent = isHtmlSourceMode
+      ? aboutContent
+      : (aboutEditorRef.current?.innerHTML ?? aboutContent ?? "");
+    const resolvedPrecautionsFixedHtml = isPrecautionsHtmlSourceMode
+      ? precautionsFixedHtml
+      : (precautionsEditorRef.current?.innerHTML ?? precautionsFixedHtml ?? "");
     const formData = new FormData();
     formData.set("nav_about_label", navAboutLabel);
-    formData.set("about_content", aboutEditorRef.current?.innerHTML ?? aboutContent ?? "");
+    formData.set("about_content", resolvedAboutContent);
+    formData.set("precautions_fixed_html", resolvedPrecautionsFixedHtml);
     startTransition(async () => {
       const result = await updateAboutPage(formData);
       if (result.success) {
@@ -163,6 +218,23 @@ export default function AboutPage() {
       }
     });
   };
+
+  const toggleHtmlSourceMode = useCallback(() => {
+    if (!isHtmlSourceMode) {
+      setAboutContent(aboutEditorRef.current?.innerHTML ?? aboutContent ?? "");
+      setIsHtmlSourceMode(true);
+      return;
+    }
+    setIsHtmlSourceMode(false);
+  }, [aboutContent, isHtmlSourceMode]);
+  const togglePrecautionsHtmlSourceMode = useCallback(() => {
+    if (!isPrecautionsHtmlSourceMode) {
+      setPrecautionsFixedHtml(precautionsEditorRef.current?.innerHTML ?? precautionsFixedHtml ?? "");
+      setIsPrecautionsHtmlSourceMode(true);
+      return;
+    }
+    setIsPrecautionsHtmlSourceMode(false);
+  }, [isPrecautionsHtmlSourceMode, precautionsFixedHtml]);
 
   if (loading) {
     return (
@@ -219,9 +291,6 @@ export default function AboutPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">關於我們內容</label>
-            <p className="mb-2 text-xs text-gray-500">
-              首頁點「關於我們」後顯示的區塊。插入圖片請優先使用「上傳圖片」（會存至 R2 並以公開網址顯示於前台）；亦可改用「網址」手動填入外部圖片連結。
-            </p>
             <input
               ref={aboutImageFileRef}
               type="file"
@@ -232,71 +301,185 @@ export default function AboutPage() {
               onChange={onAboutImageFileChange}
             />
             <div className="rounded-lg border border-gray-300 bg-white overflow-hidden">
-              <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 bg-gray-50">
-                <button type="button" onClick={() => execEditorCommand("bold")} className="p-2 rounded hover:bg-gray-200" title="粗體">
-                  <Bold className="w-4 h-4" />
-                </button>
-                <button type="button" onClick={() => execEditorCommand("italic")} className="p-2 rounded hover:bg-gray-200" title="斜體">
-                  <Italic className="w-4 h-4" />
-                </button>
-                <button type="button" onClick={() => execEditorCommand("underline")} className="p-2 rounded hover:bg-gray-200" title="底線">
-                  <Underline className="w-4 h-4" />
-                </button>
-                <span className="w-px h-6 bg-gray-300 mx-0.5" />
-                <button type="button" onClick={insertLink} className="p-2 rounded hover:bg-gray-200" title="插入超連結">
-                  <LinkIcon className="w-4 h-4" />
-                </button>
+              <div className="flex items-center justify-between gap-2 p-2 border-b border-gray-200 bg-gray-50">
+                <div className="flex flex-wrap items-center gap-1">
+                  {!isHtmlSourceMode ? (
+                    <>
+                      <button type="button" onClick={() => execEditorCommand("bold")} className="p-2 rounded hover:bg-gray-200" title="粗體">
+                        <Bold className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => execEditorCommand("italic")} className="p-2 rounded hover:bg-gray-200" title="斜體">
+                        <Italic className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => execEditorCommand("underline")} className="p-2 rounded hover:bg-gray-200" title="底線">
+                        <Underline className="w-4 h-4" />
+                      </button>
+                      <span className="w-px h-6 bg-gray-300 mx-0.5" />
+                      <button type="button" onClick={insertLink} className="p-2 rounded hover:bg-gray-200" title="插入超連結">
+                        <LinkIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => aboutImageFileRef.current?.click()}
+                        disabled={aboutImageUploading || isPending}
+                        className="p-2 rounded hover:bg-gray-200 disabled:opacity-50"
+                        title="上傳圖片至雲端並插入（R2）"
+                      >
+                        <Image className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={insertImageFromUrl}
+                        disabled={aboutImageUploading || isPending}
+                        className="px-2 py-1.5 text-xs font-medium text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
+                        title="改以圖片網址插入"
+                      >
+                        網址
+                      </button>
+                      {aboutImageUploading ? (
+                        <span className="text-xs text-amber-700 flex items-center gap-1">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                          上傳中…
+                        </span>
+                      ) : null}
+                      <button type="button" onClick={() => setCodeModalOpen(true)} className="p-2 rounded hover:bg-gray-200" title="程式碼轉圖片">
+                        <Code className="w-4 h-4" />
+                      </button>
+                      <span className="w-px h-6 bg-gray-300 mx-0.5" />
+                      <select
+                        className="text-sm border border-gray-300 rounded px-2 py-1"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v) execEditorCommand("fontSize", v);
+                        }}
+                        title="字型大小"
+                      >
+                        <option value="">字型大小</option>
+                        <option value="1">小</option>
+                        <option value="2">一般</option>
+                        <option value="3">中</option>
+                        <option value="4">大</option>
+                        <option value="5">特大</option>
+                      </select>
+                    </>
+                  ) : (
+                    <span className="px-1 text-sm text-gray-700">HTML 原始碼</span>
+                  )}
+                </div>
                 <button
                   type="button"
-                  onClick={() => aboutImageFileRef.current?.click()}
-                  disabled={aboutImageUploading || isPending}
-                  className="p-2 rounded hover:bg-gray-200 disabled:opacity-50"
-                  title="上傳圖片至雲端並插入（R2）"
+                  onClick={toggleHtmlSourceMode}
+                  className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
                 >
-                  <Image className="w-4 h-4" />
+                  {isHtmlSourceMode ? "回到視覺編輯" : "HTML 原始碼"}
                 </button>
-                <button
-                  type="button"
-                  onClick={insertImageFromUrl}
-                  disabled={aboutImageUploading || isPending}
-                  className="px-2 py-1.5 text-xs font-medium text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
-                  title="改以圖片網址插入"
-                >
-                  網址
-                </button>
-                {aboutImageUploading ? (
-                  <span className="text-xs text-amber-700 flex items-center gap-1">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                    上傳中…
-                  </span>
-                ) : null}
-                <button type="button" onClick={() => setCodeModalOpen(true)} className="p-2 rounded hover:bg-gray-200" title="程式碼轉圖片">
-                  <Code className="w-4 h-4" />
-                </button>
-                <span className="w-px h-6 bg-gray-300 mx-0.5" />
-                <select
-                  className="text-sm border border-gray-300 rounded px-2 py-1"
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v) execEditorCommand("fontSize", v);
-                  }}
-                  title="字型大小"
-                >
-                  <option value="">字型大小</option>
-                  <option value="1">小</option>
-                  <option value="2">一般</option>
-                  <option value="3">中</option>
-                  <option value="4">大</option>
-                  <option value="5">特大</option>
-                </select>
               </div>
-              <div
-                ref={aboutEditorRef}
-                contentEditable
-                className="min-h-[200px] max-h-[400px] overflow-y-auto p-4 text-sm text-gray-900 focus:outline-none prose prose-sm max-w-none"
-                data-placeholder="在此輸入關於我們的內容"
-                suppressContentEditableWarning
-              />
+              {isHtmlSourceMode ? (
+                <textarea
+                  value={aboutContent}
+                  onChange={(e) => setAboutContent(e.target.value)}
+                  spellCheck={false}
+                  className="min-h-[200px] max-h-[400px] w-full resize-y overflow-auto p-4 font-mono text-sm text-gray-900 focus:outline-none"
+                  placeholder="<p>請輸入 HTML 原始碼</p>"
+                />
+              ) : (
+                <div
+                  ref={aboutEditorRef}
+                  contentEditable
+                  className="min-h-[200px] max-h-[400px] overflow-y-auto p-4 text-sm text-gray-900 focus:outline-none prose prose-sm max-w-none"
+                  data-placeholder="在此輸入關於我們的內容"
+                  suppressContentEditableWarning
+                />
+              )}
+            </div>
+          </div>
+          <div className="pt-2 border-t border-gray-100">
+            <label className="mb-1 block text-sm font-medium text-gray-700">全站注意事項（課程內頁右側）</label>
+            <input
+              ref={precautionsImageFileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={onPrecautionsImageFileChange}
+            />
+            <div className="rounded-lg border border-gray-300 bg-white overflow-hidden">
+              <div className="flex items-center justify-between gap-2 p-2 border-b border-gray-200 bg-gray-50">
+                <div className="flex flex-wrap items-center gap-1">
+                  {!isPrecautionsHtmlSourceMode ? (
+                    <>
+                      <button type="button" onClick={() => { precautionsEditorRef.current?.focus(); document.execCommand("bold", false); }} className="p-2 rounded hover:bg-gray-200" title="粗體">
+                        <Bold className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => { precautionsEditorRef.current?.focus(); document.execCommand("italic", false); }} className="p-2 rounded hover:bg-gray-200" title="斜體">
+                        <Italic className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => { precautionsEditorRef.current?.focus(); document.execCommand("underline", false); }} className="p-2 rounded hover:bg-gray-200" title="底線">
+                        <Underline className="w-4 h-4" />
+                      </button>
+                      <span className="w-px h-6 bg-gray-300 mx-0.5" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = window.prompt("請輸入連結網址：");
+                          if (url?.trim()) {
+                            precautionsEditorRef.current?.focus();
+                            document.execCommand("createLink", false, url.trim());
+                          }
+                        }}
+                        className="p-2 rounded hover:bg-gray-200"
+                        title="插入超連結"
+                      >
+                        <LinkIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => precautionsImageFileRef.current?.click()}
+                        disabled={aboutImageUploading || isPending}
+                        className="p-2 rounded hover:bg-gray-200 disabled:opacity-50"
+                        title="上傳圖片至雲端並插入（R2）"
+                      >
+                        <Image className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={insertPrecautionsImageFromUrl}
+                        disabled={aboutImageUploading || isPending}
+                        className="px-2 py-1.5 text-xs font-medium text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
+                        title="改以圖片網址插入"
+                      >
+                        網址
+                      </button>
+                    </>
+                  ) : (
+                    <span className="px-1 text-sm text-gray-700">HTML 原始碼</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={togglePrecautionsHtmlSourceMode}
+                  className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  {isPrecautionsHtmlSourceMode ? "回到視覺編輯" : "HTML 原始碼"}
+                </button>
+              </div>
+              {isPrecautionsHtmlSourceMode ? (
+                <textarea
+                  value={precautionsFixedHtml}
+                  onChange={(e) => setPrecautionsFixedHtml(e.target.value)}
+                  spellCheck={false}
+                  className="min-h-[200px] max-h-[400px] w-full resize-y overflow-auto p-4 font-mono text-sm text-gray-900 focus:outline-none"
+                  placeholder="<p>請輸入全站注意事項 HTML</p>"
+                />
+              ) : (
+                <div
+                  ref={precautionsEditorRef}
+                  contentEditable
+                  className="min-h-[200px] max-h-[400px] overflow-y-auto p-4 text-sm text-gray-900 focus:outline-none prose prose-sm max-w-none"
+                  suppressContentEditableWarning
+                />
+              )}
             </div>
           </div>
         </section>

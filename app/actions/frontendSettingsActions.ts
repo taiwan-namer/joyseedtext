@@ -963,10 +963,18 @@ export async function updateFrontendSettings(formData: FormData): Promise<
   }
 }
 
-/** 關於我們獨立頁：僅取得導覽列文字與內容 */
-export async function getAboutPageData(): Promise<{ navAboutLabel: string; aboutContent: string | null }> {
+/** 關於我們獨立頁：取得導覽列、關於內容、課程頁全站注意事項 */
+export async function getAboutPageData(): Promise<{
+  navAboutLabel: string;
+  aboutContent: string | null;
+  precautionsFixedHtml: string | null;
+}> {
   const s = await getFrontendSettings();
-  return { navAboutLabel: s.navAboutLabel ?? DEFAULT_NAV.about, aboutContent: s.aboutContent ?? null };
+  return {
+    navAboutLabel: s.navAboutLabel ?? DEFAULT_NAV.about,
+    aboutContent: s.aboutContent ?? null,
+    precautionsFixedHtml: s.precautionsFixedHtml ?? null,
+  };
 }
 
 /** 關於我們獨立頁：僅更新導覽列文字與內容 */
@@ -980,6 +988,9 @@ export async function updateAboutPage(formData: FormData): Promise<
     const existing = await getFrontendSettings();
     const navAboutLabel = (formData.get("nav_about_label") as string)?.trim() || DEFAULT_NAV.about;
     const aboutContent = (formData.get("about_content") as string)?.trim() || null;
+    const precautionsFixedHtml = formData.has("precautions_fixed_html")
+      ? ((formData.get("precautions_fixed_html") as string)?.trim() || null)
+      : (existing.precautionsFixedHtml ?? null);
     const { createServerSupabase } = await import("@/lib/supabase/server");
     const supabase = createServerSupabase();
     const { error } = await supabase
@@ -998,6 +1009,7 @@ export async function updateAboutPage(formData: FormData): Promise<
             memberIconGallery: existing.memberIconGallery,
             memberIconSelectedIndex: existing.memberIconSelectedIndex,
             aboutContent,
+            precautionsFixedHtml,
             seoTitle: existing.seoTitle ?? null,
             seoKeywords: existing.seoKeywords ?? null,
             seoDescription: existing.seoDescription ?? null,

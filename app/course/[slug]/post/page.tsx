@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { getCourseBySlug } from "../../course-data";
 import { getCourseById } from "@/app/actions/productActions";
+import { getAboutPageData } from "@/app/actions/frontendSettingsActions";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import CoursePostBookingPanel from "@/app/components/course/CoursePostBookingPanel";
@@ -99,6 +100,7 @@ export default function CoursePostPage() {
   const { siteName } = useStoreSettings();
   const [course, setCourse] = useState<CourseForDisplay | null>(null);
   const [courseMissing, setCourseMissing] = useState(false);
+  const [globalPrecautionsHtml, setGlobalPrecautionsHtml] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -126,6 +128,19 @@ export default function CoursePostPage() {
     })();
     return () => { cancelled = true; };
   }, [slug]);
+  useEffect(() => {
+    let cancelled = false;
+    getAboutPageData()
+      .then((data) => {
+        if (!cancelled) setGlobalPrecautionsHtml(data.precautionsFixedHtml ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setGlobalPrecautionsHtml(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!course) {
     if (courseMissing) {
@@ -230,6 +245,15 @@ export default function CoursePostPage() {
                 ageRange={ageRange}
               />
               {customerNotice ? <CustomerNoticePanel notice={customerNotice} /> : null}
+              {globalPrecautionsHtml && globalPrecautionsHtml.trim() !== "" ? (
+                <section className="rounded-xl border border-gray-100 bg-gray-50/80 p-5 shadow-sm">
+                  <h2 className="mb-3 text-base font-bold text-gray-900">全站注意事項</h2>
+                  <div
+                    className="prose prose-sm max-w-none text-gray-700"
+                    dangerouslySetInnerHTML={{ __html: stripGoogleFontsFromHtml(globalPrecautionsHtml) }}
+                  />
+                </section>
+              ) : null}
             </div>
           </aside>
         </div>

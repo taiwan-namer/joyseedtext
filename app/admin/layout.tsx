@@ -154,7 +154,7 @@ function Sidebar({
           </button>
         )}
       </div>
-      <nav className="flex-1 overflow-y-auto py-2">
+      <nav className="flex-1 overflow-y-auto overscroll-contain py-2 pb-6 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
         {SIDEBAR_MENU.map((item) => {
           if ("href" in item && item.href && !("children" in item)) {
             const newTab = "newTab" in item && item.newTab;
@@ -281,7 +281,7 @@ function Sidebar({
       )}
       <aside
         className={`
-          shrink-0 bg-slate-900 text-white flex flex-col min-h-screen
+          shrink-0 bg-slate-900 text-white flex flex-col h-dvh max-h-dvh overflow-hidden
           md:relative md:translate-x-0 md:w-64
           fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-out
           ${isMobile ? (isOpen ? "translate-x-0" : "-translate-x-full") : ""}

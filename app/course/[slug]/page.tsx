@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getCourseById } from "@/app/actions/productActions";
+import { getFrontendSettings } from "@/app/actions/frontendSettingsActions";
 import { getCourseBySlug } from "../course-data";
 import CourseDetailPageClient from "./CourseDetailPageClient";
 import type { CourseDetail } from "../course-data";
@@ -22,10 +23,20 @@ export default async function CourseDetailPage({
   params: { slug: string };
 }) {
   const slug = decodeSlug(params.slug);
-  let course: CourseForPublic | CourseDetail | null = await getCourseById(slug);
+  const [dbCourse, frontend] = await Promise.all([
+    getCourseById(slug),
+    getFrontendSettings(),
+  ]);
+  let course: CourseForPublic | CourseDetail | null = dbCourse;
   if (!course) {
     course = getCourseBySlug(slug) ?? null;
   }
   if (!course) notFound();
-  return <CourseDetailPageClient initialCourse={course} slug={slug} />;
+  return (
+    <CourseDetailPageClient
+      initialCourse={course}
+      slug={slug}
+      globalPrecautionsHtml={frontend.precautionsFixedHtml ?? null}
+    />
+  );
 }
