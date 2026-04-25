@@ -187,6 +187,7 @@ function BlockFloatingIconsPanel({
               editViewport === "mobile"
                 ? (ic.heightPxMobile ?? ic.heightPx ?? ic.widthPx)
                 : (ic.heightPx ?? ic.widthPx);
+            const isFocused = focusedIconId === ic.id;
             return (
             <li
               key={ic.id}
@@ -194,7 +195,7 @@ function BlockFloatingIconsPanel({
                 iconRowRefs.current[ic.id] = el;
               }}
               className={`flex flex-wrap items-center gap-2 border-b border-gray-100 pb-2 last:border-0 rounded-md transition-colors ${
-                focusedIconId === ic.id ? "bg-amber-50 ring-2 ring-amber-400/80 -mx-1 px-1" : ""
+                isFocused ? "bg-amber-50 ring-2 ring-amber-400/80 -mx-1 px-1" : ""
               }`}
             >
               <span className="w-14 shrink-0 font-semibold text-amber-900 tabular-nums">
@@ -206,81 +207,87 @@ function BlockFloatingIconsPanel({
                 alt=""
                 className="h-10 w-10 shrink-0 rounded bg-gray-50 object-contain"
               />
-              <label className="flex items-center gap-1">
-                寬
-                <input
-                  type="number"
-                  step={1}
-                  value={
-                    dimFocus === dimKey(ic.id, "w")
-                      ? (dimDrafts[dimKey(ic.id, "w")] ?? String(previewPxFromStored(wStored)))
-                      : previewPxFromStored(wStored)
-                  }
-                  onFocus={() => {
-                    const k = dimKey(ic.id, "w");
-                    setDimFocus(k);
-                    setDimDrafts((d) => ({ ...d, [k]: String(previewPxFromStored(wStored)) }));
-                  }}
-                  onChange={(e) => {
-                    setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "w")]: e.target.value }));
-                  }}
-                  onBlur={() => {
-                    const k = dimKey(ic.id, "w");
-                    const raw = dimDrafts[k] ?? String(previewPxFromStored(wStored));
-                    setDimFocus((f) => (f === k ? null : f));
-                    setDimDrafts((d) => {
-                      const n = { ...d };
-                      delete n[k];
-                      return n;
-                    });
-                    const v = parseInt(String(raw).trim(), 10);
-                    if (Number.isFinite(v)) {
-                      onPatchIcon(ic.id, { widthPx: storedPxFromPreview(Math.max(16, v)) });
-                    }
-                  }}
-                  className="w-20 rounded border border-gray-300 px-1 py-0.5"
-                />
-                px(畫布)
-              </label>
-              <label className="flex items-center gap-1">
-                高
-                <input
-                  type="number"
-                  step={1}
-                  value={
-                    dimFocus === dimKey(ic.id, "h")
-                      ? (dimDrafts[dimKey(ic.id, "h")] ?? String(previewPxFromStored(hStored)))
-                      : previewPxFromStored(hStored)
-                  }
-                  onFocus={() => {
-                    const k = dimKey(ic.id, "h");
-                    setDimFocus(k);
-                    setDimDrafts((d) => ({
-                      ...d,
-                      [k]: String(previewPxFromStored(hStored)),
-                    }));
-                  }}
-                  onChange={(e) => {
-                    setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "h")]: e.target.value }));
-                  }}
-                  onBlur={() => {
-                    const k = dimKey(ic.id, "h");
-                    const raw = dimDrafts[k] ?? String(previewPxFromStored(hStored));
-                    setDimFocus((f) => (f === k ? null : f));
-                    setDimDrafts((d) => {
-                      const n = { ...d };
-                      delete n[k];
-                      return n;
-                    });
-                    const v = parseInt(String(raw).trim(), 10);
-                    if (Number.isFinite(v)) {
-                      onPatchIcon(ic.id, { heightPx: storedPxFromPreview(Math.max(16, v)) });
-                    }
-                  }}
-                  className="w-20 rounded border border-gray-300 px-1 py-0.5"
-                />
-                px(畫布)
-              </label>
+              {isFocused ? (
+                <>
+                  <label className="flex items-center gap-1">
+                    寬
+                    <input
+                      type="number"
+                      step={1}
+                      value={
+                        dimFocus === dimKey(ic.id, "w")
+                          ? (dimDrafts[dimKey(ic.id, "w")] ?? String(previewPxFromStored(wStored)))
+                          : previewPxFromStored(wStored)
+                      }
+                      onFocus={() => {
+                        const k = dimKey(ic.id, "w");
+                        setDimFocus(k);
+                        setDimDrafts((d) => ({ ...d, [k]: String(previewPxFromStored(wStored)) }));
+                      }}
+                      onChange={(e) => {
+                        setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "w")]: e.target.value }));
+                      }}
+                      onBlur={() => {
+                        const k = dimKey(ic.id, "w");
+                        const raw = dimDrafts[k] ?? String(previewPxFromStored(wStored));
+                        setDimFocus((f) => (f === k ? null : f));
+                        setDimDrafts((d) => {
+                          const n = { ...d };
+                          delete n[k];
+                          return n;
+                        });
+                        const v = parseInt(String(raw).trim(), 10);
+                        if (Number.isFinite(v)) {
+                          onPatchIcon(ic.id, { widthPx: storedPxFromPreview(Math.max(16, v)) });
+                        }
+                      }}
+                      className="w-20 rounded border border-gray-300 px-1 py-0.5"
+                    />
+                    px(畫布)
+                  </label>
+                  <label className="flex items-center gap-1">
+                    高
+                    <input
+                      type="number"
+                      step={1}
+                      value={
+                        dimFocus === dimKey(ic.id, "h")
+                          ? (dimDrafts[dimKey(ic.id, "h")] ?? String(previewPxFromStored(hStored)))
+                          : previewPxFromStored(hStored)
+                      }
+                      onFocus={() => {
+                        const k = dimKey(ic.id, "h");
+                        setDimFocus(k);
+                        setDimDrafts((d) => ({
+                          ...d,
+                          [k]: String(previewPxFromStored(hStored)),
+                        }));
+                      }}
+                      onChange={(e) => {
+                        setDimDrafts((d) => ({ ...d, [dimKey(ic.id, "h")]: e.target.value }));
+                      }}
+                      onBlur={() => {
+                        const k = dimKey(ic.id, "h");
+                        const raw = dimDrafts[k] ?? String(previewPxFromStored(hStored));
+                        setDimFocus((f) => (f === k ? null : f));
+                        setDimDrafts((d) => {
+                          const n = { ...d };
+                          delete n[k];
+                          return n;
+                        });
+                        const v = parseInt(String(raw).trim(), 10);
+                        if (Number.isFinite(v)) {
+                          onPatchIcon(ic.id, { heightPx: storedPxFromPreview(Math.max(16, v)) });
+                        }
+                      }}
+                      className="w-20 rounded border border-gray-300 px-1 py-0.5"
+                    />
+                    px(畫布)
+                  </label>
+                </>
+              ) : (
+                <span className="text-[11px] text-gray-500">點選畫布裝飾圖後可編輯尺寸</span>
+              )}
               <button
                 type="button"
                 className="ml-auto text-red-600 hover:underline"
@@ -336,8 +343,8 @@ export default function AdminLayoutPage() {
   const [viewportFloatingIcons, setViewportFloatingIcons] = useState<HeroFloatingIcon[]>([]);
   const [viewportSelectedFloatingIconId, setViewportSelectedFloatingIconId] = useState<string | null>(null);
   const [viewportFloatUploading, setViewportFloatUploading] = useState(false);
-  /** 全螢幕裝飾：下拉選擇後按刪除 */
-  const [viewportDeletePick, setViewportDeletePick] = useState<string>("");
+  /** 區塊裝飾圖（頂部工具列）下拉選擇後按刪除 */
+  const [blockDeletePick, setBlockDeletePick] = useState<string>("");
   const mobileCanvasSectionRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
     const iframe = mobilePreviewIframeRef.current;
@@ -355,11 +362,6 @@ export default function AdminLayoutPage() {
       window.removeEventListener("resize", measure);
     };
   }, [canvasViewportMode]);
-  useEffect(() => {
-    if (viewportDeletePick && !viewportFloatingIcons.some((x) => x.id === viewportDeletePick)) {
-      setViewportDeletePick("");
-    }
-  }, [viewportFloatingIcons, viewportDeletePick]);
   useEffect(() => {
     setFloatingEditViewport(canvasViewportMode === "mobile" ? "mobile" : "desktop");
   }, [canvasViewportMode]);
@@ -875,9 +877,8 @@ export default function AdminLayoutPage() {
     setViewportFloatUploading(true);
     setMessage(null);
     try {
-      const natural = await readImageNaturalSizeFromFile(file).catch(() => ({ width: 72, height: 72 }));
-      const widthPx = Math.max(16, Math.round(natural.width));
-      const heightPx = Math.max(16, Math.round(natural.height));
+      const widthPx = 200;
+      const heightPx = 200;
       const fd = new FormData();
       fd.set("float_image", file);
       const r = await uploadHeroFloatingIcon(fd);
@@ -918,9 +919,8 @@ export default function AdminLayoutPage() {
     setHeroFloatUploading(true);
     setMessage(null);
     try {
-      const natural = await readImageNaturalSizeFromFile(file).catch(() => ({ width: 72, height: 72 }));
-      const widthPx = Math.max(16, Math.round(natural.width));
-      const heightPx = Math.max(16, Math.round(natural.height));
+      const widthPx = 200;
+      const heightPx = 200;
       const fd = new FormData();
       fd.set("float_image", file);
       const r = await uploadHeroFloatingIcon(fd);
@@ -1312,6 +1312,12 @@ export default function AdminLayoutPage() {
   };
 
   const selectedBlock = selectedBlockId ? blocks.find((b) => b.id === selectedBlockId) : null;
+  const selectedBlockFloatingIcons = selectedBlock?.floatingIcons ?? [];
+  useEffect(() => {
+    if (blockDeletePick && !selectedBlockFloatingIcons.some((x) => x.id === blockDeletePick)) {
+      setBlockDeletePick("");
+    }
+  }, [selectedBlockFloatingIcons, blockDeletePick]);
   const selectedIndex = selectedBlockId != null ? getBlockIndex(selectedBlockId) : -1;
   const editLink = selectedBlockId ? BLOCK_EDIT_LINKS[selectedBlockId] : null;
 
@@ -1995,28 +2001,47 @@ export default function AdminLayoutPage() {
                 手機版
               </button>
             </div>
+            {selectedBlock && !LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL.has(selectedBlock.id) ? (
+              <div className="flex flex-wrap items-center gap-2 border-l border-gray-200 pl-2 sm:pl-3">
+                <button
+                  type="button"
+                  onClick={() => heroFloatFileRef.current?.click()}
+                  disabled={heroFloatUploading}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {heroFloatUploading ? "上傳中…" : "上傳裝飾圖"}
+                </button>
+                <select
+                  value={blockDeletePick}
+                  onChange={(e) => setBlockDeletePick(e.target.value)}
+                  className="max-w-[min(100%,200px)] rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-800"
+                  aria-label="選擇要刪除的區塊裝飾圖"
+                >
+                  <option value="">選擇編號…</option>
+                  {selectedBlockFloatingIcons.map((ic, idx) => (
+                    <option key={ic.id} value={ic.id}>
+                      編號 {idx + 1}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!blockDeletePick}
+                  onClick={() => {
+                    if (!blockDeletePick || !selectedBlock) return;
+                    updateBlockFloatingIcons(selectedBlock.id, (prev) =>
+                      prev.filter((x) => x.id !== blockDeletePick)
+                    );
+                    setSelectedFloatingIconId((cur) => (cur === blockDeletePick ? null : cur));
+                    setBlockDeletePick("");
+                  }}
+                  className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+                >
+                  刪除選取
+                </button>
+              </div>
+            ) : null}
           </div>
-
-          {selectedBlock && !LAYOUT_BLOCKS_HIDE_FLOATING_ICONS_PANEL.has(selectedBlock.id) ? (
-            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-              <p className="mb-2 text-xs font-medium text-amber-800">
-                區塊裝飾圖（已取代全頁裝飾圖）
-              </p>
-              <BlockFloatingIconsPanel
-                block={selectedBlock}
-                heroFloatUploading={heroFloatUploading}
-                onUploadClick={() => heroFloatFileRef.current?.click()}
-                editViewport={floatingEditViewport}
-                previewPxFromStored={previewPxFromStored}
-                storedPxFromPreview={storedPxFromPreview}
-                onPatchIcon={(iconId, patch) => patchFloatingIcon(selectedBlock.id, iconId, patch)}
-                onRemoveIcon={(iconId) =>
-                  updateBlockFloatingIcons(selectedBlock.id, (p) => p.filter((x) => x.id !== iconId))
-                }
-                focusedIconId={selectedFloatingIconId}
-              />
-            </div>
-          ) : null}
 
           {canvasViewportMode === "desktop" ? (
           <div className="w-full max-w-full rounded-xl border border-gray-200 bg-gray-100 shadow-lg shrink-0">
