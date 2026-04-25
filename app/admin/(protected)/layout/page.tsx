@@ -696,9 +696,36 @@ export default function AdminLayoutPage() {
     const next = [...blocks];
     const mobile = canvasViewportMode === "mobile";
     if (mobile) {
+      const target = next[index];
+      const newH = heightPx && heightPx > 0 ? heightPx : null;
+      const oldH =
+        target.heightPxMobile != null && target.heightPxMobile > 0
+          ? target.heightPxMobile
+          : target.heightPx != null && target.heightPx > 0
+            ? target.heightPx
+            : null;
+      const adjustedIcons =
+        oldH != null &&
+        newH != null &&
+        oldH > 0 &&
+        newH > 0 &&
+        oldH !== newH &&
+        (target.floatingIcons?.length ?? 0) > 0
+          ? (target.floatingIcons ?? []).map((ic) => {
+              const top =
+                typeof ic.topPctMobile === "number"
+                  ? ic.topPctMobile
+                  : typeof ic.topPct === "number"
+                    ? ic.topPct
+                    : 50;
+              const nextTop = Math.min(100, Math.max(0, (top * oldH) / newH));
+              return { ...ic, topPctMobile: nextTop };
+            })
+          : target.floatingIcons;
       next[index] = {
-        ...next[index],
-        heightPxMobile: heightPx && heightPx > 0 ? heightPx : null,
+        ...target,
+        heightPxMobile: newH,
+        ...(adjustedIcons ? { floatingIcons: adjustedIcons } : {}),
       };
     } else {
       next[index] = { ...next[index], heightPx: heightPx && heightPx > 0 ? heightPx : null };
@@ -734,9 +761,35 @@ export default function AdminLayoutPage() {
       prev.map((b) => {
         if (b.id !== blockId) return b;
         if (mobile) {
+          const newH = heightPx && heightPx > 0 ? heightPx : null;
+          const oldH =
+            b.heightPxMobile != null && b.heightPxMobile > 0
+              ? b.heightPxMobile
+              : b.heightPx != null && b.heightPx > 0
+                ? b.heightPx
+                : null;
+          const adjustedIcons =
+            oldH != null &&
+            newH != null &&
+            oldH > 0 &&
+            newH > 0 &&
+            oldH !== newH &&
+            (b.floatingIcons?.length ?? 0) > 0
+              ? (b.floatingIcons ?? []).map((ic) => {
+                  const top =
+                    typeof ic.topPctMobile === "number"
+                      ? ic.topPctMobile
+                      : typeof ic.topPct === "number"
+                        ? ic.topPct
+                        : 50;
+                  const nextTop = Math.min(100, Math.max(0, (top * oldH) / newH));
+                  return { ...ic, topPctMobile: nextTop };
+                })
+              : b.floatingIcons;
           return {
             ...b,
-            heightPxMobile: heightPx && heightPx > 0 ? heightPx : null,
+            heightPxMobile: newH,
+            ...(adjustedIcons ? { floatingIcons: adjustedIcons } : {}),
           };
         }
         return { ...b, heightPx: heightPx && heightPx > 0 ? heightPx : null };
