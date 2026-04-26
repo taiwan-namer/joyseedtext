@@ -41,6 +41,8 @@ const CAROUSEL_INTERVAL_MS = 4000;
 const ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX = 0;
 /** 後台畫布：全頁裝飾層與前台水平對齊微調（px，正數往右） */
 const ADMIN_VIEWPORT_FLOATING_X_OFFSET_PX = 0;
+/** 後台手機畫布與前台真機高度視覺微差補償（僅預覽，不影響儲存值） */
+const ADMIN_MOBILE_HEIGHT_PREVIEW_COMPENSATION_PX = 8;
 
 function normalizeFloatingImageKey(raw: string | null | undefined): string {
   const t = String(raw ?? "").trim();
@@ -373,8 +375,12 @@ export default function BranchSiteHomeView({
     const b = resolveLayoutBlockForStyle(layoutBlocks, id);
     if (!b) return {};
     const minH = effectiveLayoutBlockMinHeightPx(b, layoutViewportForHeights);
+    const minHeightWithPreviewComp =
+      admin != null && coordMode === "mobile" && minH != null
+        ? minH + ADMIN_MOBILE_HEIGHT_PREVIEW_COMPENSATION_PX
+        : minH;
     return {
-      ...(minH != null ? { minHeight: minH } : {}),
+      ...(minHeightWithPreviewComp != null ? { minHeight: minHeightWithPreviewComp } : {}),
       ...(b.backgroundImageUrl
         ? { backgroundImage: `url(${b.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
         : {}),
