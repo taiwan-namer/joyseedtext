@@ -373,8 +373,13 @@ export default function BranchSiteHomeView({
     const b = resolveLayoutBlockForStyle(layoutBlocks, id);
     if (!b) return {};
     const minH = effectiveLayoutBlockMinHeightPx(b, layoutViewportForHeights);
+    /**
+     * 後台畫布高度由 BlockWrapper 統一承接；此處若再套一次 minHeight，
+     * 會出現「拉高後後台與前台高度基準不一致」的雙層高度疊加。
+     */
+    const shouldApplyMinHeight = admin == null;
     return {
-      ...(minH != null ? { minHeight: minH } : {}),
+      ...(shouldApplyMinHeight && minH != null ? { minHeight: minH } : {}),
       ...(b.backgroundImageUrl
         ? { backgroundImage: `url(${b.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
         : {}),
