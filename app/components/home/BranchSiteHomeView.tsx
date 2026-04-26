@@ -474,7 +474,7 @@ export default function BranchSiteHomeView({
           admin.onBlockResizeHeight(adminId, heightPx, admin.floatingIconsCoordinateMode ?? "desktop")
         }
         blockLabel={LAYOUT_SECTION_LABELS[adminId] ?? adminId}
-        skipBackgroundImage={opts?.skipBackgroundImage}
+        skipBackgroundImage={opts?.skipBackgroundImage ?? true}
         previewScale={admin.canvasPreviewScale ?? 1}
       >
         {children}
@@ -790,7 +790,10 @@ export default function BranchSiteHomeView({
 
   const heroCarouselStripInner =
     admin && (heroImageTrimmed || resolvedHeroImageMobile) && heroBlock && heroCarouselBlock ? (
-      <section className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+      <section
+        className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35"
+        style={getBlockStyle("hero_carousel")}
+      >
         <div className="relative mx-auto max-w-7xl px-4 py-4 min-h-[100px]">
           <p className="text-xs text-center text-gray-600 relative z-0">
             首頁大圖（輪播）裝飾圖層—與上方主圖共用同一張圖；此區編輯「首頁大圖（輪播）」積木的裝飾圖。
@@ -1269,7 +1272,10 @@ export default function BranchSiteHomeView({
         const b = getBlock("full_width_image");
         if (admin) {
           const inner = (
-            <section className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35">
+            <section
+              className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35"
+              style={getBlockStyle("full_width_image")}
+            >
               <div className="relative mx-auto max-w-7xl px-4 py-8 min-h-[120px]">
                 {fullWidthImageUrl ? (
                   <div className="relative w-full max-h-[220px] rounded-lg overflow-hidden bg-gray-100 border border-amber-200/60">
