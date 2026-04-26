@@ -11,6 +11,8 @@ type Props = {
   block: LayoutBlock;
   /** 與後台畫布桌機／手機分頁一致，決定讀寫 heightPx 或 heightPxMobile */
   layoutViewport?: "desktop" | "mobile";
+  /** true=由外層 BlockWrapper 吃 minHeight；false=交由內容層（更貼近前台結構） */
+  applyWrapperMinHeight?: boolean;
   isSelected: boolean;
   onSelect: () => void;
   onResizeHeight: (heightPx: number | null) => void;
@@ -26,6 +28,7 @@ type Props = {
 export default function BlockWrapper({
   block,
   layoutViewport = "desktop",
+  applyWrapperMinHeight = true,
   isSelected,
   onSelect,
   onResizeHeight,
@@ -91,7 +94,7 @@ export default function BlockWrapper({
         : `${rawH} px`;
 
   const blockStyle: React.CSSProperties = {
-    minHeight: rawH != null ? rawH : undefined,
+    minHeight: applyWrapperMinHeight && rawH != null ? rawH : undefined,
     ...(skipBackgroundImage || !block.backgroundImageUrl
       ? {}
       : {
