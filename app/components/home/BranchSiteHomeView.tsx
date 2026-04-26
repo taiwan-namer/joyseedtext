@@ -209,6 +209,155 @@ export default function BranchSiteHomeView({
 
   const hasSocialLinks = !!(socialFbUrl || socialIgUrl || socialLineUrl);
   const hasContact = !!(contactPhone || contactEmail || contactAddress);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const organizerName = siteName?.trim() || "[主辦方/老師品牌名稱]";
+  const termsModalContent = useMemo(
+    () => `${organizerName} — 使用者服務條款
+(系統與技術提供：童趣島 WONDER VOYAGE)
+
+歡迎您預訂 ${organizerName}（以下簡稱「本單位」）之活動。本單位之報名系統與金流由「童趣島 WONDER VOYAGE」（以下簡稱「系統商」）提供技術支援。當您完成預訂，即視為您已閱讀並同意以下條款：
+
+契約關係與平台角色
+1.1 契約當事人
+您所預訂之課程或體驗活動，其實際舉辦者與執行者為「本單位」。您與本單位之間成立服務契約。
+1.2 系統商免責聲明
+「系統商（童趣島）」僅提供報名網頁建置、訂單管理、金流代收代付及保險行政協作服務。活動之內容設計、現場安全管理、教學品質與履約責任，均由本單位全權負責，系統商不承擔連帶履約或損害賠償責任。
+
+安心包、安全管理與保險聲明
+2.1 安心包定義
+「安心包」為本平台提供之活動風險管理，內容包含：
+- 活動現場之風險管理規格建議。
+- 活動內容重大變更或安全疑慮時之協作處理。
+2.2 非保險銷售
+活動相關之保險（包含但不限於公共意外責任險、旅行平安險或特定活動險），均由「實際舉辦活動之供應商」負責投保與提供。本平台不從事保險銷售、未向使用者收取保險費，亦不代為執行投保作業。各項保險之實際保障範圍、理賠條件與除外責任，悉依供應商所投保之保險公司保單條款為準。本平台僅居間提供行政與溝通協助。
+
+預訂、付款與退費政策
+3.1 契約成立
+於本系統完成付款，並收到系統商發送之通知（Email／LINE）後，訂單即正式成立。
+3.2 取消與退費標準
+依據活動頁面標示為準；若無特別標示，適用以下標準：
+- 活動日前 7 日（含）以上取消：退費 100%（得扣除行政匯費 15 元）。
+- 活動日前 3–6 日取消：退費 50%。
+- 活動日前 1–2 日及當日取消：不予退費。
+3.3 不可抗力與主辦方取消
+如遇天災、疫情等不可抗力，或本單位因故無法舉辦活動，本單位將負責通知您，並提供全額退款或改期之選項。退款作業由系統商協助執行。
+
+活動現場規範與健康聲明
+4.1 據實告知義務
+您於報名時應確認參加者（含兒童）身心狀況良好。若有心臟病、氣喘、過敏或其他特殊疾病，必須於備註欄載明並於現場主動告知本單位講師。若因隱瞞致生意外，責任由您自行承擔。
+4.2 風險承擔與安全規範
+您承諾將遵守本單位之安全指導。若因參加者故意違反規定（如不當使用工具、奔跑推擠）導致受傷或造成設備損壞、第三人受傷，家長需自負法律與賠償責任。
+4.3 緊急醫療授權
+若發生意外且無法即時聯繫您，您同意授權本單位現場人員採取必要急救並送醫，相關費用由您負擔（或由保險理賠支付）。
+
+個人資料與隱私權
+您同意本單位及系統商（童趣島）依《個人資料保護法》，為處理訂單、聯繫、建立保險及後續服務之目的，蒐集、處理與利用您的個人資料。雙方均承諾不將您的資料出售予無關之第三方。
+
+肖像權授權
+活動期間本單位可能進行拍攝紀錄，作為行銷素材使用。若不願被拍攝，請於現場主動告知本單位人員；未告知者視為同意授權。
+
+系統服務中斷
+對於因不可抗力或第三方服務異常（如金流系統當機）導致之報名中斷，本單位與系統商不負損害賠償責任。
+
+準據法與管轄法院
+本條款依中華民國法律解釋。若發生爭議，雙方同意以臺灣新北地方法院為第一審管轄法院。`,
+    [organizerName]
+  );
+  const privacyModalContent = useMemo(() => {
+    const lines: string[] = [
+      "隱私權政策",
+      "(系統與技術提供：童趣島 WONDER VOYAGE)",
+      "",
+      `${organizerName}（以下簡稱「本單位」）非常重視您的個人資料與隱私保護。本單位之報名與管理系統由「童趣島 WONDER VOYAGE」（以下簡稱「系統商」）提供技術支援。本單位與系統商皆依照《個人資料保護法》蒐集、處理與利用您的個人資料。`,
+      "當您使用本網站服務，即表示您已閱讀、理解並同意本隱私權政策全部內容。",
+      "",
+      "一、個人資料的蒐集項目",
+      "本單位透過系統商之服務，將蒐集下列類別資料：",
+      "- 基本識別資料：姓名、暱稱、電子郵件、聯絡電話、住址等。",
+      "- 兒童活動必要資料：參加者姓名、性別、出生年月日、過敏或特殊健康需求。",
+      "- 金流與交易資料：付款方式（信用卡由第三方金流處理，本單位僅接收交易結果代碼）、退款資料、發票資訊。",
+      "- 使用與交易紀錄：預訂紀錄、取消紀錄、裝置資訊、IP 位址等。",
+      "",
+      "二、資料蒐集之目的",
+      "本單位蒐集與利用資料之目的包含：",
+      "- 課程／活動預訂、訂單管理與身分驗證。",
+      "- 活動行前通知、緊急聯絡、客服詢問回覆。",
+      "- 辦理活動必要之保險投保作業。",
+      "- 透過系統商執行退費、改期或「安心包」爭議協調程序。",
+      "- 法律義務（稅務、消費者保護等）。",
+      "",
+      "三、資料分享與第三方合作對象（資料受託者）",
+      "為完成服務流程，本單位會將必要之個人資料提供予以下第三方：",
+      "",
+      "系統商（童趣島 WONDER VOYAGE）",
+      "作為資料處理之受託者，用於：系統維運、訂單資料庫管理、發送 LINE 通知型訊息、金流代收付處理及安心包客服協調。",
+      "",
+      "保險公司或保險代理人",
+      "用於：辦理活動相關保險（如旅平險、特定活動險）及事故理賠程序。",
+      "",
+      "第三方金流服務（如綠界、LINE Pay 等）",
+      "用於付款授權處理及金流對帳。",
+      "",
+      "法律或政府機關",
+      "依法令要求或公權力機關之合法調閱。",
+      "本單位與系統商承諾，絕不任意販售、交換、租借您的資料予無關之第三方。",
+      "",
+      "四、資料保存與安全措施",
+      "- 資料將依蒐集目的或法定保存期間保存，期間屆滿後將安全刪除或匿名化。",
+      "- 系統商採用符合業界標準之安全措施（含 SSL 加密、權限控管、防火牆），以保護儲存於系統中之個人資料。但網路傳輸具不可控風險，請您妥善保管帳號密碼。",
+      "",
+      "五、LINE 通知型訊息",
+      "為傳遞重要活動資訊（如行前通知、改期、緊急消息），本單位將透過系統商（童趣島）之 LINE 官方帳號或本單位綁定之帳號傳送「通知型訊息」。觸發條件：",
+      "- 您在報名留下的電話號碼與 LINE 帳號電話相同。",
+      "- LINE 設定已允許接收「通知型訊息」。",
+      "- 未封鎖發送端之官方帳號。",
+      "若您於 LINE 設定中關閉「通知型訊息」，將無法收到系統自動發送之重要通知，可能影響您的活動參與權益。",
+      "",
+      "六、兒童隱私權特別聲明",
+      "本單位服務對象包含未成年人：",
+      "- 當您填寫兒童之個人資料時，視為您已以法定代理人身分同意本單位蒐集該資料。",
+      "- 兒童資料僅嚴格用於活動報名審核、保險辦理及現場安全照護（如過敏核對），絕不挪作行銷他用。",
+      "",
+      "七、活動攝影與肖像權使用",
+      "活動期間本單位可能進行拍攝紀錄，用於品質管理或本單位之社群行銷宣傳。",
+      "您的權利：若您不希望孩子被拍攝或公開影像，請於活動現場主動告知本單位工作人員，我們將避免拍攝或進行遮蔽處理。未事先告知者，視為同意授權。",
+      "",
+      "八、當事人依個資法享有之權利",
+      "您可隨時向本單位或系統商請求：",
+      "- 查詢或閱覽個人資料",
+      "- 製給複製本",
+      "- 補充或更正資料",
+      "- 停止蒐集、處理或利用",
+      "- 請求刪除資料",
+      "注意：若要求刪除資料，可能導致無法辦理保險、無法查詢歷史訂單或無法繼續提供服務。",
+      "",
+      "九、Cookie 與追蹤技術",
+      "本網站由系統商維護，將使用 Cookie 以維持登入狀態及優化預訂流程。您可於瀏覽器設定拒絕 Cookie，但可能導致無法正常結帳或登入。",
+      "",
+      "十、政策修訂",
+      "本單位與系統商保留修訂本政策之權利，更新後將公告於網站。",
+      "",
+      "十一、聯絡方式",
+      "如對本政策有任何問題、欲申請個資權利，或需進行退費與客服協調，請聯繫：",
+      "",
+      `單位名稱：${organizerName}`,
+    ];
+    if (contactEmail?.trim()) {
+      lines.push(`聯絡信箱：${contactEmail.trim()}`);
+    }
+    if (socialLineUrl?.trim()) {
+      lines.push(`官方 LINE：${socialLineUrl.trim()}`);
+    }
+    lines.push("系統客服支援：童趣島官方客服 (LINE ID: @joyseed2025)");
+    lines.push("");
+    lines.push("商業與法務邏輯差異分析（總站 vs. 分站）：");
+    lines.push("");
+    lines.push("資料控制者 (Data Controller) 與處理者 (Data Processor) 的切割：在分站條款中，老師（本單位）是直接向消費者蒐集資料的「控制者」，而童趣島退居為提供系統服務的「處理者（受託者）」。這點在第三條第一款做了明確定義。");
+    lines.push("");
+    lines.push("責任歸屬：若發生個資外洩，若是老師自己將名單匯出後外流，責任在老師；若是系統資料庫被駭，童趣島需負擔系統商的資安責任。條款明確區分了雙方的角色。");
+    return lines.join("\n");
+  }, [organizerName, contactEmail, socialLineUrl]);
   const mapEmbedUrl = contactAddress?.trim()
     ? `https://www.google.com/maps?q=${encodeURIComponent(contactAddress.trim())}&output=embed`
     : "";
@@ -1098,12 +1247,20 @@ export default function BranchSiteHomeView({
           )}
         </div>
         <div className="mt-8 pt-6 border-t border-gray-200 flex flex-wrap justify-center gap-x-6 gap-y-1 text-sm text-gray-600">
-          <Link href="/privacy" className="hover:text-brand hover:underline">
+          <button
+            type="button"
+            className="hover:text-brand hover:underline"
+            onClick={() => setPrivacyModalOpen(true)}
+          >
             隱私權條款
-          </Link>
-          <Link href="/terms" className="hover:text-brand hover:underline">
+          </button>
+          <button
+            type="button"
+            className="hover:text-brand hover:underline"
+            onClick={() => setTermsModalOpen(true)}
+          >
             服務條款
-          </Link>
+          </button>
         </div>
       </div>
       {renderBlockFloatingIconsOverlay("contact")}
@@ -1129,6 +1286,56 @@ export default function BranchSiteHomeView({
       {renderBlockFloatingIconsOverlay("footer")}
     </footer>
   );
+  const privacyModal = privacyModalOpen ? (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/55"
+        aria-label="關閉隱私權條款視窗"
+        onClick={() => setPrivacyModalOpen(false)}
+      />
+      <div className="relative z-[121] w-full max-w-3xl rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+          <h3 className="text-base font-semibold text-gray-900">隱私權政策</h3>
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            onClick={() => setPrivacyModalOpen(false)}
+          >
+            關閉
+          </button>
+        </div>
+        <div className="max-h-[75vh] overflow-y-auto px-4 py-4">
+          <pre className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{privacyModalContent}</pre>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const termsModal = termsModalOpen ? (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/55"
+        aria-label="關閉服務條款視窗"
+        onClick={() => setTermsModalOpen(false)}
+      />
+      <div className="relative z-[121] w-full max-w-3xl rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+          <h3 className="text-base font-semibold text-gray-900">使用者服務條款</h3>
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            onClick={() => setTermsModalOpen(false)}
+          >
+            關閉
+          </button>
+        </div>
+        <div className="max-h-[75vh] overflow-y-auto px-4 py-4">
+          <pre className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{termsModalContent}</pre>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   const renderCoursesGridOrListSection = (
     blockId: "courses" | "courses_grid" | "courses_list"
@@ -1465,6 +1672,8 @@ export default function BranchSiteHomeView({
         if (node == null) return null;
         return <Fragment key={id}>{node}</Fragment>;
       })}
+      {privacyModal}
+      {termsModal}
     </div>
   );
 }

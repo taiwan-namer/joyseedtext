@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { X, Eye, EyeOff, Mail } from "lucide-react";
@@ -252,7 +252,38 @@ export default function LoginModal({
     }
   }, [forgotEmail]);
 
-  const { siteName } = useStoreSettings();
+  const { siteName, contactEmail, socialLineUrl } = useStoreSettings();
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+  const organizerName = siteName?.trim() || "[主辦方/老師品牌名稱]";
+  const termsModalContent = useMemo(
+    () =>
+      `${organizerName} — 使用者服務條款
+(系統與技術提供：童趣島 WONDER VOYAGE)
+
+歡迎您預訂 ${organizerName}（以下簡稱「本單位」）之活動。本單位之報名系統與金流由「童趣島 WONDER VOYAGE」（以下簡稱「系統商」）提供技術支援。當您完成預訂，即視為您已閱讀並同意以下條款：
+
+契約關係與平台角色、安心包、安全管理與保險聲明、預訂付款退費政策、活動現場規範與健康聲明、個人資料與隱私權、肖像權授權、系統服務中斷、準據法與管轄法院等內容，均依首頁下方最新公告版本適用。`,
+    [organizerName]
+  );
+  const privacyModalContent = useMemo(() => {
+    const lines = [
+      "隱私權政策",
+      "(系統與技術提供：童趣島 WONDER VOYAGE)",
+      "",
+      `${organizerName}（以下簡稱「本單位」）非常重視您的個人資料與隱私保護。本單位與系統商皆依照《個人資料保護法》蒐集、處理與利用您的個人資料。`,
+      "當您使用本網站服務，即表示您已閱讀、理解並同意本隱私權政策全部內容。",
+      "",
+      "蒐集項目、資料使用目的、第三方合作對象、資料保存與安全、LINE 通知、兒童隱私、肖像權、當事人權利、Cookie、政策修訂等內容，依首頁下方最新公告版本適用。",
+      "",
+      "聯絡方式",
+      `單位名稱：${organizerName}`,
+      ...(contactEmail?.trim() ? [`聯絡信箱：${contactEmail.trim()}`] : []),
+      ...(socialLineUrl?.trim() ? [`官方 LINE：${socialLineUrl.trim()}`] : []),
+      "系統客服支援：童趣島官方客服 (LINE ID: @joyseed2025)",
+    ];
+    return lines.join("\n");
+  }, [organizerName, contactEmail, socialLineUrl]);
   function ModalHeader({ title }: { title?: string }) {
     return (
       <div className="text-center pt-6 pb-2">
@@ -315,14 +346,33 @@ export default function LoginModal({
               </button>
             </div>
             <div className="px-6 pb-6 text-center text-sm text-gray-500 space-y-1">
-              <p>
-                <Link href="/" prefetch className="text-amber-600 hover:underline touch-manipulation">聯絡我們</Link>
-              </p>
+              {contactEmail?.trim() ? (
+                <p>
+                  <a
+                    href={`mailto:${contactEmail.trim()}`}
+                    className="text-amber-600 hover:underline touch-manipulation"
+                  >
+                    聯絡我們
+                  </a>
+                </p>
+              ) : null}
               <p>
                 註冊或登入即表示您瞭解並同意
-                <Link href="/" prefetch className="text-amber-600 hover:underline touch-manipulation"> 服務條款 </Link>
+                <button
+                  type="button"
+                  className="text-amber-600 hover:underline touch-manipulation"
+                  onClick={() => setTermsModalOpen(true)}
+                >
+                  {" "}服務條款{" "}
+                </button>
                 及
-                <Link href="/" prefetch className="text-amber-600 hover:underline touch-manipulation"> 隱私政策</Link>。
+                <button
+                  type="button"
+                  className="text-amber-600 hover:underline touch-manipulation"
+                  onClick={() => setPrivacyModalOpen(true)}
+                >
+                  {" "}隱私政策
+                </button>。
               </p>
             </div>
           </>
@@ -601,6 +651,56 @@ export default function LoginModal({
           </>
         )}
       </div>
+      {termsModalOpen ? (
+        <div className="fixed inset-0 z-[1010] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55"
+            onClick={() => setTermsModalOpen(false)}
+            aria-label="關閉服務條款"
+          />
+          <div className="relative z-[1011] w-full max-w-3xl rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h3 className="text-base font-semibold text-gray-900">使用者服務條款</h3>
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                onClick={() => setTermsModalOpen(false)}
+              >
+                關閉
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-y-auto px-4 py-4">
+              <pre className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{termsModalContent}</pre>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {privacyModalOpen ? (
+        <div className="fixed inset-0 z-[1010] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55"
+            onClick={() => setPrivacyModalOpen(false)}
+            aria-label="關閉隱私政策"
+          />
+          <div className="relative z-[1011] w-full max-w-3xl rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h3 className="text-base font-semibold text-gray-900">隱私權政策</h3>
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                onClick={() => setPrivacyModalOpen(false)}
+              >
+                關閉
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-y-auto px-4 py-4">
+              <pre className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{privacyModalContent}</pre>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>,
     document.body
   );
