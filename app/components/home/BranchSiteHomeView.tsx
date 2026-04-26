@@ -373,9 +373,10 @@ export default function BranchSiteHomeView({
     const b = resolveLayoutBlockForStyle(layoutBlocks, id);
     if (!b) return {};
     const minH = effectiveLayoutBlockMinHeightPx(b, layoutViewportForHeights);
+    const shouldRenderLayoutBlockStyleInSection = !isAdminCanvas;
     return {
-      ...(minH != null ? { minHeight: minH } : {}),
-      ...(b.backgroundImageUrl
+      ...(shouldRenderLayoutBlockStyleInSection && minH != null ? { minHeight: minH } : {}),
+      ...(shouldRenderLayoutBlockStyleInSection && b.backgroundImageUrl
         ? { backgroundImage: `url(${b.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
         : {}),
     };
