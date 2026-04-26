@@ -374,7 +374,11 @@ export default function BranchSiteHomeView({
     if (!b) return {};
     const minH = effectiveLayoutBlockMinHeightPx(b, layoutViewportForHeights);
     return {
-      ...(minH != null ? { minHeight: minH } : {}),
+      /**
+       * 後台畫布高度由 BlockWrapper 單一負責，避免 wrapper + section 重複套用 minHeight，
+       * 手機拉高後會比前台多一截（定位基準也會被拉長）。
+       */
+      ...(!isAdminCanvas && minH != null ? { minHeight: minH } : {}),
       ...(b.backgroundImageUrl
         ? { backgroundImage: `url(${b.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
         : {}),
