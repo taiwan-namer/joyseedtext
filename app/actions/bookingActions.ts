@@ -17,7 +17,6 @@ import {
   COPY_RESCHEDULE_BLOCKED,
   COPY_RESCHEDULE_NO_SLOT,
 } from "@/lib/memberBookingPolicy";
-import { bookingHasExplicitSessionSlot } from "@/lib/bookingSessionSlot";
 import {
   computeBookingDisplayClassPrice,
   parseClassAddonPricesFromRaw,
@@ -1203,52 +1202,9 @@ export async function deleteBooking(
   | { success: true; message?: string }
   | { success: false; error: string }
 > {
-  try {
-    await verifyAdminSession();
-    const supabase = createServerSupabase();
-    const access = await getAdminBookingsAccessFilter(supabase);
-    if (!access) return { success: false, error: "未設定店家" };
-
-    const { data: booking, error: fetchError } = await applyAdminBookingsAccess(
-      supabase.from("bookings").select("id, class_id, slot_date, slot_time, merchant_id").eq("id", bookingId),
-      access
-    ).single();
-
-    if (fetchError || !booking) return { success: false, error: "訂單不存在或非本店家" };
-
-    const classId = (booking as { class_id?: string }).class_id;
-    const ownerMerchantId = String((booking as { merchant_id?: string }).merchant_id ?? "");
-    const hadSlot = bookingHasExplicitSessionSlot(
-      (booking as { slot_date?: string | null }).slot_date,
-      (booking as { slot_time?: string | null }).slot_time
-    );
-    const { error: deleteError } = await applyAdminBookingsAccess(
-      supabase.from("bookings").delete().eq("id", bookingId),
-      access
-    );
-
-    if (deleteError) return { success: false, error: deleteError.message };
-
-    if (classId && !hadSlot && ownerMerchantId) {
-      const { data: cls } = await supabase
-        .from("classes")
-        .select("capacity")
-        .eq("id", classId)
-        .eq("merchant_id", ownerMerchantId)
-        .single();
-      const current = (cls as { capacity?: number } | null)?.capacity ?? 0;
-      await supabase
-        .from("classes")
-        .update({ capacity: Math.max(0, current + 1) })
-        .eq("id", classId)
-        .eq("merchant_id", ownerMerchantId);
-    }
-
-    return { success: true, message: "訂單已刪除" };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "刪除失敗";
-    return { success: false, error: msg };
-  }
+  void bookingId;
+  // 供應商不可刪除訂單：避免分站自行刪除後，與總站帳務／對帳資料不一致。
+  return { success: false, error: "已停用刪除訂單功能，請改用退款或取消流程。" };
 }
 
 /** 會員中心用：取得當前登入者信箱（從 cookie session） */

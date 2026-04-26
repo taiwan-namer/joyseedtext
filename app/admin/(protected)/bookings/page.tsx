@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   Loader2,
   CheckCircle,
-  Trash2,
   Filter,
   CheckCheck,
   Banknote,
@@ -17,7 +16,6 @@ import {
   getAdminBookings,
   markBookingAsPaid,
   completeBooking,
-  deleteBooking,
   batchMarkBookingsAsPaid,
   batchCompleteBookings,
   type BookingWithClass,
@@ -114,7 +112,6 @@ export default function AdminBookingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("");
@@ -203,18 +200,6 @@ export default function AdminBookingsPage() {
       setList((prev) =>
         prev.map((b) => (b.id === bookingId ? { ...b, status: "completed" } : b))
       );
-    } else {
-      alert(res.error);
-    }
-  };
-
-  const handleDelete = async (bookingId: string) => {
-    if (!confirm("確定要刪除此筆訂單嗎？刪除後將無法復原。")) return;
-    setDeletingId(bookingId);
-    const res = await deleteBooking(bookingId);
-    setDeletingId(null);
-    if (res.success) {
-      setList((prev) => prev.filter((b) => b.id !== bookingId));
     } else {
       alert(res.error);
     }
@@ -591,20 +576,6 @@ export default function AdminBookingsPage() {
                                   : "綠界退刷"}
                             </button>
                           )}
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(row.id)}
-                          disabled={deletingId === row.id}
-                          className="inline-flex shrink-0 items-center justify-center h-8 w-8 rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-60 transition-colors"
-                          title="刪除訂單"
-                          aria-label="刪除訂單"
-                        >
-                          {deletingId === row.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
                       </div>
                     </td>
                   </tr>
