@@ -42,7 +42,7 @@ const ADMIN_VIEWPORT_FLOATING_Y_OFFSET_PX = 0;
 /** 後台畫布：全頁裝飾層與前台水平對齊微調（px，正數往右） */
 const ADMIN_VIEWPORT_FLOATING_X_OFFSET_PX = 0;
 /** 後台手機畫布與前台真機高度視覺微差補償（僅預覽，不影響儲存值） */
-const ADMIN_MOBILE_HEIGHT_PREVIEW_COMPENSATION_PX = 8;
+const ADMIN_MOBILE_HEIGHT_PREVIEW_COMPENSATION_PX = 12;
 
 function normalizeFloatingImageKey(raw: string | null | undefined): string {
   const t = String(raw ?? "").trim();
