@@ -374,8 +374,7 @@ export default function BranchSiteHomeView({
     if (!b) return {};
     const minH = effectiveLayoutBlockMinHeightPx(b, layoutViewportForHeights);
     return {
-      // 後台畫布高度以 BlockWrapper 為唯一來源；避免內外層雙重 minHeight 導致手機畫布高度偏大。
-      ...(!isAdminCanvas && minH != null ? { minHeight: minH } : {}),
+      ...(minH != null ? { minHeight: minH } : {}),
       ...(b.backgroundImageUrl
         ? { backgroundImage: `url(${b.backgroundImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
         : {}),
