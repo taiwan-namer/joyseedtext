@@ -670,7 +670,10 @@ export default function LoginModal({
                 關閉
               </button>
             </div>
-            <div className="max-h-[75vh] overflow-y-auto px-4 py-4">
+            <div
+              className="max-h-[80vh] overflow-y-scroll overscroll-contain px-4 py-4 touch-pan-y"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               <pre className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{termsModalContent}</pre>
             </div>
           </div>
@@ -695,7 +698,10 @@ export default function LoginModal({
                 關閉
               </button>
             </div>
-            <div className="max-h-[75vh] overflow-y-auto px-4 py-4">
+            <div
+              className="max-h-[80vh] overflow-y-scroll overscroll-contain px-4 py-4 touch-pan-y"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               <pre className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{privacyModalContent}</pre>
             </div>
           </div>

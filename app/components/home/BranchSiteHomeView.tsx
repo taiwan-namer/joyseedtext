@@ -350,12 +350,6 @@ export default function BranchSiteHomeView({
       lines.push(`官方 LINE：${socialLineUrl.trim()}`);
     }
     lines.push("系統客服支援：童趣島官方客服 (LINE ID: @joyseed2025)");
-    lines.push("");
-    lines.push("商業與法務邏輯差異分析（總站 vs. 分站）：");
-    lines.push("");
-    lines.push("資料控制者 (Data Controller) 與處理者 (Data Processor) 的切割：在分站條款中，老師（本單位）是直接向消費者蒐集資料的「控制者」，而童趣島退居為提供系統服務的「處理者（受託者）」。這點在第三條第一款做了明確定義。");
-    lines.push("");
-    lines.push("責任歸屬：若發生個資外洩，若是老師自己將名單匯出後外流，責任在老師；若是系統資料庫被駭，童趣島需負擔系統商的資安責任。條款明確區分了雙方的角色。");
     return lines.join("\n");
   }, [organizerName, contactEmail, socialLineUrl]);
   const mapEmbedUrl = contactAddress?.trim()
