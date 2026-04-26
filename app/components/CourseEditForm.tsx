@@ -66,6 +66,8 @@ const HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i + 9); // 9～21
 const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
 const WHEEL_ITEM_HEIGHT = 44;
 const EDITOR_PORTRAIT_IMAGE_CLASS = "is-portrait-image";
+const COURSE_UPLOAD_TARGET_KB = 350;
+const COURSE_UPLOAD_MAX_DIMENSION_PX = 1920;
 
 function applyEditorPortraitClass(img: HTMLImageElement) {
   if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
@@ -86,6 +88,71 @@ function revokePreviewIfBlob(preview: string) {
       /* ignore */
     }
   }
+}
+
+async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("圖片讀取失敗"));
+      img.src = url;
+    });
+    return img;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * 壓縮圖片到目標大小（KB）再上傳：
+ * - 先限制最長邊，避免超大解析度導致檔案過重
+ * - 以 JPEG 逐步降低品質；若無法更小則回傳目前最佳結果
+ * - GIF 通常包含動畫，避免破壞內容，直接略過壓縮
+ */
+async function compressImageForUpload(file: File, targetKB: number): Promise<File> {
+  const targetBytes = Math.max(1, Math.floor(targetKB * 1024));
+  if (file.size <= targetBytes) return file;
+  if (file.type === "image/gif") return file;
+
+  const img = await loadImageFromFile(file);
+  const originW = img.naturalWidth || img.width;
+  const originH = img.naturalHeight || img.height;
+  if (originW <= 0 || originH <= 0) return file;
+
+  const scale = Math.min(1, COURSE_UPLOAD_MAX_DIMENSION_PX / Math.max(originW, originH));
+  const width = Math.max(1, Math.round(originW * scale));
+  const height = Math.max(1, Math.round(originH * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return file;
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const toBlob = (quality: number) =>
+    new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/jpeg", quality);
+    });
+
+  const qualities = [0.9, 0.82, 0.75, 0.68, 0.6, 0.52, 0.45, 0.38];
+  let bestBlob: Blob | null = null;
+  for (const q of qualities) {
+    const blob = await toBlob(q);
+    if (!blob) continue;
+    bestBlob = blob;
+    if (blob.size <= targetBytes) break;
+  }
+  if (!bestBlob) return file;
+  if (bestBlob.size >= file.size) return file;
+
+  const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
+  return new File([bestBlob], `${nameWithoutExt}.jpg`, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
 }
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -709,10 +776,6 @@ export default function CourseEditForm({
       setError("請上傳主圖");
       return;
     }
-    if (imageSlots[0].file) formData.set("image_main", imageSlots[0].file as File);
-    for (let i = 1; i <= COURSE_GALLERY_MAX; i++) {
-      if (imageSlots[i].file) formData.set(`image_${i}`, imageSlots[i].file as File);
-    }
     const postHtml = editorRef.current ? serializePostContentFromEditor(editorRef.current) : "";
     formData.set("post_content", postHtml);
     const sidebarPayload = buildSidebarOptionFromForm(hasMin ? Number(ageMin) : null, hasMax ? Number(ageMax) : null, false);
@@ -746,6 +809,22 @@ export default function CourseEditForm({
       formData.set("merchant_id", showHqCourseAdminUi ? selectedCreateMerchantId : siteHqMerchantId);
     }
     startTransition(async () => {
+      try {
+        if (imageSlots[0].file) {
+          const compressedMain = await compressImageForUpload(imageSlots[0].file, COURSE_UPLOAD_TARGET_KB);
+          formData.set("image_main", compressedMain);
+        }
+        for (let i = 1; i <= COURSE_GALLERY_MAX; i++) {
+          const f = imageSlots[i].file;
+          if (!f) continue;
+          const compressed = await compressImageForUpload(f, COURSE_UPLOAD_TARGET_KB);
+          formData.set(`image_${i}`, compressed);
+        }
+      } catch {
+        setError("圖片壓縮失敗，請更換圖片後再試一次");
+        return;
+      }
+
       const result = isEdit
         ? await updateCourseFull(courseId!, formData)
         : await createCourseFull(formData);
@@ -1016,10 +1095,10 @@ export default function CourseEditForm({
                 </button>
               </div>
 
-              {/* 圖文編輯：工具列 + 編輯區；緊湊單一區塊、全寬控制項、響應式排列 */}
-              <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+              {/* 圖文編輯：工具列（字體、插入圖片）+ 編輯區；緊湊排列，減少空白 */}
+              <div className="relative rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
                 <h3 className="mb-2 text-sm font-semibold text-gray-700">圖文編輯</h3>
-                <div className="mb-3 space-y-2.5 rounded-lg border border-gray-100 bg-gray-50/80 p-2 sm:p-2.5">
+                <div className="sticky top-20 z-20 mb-3 space-y-2.5 rounded-lg border border-gray-100 bg-gray-50/95 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-gray-50/85 sm:p-2.5">
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <span className="w-full text-[11px] font-medium text-gray-500 sm:hidden">文字</span>
                     <select
