@@ -1432,7 +1432,36 @@ export async function updateCourseFull(
 
     const galleryKeys = Array.from({ length: COURSE_FORM_GALLERY_SLOT_COUNT }, (_, i) => `image_${i + 1}`);
     const uploadedGallery = await Promise.all(galleryKeys.map((key) => uploadOneToR2(formData, key)));
-    const finalGallery = uploadedGallery.map((url, i) => url ?? existingGallery[i]).filter(Boolean) as string[];
+    /** 編輯頁送出的每槽意圖：`null`＝該槽有新檔待上傳；`""`＝使用者已清除；非空字串＝沿用既有 R2 網址 */
+    const keepsRaw = (formData.get("gallery_existing_keeps") as string | null)?.trim() ?? "";
+    let gallerySlotKeeps: (string | null)[] | null = null;
+    if (keepsRaw) {
+      try {
+        const parsed = JSON.parse(keepsRaw) as unknown;
+        if (Array.isArray(parsed)) {
+          gallerySlotKeeps = parsed.map((x) =>
+            x === null ? null : typeof x === "string" ? x : ""
+          ) as (string | null)[];
+        }
+      } catch {
+        gallerySlotKeeps = null;
+      }
+    }
+    const finalGallery: string[] = [];
+    for (let i = 0; i < COURSE_FORM_GALLERY_SLOT_COUNT; i++) {
+      const uploaded = uploadedGallery[i];
+      if (uploaded) {
+        finalGallery.push(uploaded);
+        continue;
+      }
+      if (gallerySlotKeeps != null && i < gallerySlotKeeps.length) {
+        const k = gallerySlotKeeps[i];
+        if (typeof k === "string" && k.trim() !== "") finalGallery.push(k.trim());
+        continue;
+      }
+      const legacy = existingGallery[i];
+      if (legacy) finalGallery.push(legacy);
+    }
 
     const classDateRaw = (formData.get("class_date") as string)?.trim() || null;
     const classTimeRaw = (formData.get("class_time") as string)?.trim() || null;
@@ -1490,7 +1519,7 @@ export async function updateCourseFull(
       price: Math.round(price),
       capacity: Math.floor(capacity),
       ...(keepMain != null && { image_url: keepMain }),
-      ...(finalGallery.length > 0 && { gallery_urls: finalGallery }),
+      gallery_urls: finalGallery.length > 0 ? finalGallery : null,
       course_intro: courseIntro || null,
       post_content: postContent || null,
       customer_notice: customerNotice,

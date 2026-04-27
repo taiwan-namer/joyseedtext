@@ -808,6 +808,20 @@ export default function CourseEditForm({
     if (!isEdit) {
       formData.set("merchant_id", showHqCourseAdminUi ? selectedCreateMerchantId : siteHqMerchantId);
     }
+    if (isEdit) {
+      const keeps: (string | null)[] = [];
+      for (let i = 1; i <= COURSE_GALLERY_MAX; i++) {
+        const slot = imageSlots[i];
+        if (slot.file) {
+          keeps.push(null);
+        } else {
+          const p = (slot.preview ?? "").trim();
+          if (!p || p.startsWith("blob:")) keeps.push("");
+          else keeps.push(p);
+        }
+      }
+      formData.set("gallery_existing_keeps", JSON.stringify(keeps));
+    }
     startTransition(async () => {
       try {
         if (imageSlots[0].file) {
