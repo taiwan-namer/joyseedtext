@@ -133,7 +133,7 @@ export default function HomeMarketplaceCoursesSection({ blockStyle, activities, 
                       <h3 className="font-medium text-gray-800 line-clamp-2 mb-2 text-sm">{activity.title}</h3>
                       <div className="mb-3 flex items-center justify-end gap-2">
                         {activity.salePrice != null && activity.originalPrice != null ? (
-                          <div className="text-right space-y-0.5">
+                          <div className="min-h-[2.5rem] text-right flex flex-col justify-end space-y-0.5">
                             <p className="text-xs text-gray-400 line-through">
                               NT$ {activity.originalPrice.toLocaleString()}
                             </p>
@@ -142,9 +142,11 @@ export default function HomeMarketplaceCoursesSection({ blockStyle, activities, 
                             </p>
                           </div>
                         ) : (
-                          <p className="text-amber-600 font-semibold text-sm">
-                            NT$ {activity.price.toLocaleString()} 起
-                          </p>
+                          <div className="min-h-[2.5rem] flex flex-col justify-end">
+                            <p className="text-amber-600 font-semibold text-sm">
+                              NT$ {activity.price.toLocaleString()} 起
+                            </p>
+                          </div>
                         )}
                       </div>
                       <Link
