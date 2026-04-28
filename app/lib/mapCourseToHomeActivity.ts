@@ -3,12 +3,14 @@ import type { Activity } from "@/app/lib/homeSectionTypes";
 
 /** 將首頁課程 API 列轉成首頁卡片用 Activity（與熱門課程橫列一致） */
 export function mapCourseToHomeActivity(c: CourseForPublic): Activity {
-  const price =
-    c.salePrice != null && c.price != null && c.salePrice < c.price ? c.salePrice : c.price ?? 0;
+  const hasSale = c.salePrice != null && c.price != null && c.salePrice < c.price;
+  const price = hasSale ? c.salePrice : c.price ?? 0;
   return {
     id: c.id,
     title: c.title,
     price,
+    originalPrice: hasSale ? c.price ?? undefined : undefined,
+    salePrice: hasSale ? c.salePrice ?? undefined : undefined,
     stock: c.capacity ?? 0,
     imageUrl: c.imageUrl ?? null,
     detailHref: `/course/${c.slug || c.id}`,

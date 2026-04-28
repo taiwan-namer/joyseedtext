@@ -172,9 +172,20 @@ export default function HomeCoursesGridListBlock({
                       ))}
                     </div>
                   ) : null}
-                  <p className="text-sm font-semibold text-amber-600 tabular-nums">
-                    NT$ {activity.price.toLocaleString()} 起
-                  </p>
+                  {activity.salePrice != null && activity.originalPrice != null ? (
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-gray-400 line-through tabular-nums">
+                        NT$ {activity.originalPrice.toLocaleString()}
+                      </p>
+                      <p className="text-sm font-semibold text-amber-600 tabular-nums">
+                        特價 NT$ {activity.salePrice.toLocaleString()} 起
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-semibold text-amber-600 tabular-nums">
+                      NT$ {activity.price.toLocaleString()} 起
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-col items-stretch justify-center self-center pl-1">
                   <Link
@@ -223,9 +234,20 @@ export default function HomeCoursesGridListBlock({
             </div>
             <div className="flex min-h-0 flex-1 flex-col p-3">
               <h3 className="mb-2 line-clamp-2 text-sm font-medium text-gray-800">{activity.title}</h3>
-              <p className="mb-2 text-sm font-semibold text-amber-600 tabular-nums">
-                NT$ {activity.price.toLocaleString()} 起
-              </p>
+              {activity.salePrice != null && activity.originalPrice != null ? (
+                <div className="mb-2 space-y-0.5">
+                  <p className="text-xs text-gray-400 line-through tabular-nums">
+                    NT$ {activity.originalPrice.toLocaleString()}
+                  </p>
+                  <p className="text-sm font-semibold text-amber-600 tabular-nums">
+                    特價 NT$ {activity.salePrice.toLocaleString()} 起
+                  </p>
+                </div>
+              ) : (
+                <p className="mb-2 text-sm font-semibold text-amber-600 tabular-nums">
+                  NT$ {activity.price.toLocaleString()} 起
+                </p>
+              )}
               <Link
                 href={activity.detailHref}
                 prefetch

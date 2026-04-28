@@ -131,10 +131,21 @@ export default function HomeMarketplaceCoursesSection({ blockStyle, activities, 
                         )}
                       </div>
                       <h3 className="font-medium text-gray-800 line-clamp-2 mb-2 text-sm">{activity.title}</h3>
-                      <div className="flex items-center justify-end gap-2 mb-3">
-                        <p className="text-amber-600 font-semibold text-sm">
-                          NT$ {activity.price.toLocaleString()} 起
-                        </p>
+                      <div className="mb-3 flex items-center justify-end gap-2">
+                        {activity.salePrice != null && activity.originalPrice != null ? (
+                          <div className="text-right space-y-0.5">
+                            <p className="text-xs text-gray-400 line-through">
+                              NT$ {activity.originalPrice.toLocaleString()}
+                            </p>
+                            <p className="text-amber-600 font-semibold text-sm">
+                              特價 NT$ {activity.salePrice.toLocaleString()} 起
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-amber-600 font-semibold text-sm">
+                            NT$ {activity.price.toLocaleString()} 起
+                          </p>
+                        )}
                       </div>
                       <Link
                         href={activity.detailHref}

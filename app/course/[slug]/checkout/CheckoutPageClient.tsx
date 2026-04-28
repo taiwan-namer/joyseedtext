@@ -258,10 +258,20 @@ export default function CheckoutPageClient({
       .filter((n) => !Number.isNaN(n) && n >= 0);
   }, [searchParams]);
 
+  const originalCoursePrice = "price" in course && typeof course.price === "number" ? course.price : null;
+  const saleCoursePrice =
+    "salePrice" in course && typeof course.salePrice === "number" ? course.salePrice : null;
+  const hasActiveSale =
+    originalCoursePrice != null &&
+    saleCoursePrice != null &&
+    saleCoursePrice < originalCoursePrice;
+
   const orderSummary = {
     courseName: course.title ?? "—",
     dateTime: dateTimeFromUrl,
     totalAmount: totalFromUrl,
+    originalPrice: hasActiveSale ? originalCoursePrice : null,
+    salePrice: hasActiveSale ? saleCoursePrice : null,
   };
 
   const loginNext = `/course/${slug}/checkout?${searchParams.toString()}`;
@@ -764,7 +774,13 @@ function OrderSummaryCard({
   atmBankAccount = "",
   submitDisabled = false,
 }: {
-  orderSummary: { courseName: string; dateTime: string; totalAmount: number };
+  orderSummary: {
+    courseName: string;
+    dateTime: string;
+    totalAmount: number;
+    originalPrice: number | null;
+    salePrice: number | null;
+  };
   paymentMethod: PaymentMethod;
   buttonText: string;
   onSubmit: () => void;
@@ -792,6 +808,16 @@ function OrderSummaryCard({
         </div>
         <div>
           <dt className="text-gray-500">總金額</dt>
+          {orderSummary.originalPrice != null && orderSummary.salePrice != null ? (
+            <dd className="mt-0.5 space-y-0.5">
+              <p className="text-sm text-gray-500 line-through">
+                NT$ {orderSummary.originalPrice.toLocaleString()}
+              </p>
+              <p className="font-bold text-lg text-amber-600">
+                NT$ {orderSummary.salePrice.toLocaleString()}
+              </p>
+            </dd>
+          ) : null}
           <dd className="font-bold text-lg text-gray-900 mt-0.5">
             NT$ {orderSummary.totalAmount.toLocaleString()}
           </dd>
