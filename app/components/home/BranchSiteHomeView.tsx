@@ -379,9 +379,14 @@ export default function BranchSiteHomeView({
     if (previewCoordinateViewport === "desktop") return "desktop";
     return visitorNarrowMaxMd ? "mobile" : "desktop";
   }, [admin, coordMode, previewCoordinateViewport, visitorNarrowMaxMd]);
-  /** 後台依分頁強制座標；訪客勿固定 desktop，否則窄螢幕仍用桌機欄位、手機專用座標／寬度全被忽略 */
-  const floatingCoordinateViewport =
-    admin != null ? coordMode : (previewCoordinateViewport ?? undefined);
+  /**
+   * 區塊高度與裝飾圖座標需共用同一 viewport 判斷，否則手機端可能出現
+   * 「高度已切 mobile、裝飾圖仍用 desktop（或反之）」的瞬間不同步，導致上下漂移。
+   */
+  const floatingCoordinateViewport: "desktop" | "mobile" =
+    admin != null
+      ? coordMode
+      : (previewCoordinateViewport ?? (visitorNarrowMaxMd ? "mobile" : "desktop"));
   const floatingScaleReferenceWidthPx =
     isAdminCanvas && admin != null && coordMode === "mobile"
       ? admin.mobileFloatingScaleReferenceWidthPx ?? LAYOUT_MOBILE_FLOATING_SCALE_WIDTH_PX
