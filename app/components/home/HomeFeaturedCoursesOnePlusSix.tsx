@@ -64,12 +64,16 @@ export default function HomeFeaturedCoursesOnePlusSix({
   const secondary = slots.slice(1);
 
   const renderCard = (activity: HomePageActivity | null, size: "main" | "small", idx: number) => {
-    const wClass = size === "main" ? "w-full md:w-[420px] lg:w-[520px]" : "w-full";
+    const wClass = "w-full";
+    const imageSizes =
+      size === "main"
+        ? "(max-width: 767px) 100vw, (max-width: 1279px) 380px, 460px"
+        : "(max-width: 767px) 50vw, (max-width: 1279px) 220px, 224px";
     const card = (
       <div className={`group rounded-2xl overflow-hidden bg-white/85 shadow-sm ${wClass}`}>
         <div className="relative aspect-square bg-gray-100 overflow-hidden">
           {activity?.imageUrl ? (
-            <NextImage src={activity.imageUrl} alt={activity.title} fill sizes="(max-width:1024px) 280px, 520px" className="object-cover" />
+            <NextImage src={activity.imageUrl} alt={activity.title} fill sizes={imageSizes} className="object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400">
               <LucideImage className="h-10 w-10" strokeWidth={1.5} />
@@ -105,9 +109,9 @@ export default function HomeFeaturedCoursesOnePlusSix({
         {resolvedLoading ? (
           <div className="text-sm text-gray-500 min-h-[320px] flex items-start pt-2">載入中…</div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-[minmax(0,520px)_minmax(0,1fr)] md:gap-5 items-start">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,460px)_minmax(0,696px)] md:gap-5 items-start">
             <div>{renderCard(main, "main", 0)}</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 lg:gap-3">
               {secondary.map((activity, i) => renderCard(activity, "small", i + 1))}
             </div>
           </div>

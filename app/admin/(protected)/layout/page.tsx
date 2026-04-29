@@ -435,6 +435,7 @@ export default function AdminLayoutPage() {
   /** LOGO／頁首背景 */
   const [logoDraftUrl, setLogoDraftUrl] = useState<string | null>(null);
   const [logoPendingFile, setLogoPendingFile] = useState<File | null>(null);
+  const [logoMarkedForRemoval, setLogoMarkedForRemoval] = useState(false);
   const logoFileRef = useRef<HTMLInputElement | null>(null);
   const [headerBgDeskDraftUrl, setHeaderBgDeskDraftUrl] = useState<string | null>(null);
   const [headerBgDeskPendingFile, setHeaderBgDeskPendingFile] = useState<File | null>(null);
@@ -501,6 +502,7 @@ export default function AdminLayoutPage() {
         setFeaturedCategories(s.featuredCategories?.length ? s.featuredCategories : []);
         setFeaturedSectionIconUrl(s.featuredSectionIconUrl ?? null);
         setLogoUrl(s.logoUrl ?? null);
+        setLogoMarkedForRemoval(false);
         setHeaderBackgroundUrl(s.headerBackgroundUrl ?? null);
         setHeaderBackgroundMobileUrl(s.headerBackgroundMobileUrl ?? null);
         setShowProductMenu(s.showProductMenu === true);
@@ -1137,6 +1139,7 @@ export default function AdminLayoutPage() {
       return URL.createObjectURL(file);
     });
     setLogoPendingFile(file);
+    setLogoMarkedForRemoval(false);
     setMessage(null);
   };
 
@@ -1146,6 +1149,17 @@ export default function AdminLayoutPage() {
       return null;
     });
     setLogoPendingFile(null);
+  };
+
+  const removeLogo = () => {
+    setLogoDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setLogoPendingFile(null);
+    setLogoUrl(null);
+    setLogoMarkedForRemoval(true);
+    setMessage({ type: "success", text: "LOGO 已從預覽移除，請按「儲存版面」套用。" });
   };
 
   const handleHeaderBgDeskFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -1349,6 +1363,15 @@ export default function AdminLayoutPage() {
           return null;
         });
         setLogoPendingFile(null);
+        setLogoMarkedForRemoval(false);
+      } else if (logoMarkedForRemoval) {
+        const savedMeta = await updateLogoUrl(null);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setLogoUrl(null);
+        setLogoMarkedForRemoval(false);
       }
 
       let deskUrl = headerBackgroundUrl;
@@ -1543,6 +1566,11 @@ export default function AdminLayoutPage() {
           {logoPendingFile || logoDraftUrl ? (
             <button type="button" onClick={clearLogoDraft} className="text-xs text-gray-600 hover:text-red-600 underline">
               取消 LOGO 預覽
+            </button>
+          ) : null}
+          {displayLogoUrl ? (
+            <button type="button" onClick={removeLogo} className="text-xs text-gray-600 hover:text-red-600 underline">
+              刪除 LOGO
             </button>
           ) : null}
         </div>
