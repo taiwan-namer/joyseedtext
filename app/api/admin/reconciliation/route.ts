@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
 import {
+  attachOrdersArraysToBookingRaws,
   buildReconciliationLines,
+  fetchOrderRowsForReconciliation,
+  groupOrderRowsByBookingId,
   normalizeReconciliationBookingRows,
   sumReconciliationTotals,
 } from "@/lib/reconciliationFromBookings";
@@ -92,7 +95,26 @@ export async function GET(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const rows = normalizeReconciliationBookingRows(rawRows ?? []);
+    const bookingIds = (rawRows ?? [])
+      .map((row) => {
+        if (!row || typeof row !== "object") return "";
+        return String((row as Record<string, unknown>).id ?? "").trim();
+      })
+      .filter(Boolean);
+
+    let mergedBookings: unknown[] = rawRows ?? [];
+    try {
+      const orderRows = await fetchOrderRowsForReconciliation(supabase, bookingIds);
+      const byBooking = groupOrderRowsByBookingId(orderRows);
+      mergedBookings = attachOrdersArraysToBookingRaws(rawRows ?? [], byBooking);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "載入 orders 失敗" },
+        { status: 500 }
+      );
+    }
+
+    const rows = normalizeReconciliationBookingRows(mergedBookings);
     const lines = buildReconciliationLines(
       rows,
       commissionByMerchant,

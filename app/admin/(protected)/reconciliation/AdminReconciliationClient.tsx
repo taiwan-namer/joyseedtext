@@ -9,11 +9,12 @@ type Line = {
   supplier_label: string;
   class_title: string;
   course_amount: number;
-  peace_addon_amount?: number;
+  peace_addon_amount: number;
   commission_amount: number;
   course_net_after_commission: number;
   commission_rate_percent: number;
-  order_total?: number;
+  order_total: number;
+  is_trial_first_purchase: boolean;
 };
 
 type Totals = {
@@ -66,17 +67,18 @@ function ReconciliationTable({
     return <p className="py-12 text-center text-sm text-gray-500">{emptyText}</p>;
   }
   return (
-    <table className="w-full min-w-[960px] text-sm">
+    <table className="w-full min-w-[1180px] text-sm">
       <thead>
         <tr className="bg-gray-50 border-b border-gray-200">
           <th className="text-left py-3 px-4 font-medium text-gray-700">訂單時間</th>
           <th className="text-left py-3 px-4 font-medium text-gray-700">課程所屬店家</th>
           <th className="text-left py-3 px-4 font-medium text-gray-700">課程</th>
           <th className="text-right py-3 px-4 font-medium text-gray-700">客付總額</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700">總金額（課程）</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700">安心包</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700">課程金額</th>
           <th className="text-right py-3 px-4 font-medium text-gray-700">抽成%</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700">傭金</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700">扣除傭金後</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700">平台服務費</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700">扣除平台服務費後（課程淨額）</th>
         </tr>
       </thead>
       <tbody>
@@ -86,10 +88,16 @@ function ReconciliationTable({
               {new Date(row.created_at).toLocaleString("zh-TW")}
             </td>
             <td className="py-3 px-4 text-gray-800">{row.supplier_label}</td>
-            <td className="py-3 px-4 text-gray-900">{row.class_title}</td>
-            <td className="py-3 px-4 text-right text-gray-600">
-              NT$ {(row.order_total ?? 0).toLocaleString()}
+            <td className="py-3 px-4 text-gray-900">
+              <span className="align-middle">{row.class_title}</span>
+              {row.is_trial_first_purchase ? (
+                <span className="ml-2 inline-flex align-middle rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                  首次體驗
+                </span>
+              ) : null}
             </td>
+            <td className="py-3 px-4 text-right text-gray-600">NT$ {row.order_total.toLocaleString()}</td>
+            <td className="py-3 px-4 text-right text-gray-600">NT$ {row.peace_addon_amount.toLocaleString()}</td>
             <td className="py-3 px-4 text-right font-medium">NT$ {row.course_amount.toLocaleString()}</td>
             <td className="text-right py-3 px-4 text-gray-600">{row.commission_rate_percent}%</td>
             <td className="py-3 px-4 text-right">NT$ {row.commission_amount.toLocaleString()}</td>
@@ -119,20 +127,20 @@ function PayoutClaimSection({
     <section className="space-y-3 rounded-xl border border-violet-200/90 bg-violet-50/40 p-4 sm:p-5">
       <h2 className="text-lg font-semibold text-gray-900">請款項目</h2>
       <p className="text-sm text-gray-500 lg:hidden">
-        總站淨額 − 本站傭金 = 請款金額
+        總站淨額 − 本站平台服務費 = 請款金額
       </p>
       <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-stretch lg:gap-3">
         <div className="flex flex-1 flex-col justify-center rounded-xl border border-white/80 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">總站淨額</p>
-          <p className="mt-1 text-xs text-gray-400">總站訂單「扣除傭金後（課程淨額）」小計</p>
+          <p className="mt-1 text-xs text-gray-400">總站訂單「扣除平台服務費後（課程淨額）」小計</p>
           <p className="mt-2 text-xl font-bold text-gray-900">NT$ {hqNet.toLocaleString()}</p>
         </div>
         <div className="hidden items-center justify-center text-2xl font-light text-gray-400 lg:flex" aria-hidden>
           −
         </div>
         <div className="flex flex-1 flex-col justify-center rounded-xl border border-white/80 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">本站傭金</p>
-          <p className="mt-1 text-xs text-gray-400">本站訂單傭金小計</p>
+          <p className="text-sm text-gray-500">本站平台服務費</p>
+          <p className="mt-1 text-xs text-gray-400">本站訂單平台服務費小計</p>
           <p className="mt-2 text-xl font-bold text-gray-900">NT$ {localCommission.toLocaleString()}</p>
         </div>
         <div className="hidden items-center justify-center text-2xl font-light text-gray-400 lg:flex" aria-hidden>
@@ -146,7 +154,7 @@ function PayoutClaimSection({
           }`}
         >
           <p className="text-sm text-gray-600">請款金額</p>
-          <p className="mt-1 text-xs text-gray-500">總站淨額 − 本站傭金</p>
+          <p className="mt-1 text-xs text-gray-500">總站淨額 − 本站平台服務費</p>
           <p
             className={`mt-2 text-2xl font-bold tabular-nums ${
               isNegative ? "text-red-800" : "text-amber-900"
@@ -171,21 +179,25 @@ function TotalsCards({ totals, title }: { totals: Totals | null; title: string }
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">客付總額</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.order_total.toLocaleString()}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">總金額（課程）</p>
+          <p className="text-sm text-gray-500">安心包</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.peace_addon.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-sm text-gray-500">課程金額</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.course_amount.toLocaleString()}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">傭金</p>
+          <p className="text-sm text-gray-500">平台服務費</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.commission.toLocaleString()}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">扣除傭金後（課程淨額）</p>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+          <p className="text-sm text-gray-500">扣除平台服務費後（課程淨額）</p>
           <p className="mt-1 text-lg font-bold text-amber-900">NT$ {totals.net.toLocaleString()}</p>
         </div>
       </div>
@@ -216,6 +228,10 @@ export default function AdminReconciliationClient() {
     course_net_after_commission: Number(x.course_net_after_commission) || 0,
     commission_rate_percent: Number(x.commission_rate_percent) || 0,
     order_total: Number(x.order_total) || 0,
+    is_trial_first_purchase:
+      x.is_trial_first_purchase === true ||
+      x.is_trial_first_purchase === "true" ||
+      x.is_trial_first_purchase === 1,
   });
 
   const load = useCallback(async (opts?: { signal?: AbortSignal }) => {
