@@ -9,12 +9,13 @@ function envTrim(key: string): string {
 }
 
 /**
- * GET /api/admin/reconciliation?start_date=&end_date=
- * 分站後台：與訂單列表相同可見範圍；回傳明細並分「總站購買」／「本站購買」（sold_via_merchant_id）。
+ * GET /api/dashboard/reconciliation-summary?start_date=&end_date=&course_id=
+ * Dashboard 對帳口徑小計（與「對帳明細」同邏輯：orders 入帳快照 + bookings）
  */
 export async function GET(request: NextRequest) {
   try {
     await verifyAdminSession();
+
     const branchMerchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
     if (!branchMerchantId) {
       return NextResponse.json({ error: "未設定店家" }, { status: 500 });
@@ -23,15 +24,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date")?.trim();
     const endDate = searchParams.get("end_date")?.trim();
+    const courseId = searchParams.get("course_id")?.trim() || null;
 
     if (!startDate || !endDate) {
-      return NextResponse.json({ error: "請提供 start_date 與 end_date" }, { status: 400 });
+      return NextResponse.json(
+        { error: "請提供 start_date 與 end_date（YYYY-MM-DD）" },
+        { status: 400 }
+      );
     }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
-      return NextResponse.json({ error: "日期無效" }, { status: 400 });
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return NextResponse.json({ error: "日期格式錯誤" }, { status: 400 });
+    }
+    if (start > end) {
+      return NextResponse.json({ error: "start_date 不可大於 end_date" }, { status: 400 });
     }
 
     const startISO = start.toISOString().slice(0, 10) + "T00:00:00.000Z";
@@ -40,32 +48,33 @@ export async function GET(request: NextRequest) {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-
     try {
-      const { lines, linesHq, linesLocal, totals, totalsHq, totalsLocal } = await fetchAdminReconciliationResult(
-        supabase,
-        { startISO, endNextISO, branchMerchantId }
-      );
+      const result = await fetchAdminReconciliationResult(supabase, {
+        startISO,
+        endNextISO,
+        branchMerchantId,
+        class_id: courseId,
+      });
 
       return NextResponse.json({
-        lines,
-        lines_hq: linesHq,
-        lines_local: linesLocal,
-        totals,
-        totals_hq: totalsHq,
-        totals_local: totalsLocal,
+        order_count: result.lines.length,
+        totals: result.totals,
+        totals_hq: result.totalsHq,
+        totals_local: result.totalsLocal,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "載入失敗";
-      if (msg.includes("orders")) {
-        return NextResponse.json({ error: msg }, { status: 500 });
-      }
-      return NextResponse.json({ error: msg }, { status: 500 });
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "對帳資料載入失敗" },
+        { status: 500 }
+      );
     }
   } catch (e) {
     if (e instanceof Error && e.message === "Unauthorized admin access") {
       return NextResponse.json({ error: "未授權" }, { status: 401 });
     }
-    return NextResponse.json({ error: e instanceof Error ? e.message : "錯誤" }, { status: 500 });
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "伺服器錯誤" },
+      { status: 500 }
+    );
   }
 }

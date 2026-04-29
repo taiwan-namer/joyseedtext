@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/verifyAdminSession";
-import { bookingRowDisplayAmountForBranch } from "@/lib/bookingBranchDisplayAmount";
-import {
-  applyAdminBookingsAccessToQuery,
-  getAdminBookingsAccessFilter,
-} from "@/lib/bookingsMerchantFilter";
+import { fetchAdminReconciliationResult } from "@/lib/adminReconciliationFetch";
+
+function envTrim(key: string): string {
+  const raw = process.env[key];
+  return typeof raw === "string" ? raw.trim() : "";
+}
 
 /**
- * GET /api/dashboard/revenue-summary?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&course_id=xxx
- * 老師後台訂單金額總覽：總營收、總報名人數、課程數量、平均客單價（status = paid 或 completed，與訂單列表可見範圍一致）
- * course_id 為選填，篩選指定課程。
+ * GET /api/dashboard/revenue-summary?start_date=&end_date=&course_id=
+ * 相容舊欄位名稱：`total_revenue` = 對帳口徑客付總額（等同對帳明細 totals.order_total）
  */
 export async function GET(request: NextRequest) {
   try {
     await verifyAdminSession();
+
+    const branchMerchantId = envTrim("NEXT_PUBLIC_CLIENT_ID");
+    if (!branchMerchantId) {
+      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
+    }
 
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date")?.trim();
@@ -26,6 +31,7 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
     const start = new Date(startDate);
     const end = new Date(endDate);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
@@ -41,52 +47,31 @@ export async function GET(request: NextRequest) {
     const endNextISO = endNext.toISOString();
 
     const supabase = createServerSupabase();
-    const access = await getAdminBookingsAccessFilter(supabase);
-    if (!access) {
-      return NextResponse.json({ error: "未設定店家" }, { status: 500 });
-    }
-    const query = supabase
-      .from("bookings")
-      .select("id, class_id, order_amount, addon_indices, metadata, classes(price, addon_prices)");
-    const scoped = applyAdminBookingsAccessToQuery(query, access);
-    let filtered = scoped
-      .in("status", ["paid", "completed"])
-      .gte("created_at", startISO)
-      .lt("created_at", endNextISO);
-    if (courseId) {
-      filtered = filtered.eq("class_id", courseId);
-    }
-    const { data: rows, error } = await filtered;
+    try {
+      const { lines, totals } = await fetchAdminReconciliationResult(supabase, {
+        startISO,
+        endNextISO,
+        branchMerchantId,
+        class_id: courseId,
+      });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      const totalStudents = lines.length;
+      const uniqueCourseKeys = new Set(lines.map((l) => `${l.supplier_merchant_id}\0${l.class_title}`));
+      const totalCourses = uniqueCourseKeys.size;
+      const averageOrderValue = totalStudents > 0 ? Math.round(totals.order_total / totalStudents) : 0;
+
+      return NextResponse.json({
+        total_revenue: totals.order_total,
+        total_students: totalStudents,
+        total_courses: totalCourses,
+        average_order_value: averageOrderValue,
+      });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "對帳資料載入失敗" },
+        { status: 500 }
+      );
     }
-
-    let totalRevenue = 0;
-    const classIds = new Set<string>();
-    for (const r of rows ?? []) {
-      const row = r as {
-        order_amount?: number | null;
-        addon_indices?: unknown;
-        metadata?: unknown;
-        classes?: { price?: number | null; addon_prices?: unknown } | null;
-        class_id?: string;
-      };
-      const amount = bookingRowDisplayAmountForBranch(row);
-      totalRevenue += amount;
-      if (row.class_id) classIds.add(String(row.class_id));
-    }
-
-    const totalStudents = (rows ?? []).length;
-    const totalCourses = classIds.size;
-    const averageOrderValue = totalStudents > 0 ? Math.round(totalRevenue / totalStudents) : 0;
-
-    return NextResponse.json({
-      total_revenue: totalRevenue,
-      total_students: totalStudents,
-      total_courses: totalCourses,
-      average_order_value: averageOrderValue,
-    });
   } catch (e) {
     if (e instanceof Error && e.message === "Unauthorized admin access") {
       return NextResponse.json({ error: "未授權" }, { status: 401 });

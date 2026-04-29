@@ -179,14 +179,10 @@ function TotalsCards({ totals, title }: { totals: Totals | null; title: string }
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">客付總額</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.order_total.toLocaleString()}</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">安心包</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.peace_addon.toLocaleString()}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">課程金額</p>
@@ -196,7 +192,7 @@ function TotalsCards({ totals, title }: { totals: Totals | null; title: string }
           <p className="text-sm text-gray-500">平台服務費</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.commission.toLocaleString()}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">扣除平台服務費後（課程淨額）</p>
           <p className="mt-1 text-lg font-bold text-amber-900">NT$ {totals.net.toLocaleString()}</p>
         </div>

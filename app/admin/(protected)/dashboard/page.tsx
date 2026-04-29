@@ -64,11 +64,20 @@ function statusLabel(s: string) {
   }
 }
 
-type Summary = {
-  total_revenue: number;
-  total_students: number;
-  total_courses: number;
-  average_order_value: number;
+type ReconciliationTotals = {
+  course_amount: number;
+  peace_addon: number;
+  commission: number;
+  net: number;
+  order_total: number;
+};
+
+/** 與 /api/admin/reconciliation 同口徑 */
+type ReconciliationSummary = {
+  order_count: number;
+  totals: ReconciliationTotals;
+  totals_hq: ReconciliationTotals;
+  totals_local: ReconciliationTotals;
 };
 
 type MonthlyItem = { month: string; revenue: number };
@@ -76,7 +85,7 @@ type MonthlyItem = { month: string; revenue: number };
 const CHART_COLOR = "#d97706"; // amber-600
 
 export default function AdminDashboardPage() {
-  const [summary, setSummary] = useState<Summary | null>(null);
+  const [recoSummary, setRecoSummary] = useState<ReconciliationSummary | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyItem[]>([]);
   const [allBookings, setAllBookings] = useState<BookingWithClass[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,19 +105,19 @@ export default function AdminDashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-        if (filterCourseId) params.set("course_id", filterCourseId);
-        const [summaryRes, monthlyRes, bookingsRes] = await Promise.all([
-          fetch(`/api/dashboard/revenue-summary?${params}`),
+        const recoParams = new URLSearchParams({ start_date: startDate, end_date: endDate });
+        if (filterCourseId) recoParams.set("course_id", filterCourseId);
+        const [recoRes, monthlyRes, bookingsRes] = await Promise.all([
+          fetch(`/api/dashboard/reconciliation-summary?${recoParams}`),
           fetch("/api/dashboard/monthly-revenue"),
           getAdminBookings(),
         ]);
 
         if (cancelled) return;
 
-        if (!summaryRes.ok) {
-          const err = await summaryRes.json().catch(() => ({}));
-          setError(err.error || summaryRes.statusText);
+        if (!recoRes.ok) {
+          const err = await recoRes.json().catch(() => ({}));
+          setError(typeof err.error === "string" ? err.error : recoRes.statusText);
           setLoading(false);
           return;
         }
@@ -119,9 +128,9 @@ export default function AdminDashboardPage() {
           return;
         }
 
-        const summaryData = await summaryRes.json();
+        const recoData = (await recoRes.json()) as ReconciliationSummary;
         const monthly = await monthlyRes.json();
-        setSummary(summaryData);
+        setRecoSummary(recoData);
         setMonthlyData(monthly.items ?? []);
 
         if (bookingsRes.success) {
@@ -221,46 +230,83 @@ export default function AdminDashboardPage() {
         </div>
       ) : (
         <>
-          {/* Summary cards - 依篩選連動 */}
+          {/* 對帳口徑總覽（與「對帳明細」相同計算：含 orders 入帳快照） */}
           <div>
-            <p className="text-sm font-medium text-gray-500 mb-3">
-              {filterCourseId || filterStartDate || filterEndDate ? "篩選後總覽" : "本月總覽"}
-            </p>
+            <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
+              <div>
+                <p className="text-sm font-medium text-gray-500">
+                  {filterCourseId || filterStartDate || filterEndDate ? "篩選後對帳總覽" : "本月對帳總覽"}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  區間內有效訂單 {recoSummary?.order_count ?? 0} 筆 · 金額與「對帳明細」一致
+                </p>
+              </div>
+              <Link
+                href="/admin/reconciliation"
+                prefetch
+                className="text-sm font-medium text-amber-600 hover:text-amber-700 touch-manipulation"
+              >
+                開啟對帳明細
+              </Link>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-medium text-gray-500">總營收</p>
+                <p className="text-sm font-medium text-gray-500">客付總額</p>
                 <p className="mt-1 text-2xl font-bold text-gray-900">
-                  NT$ {(summary?.total_revenue ?? 0).toLocaleString()}
+                  NT$ {(recoSummary?.totals.order_total ?? 0).toLocaleString()}
                 </p>
               </div>
               <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-medium text-gray-500">本月報名人數</p>
+                <p className="text-sm font-medium text-gray-500">課程金額</p>
                 <p className="mt-1 text-2xl font-bold text-gray-900">
-                  {summary?.total_students ?? 0} 人
+                  NT$ {(recoSummary?.totals.course_amount ?? 0).toLocaleString()}
                 </p>
               </div>
               <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-medium text-gray-500">課程數量</p>
+                <p className="text-sm font-medium text-gray-500">平台服務費</p>
                 <p className="mt-1 text-2xl font-bold text-gray-900">
-                  {summary?.total_courses ?? 0} 堂
+                  NT$ {(recoSummary?.totals.commission ?? 0).toLocaleString()}
                 </p>
               </div>
               <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-medium text-gray-500">平均客單價</p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">
-                  NT$ {(summary?.average_order_value ?? 0).toLocaleString()}
+                <p className="text-sm font-medium text-gray-500">扣除平台服務費後（課程淨額）</p>
+                <p className="mt-1 text-2xl font-bold text-amber-900">
+                  NT$ {(recoSummary?.totals.net ?? 0).toLocaleString()}
                 </p>
               </div>
             </div>
+            {recoSummary ? (
+              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 rounded-lg border border-gray-100 bg-gray-50/80 px-4 py-3 text-xs text-gray-600">
+                <span>
+                  總站購買 · 客付 NT${" "}
+                  <span className="font-semibold tabular-nums text-gray-800">
+                    {recoSummary.totals_hq.order_total.toLocaleString()}
+                  </span>
+                  {" · "}淨額 NT${" "}
+                  <span className="font-semibold tabular-nums text-gray-800">{recoSummary.totals_hq.net.toLocaleString()}</span>
+                </span>
+                <span>
+                  本站購買 · 客付 NT${" "}
+                  <span className="font-semibold tabular-nums text-gray-800">
+                    {recoSummary.totals_local.order_total.toLocaleString()}
+                  </span>
+                  {" · "}淨額 NT${" "}
+                  <span className="font-semibold tabular-nums text-gray-800">
+                    {recoSummary.totals_local.net.toLocaleString()}
+                  </span>
+                </span>
+              </div>
+            ) : null}
           </div>
 
-          {/* Monthly Revenue Chart */}
+          {/* Monthly: 對帳口徑客付總額 */}
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-800 mb-4">最近 6 個月營收</h2>
+            <h2 className="text-sm font-semibold text-gray-800 mb-1">最近 6 個月客付總額</h2>
+            <p className="text-xs text-gray-500 mb-4">依訂單建立月份加總（與對帳明細之客付總額相同口徑）</p>
             <div className="h-64 w-full">
               {chartData.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-                  尚無營收資料
+                  尚無資料
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -277,7 +323,7 @@ export default function AdminDashboardPage() {
                     />
                     <Tooltip
                       formatter={(value) =>
-                        [`NT$ ${Number(value ?? 0).toLocaleString()}`, "營收"]
+                        [`NT$ ${Number(value ?? 0).toLocaleString()}`, "客付總額"]
                       }
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ""}
                     />
