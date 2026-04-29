@@ -20,23 +20,12 @@ function formatDate(iso: string) {
 }
 
 function formatCourseDate(row: BookingWithClass) {
-  const datePart = row.slot_date?.trim?.() || row.slot_date;
+  const datePartRaw = row.slot_date?.trim?.() || row.slot_date;
+  const datePart = datePartRaw ? String(datePartRaw).replace(/T.*$/, "").slice(0, 10) : "";
   if (!datePart) return "—";
-  const timePart = (row.slot_time != null ? String(row.slot_time).slice(0, 5) : null) || "00:00";
-  try {
-    const iso = timePart.length === 5 ? `${datePart}T${timePart}:00` : `${datePart}T00:00:00`;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return `${datePart} ${timePart}`;
-    return d.toLocaleString("zh-TW", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return timePart ? `${datePart} ${timePart}` : datePart;
-  }
+  const timeMatch = String(row.slot_time ?? "").match(/(\d{2}:\d{2})/);
+  const timePart = timeMatch?.[1] ?? "00:00";
+  return `${datePart} ${timePart}`;
 }
 
 function statusLabel(s: string) {
