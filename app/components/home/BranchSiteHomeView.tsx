@@ -822,12 +822,16 @@ export default function BranchSiteHomeView({
       (heroEditBlockId === "hero_carousel" && !heroBlock && (heroCarouselBlock?.floatingIcons?.length ?? 0) > 0));
 
   /**
-   * 有主圖或裝飾圖即顯示主圖區；僅裝飾、無主圖時仍畫出同比例底框。
+   * 有主圖或裝飾圖即顯示主圖區；有主圖時依圖片原始比例顯示（不裁切）；僅裝飾、無主圖時仍畫出固定比例底框。
    * 後台畫布（admin）即使無圖、無裝飾亦顯示佔位，以便預覽版面並在畫布上選檔；訪客首頁無 admin 時無圖無裝飾則不渲染。
    */
   const heroImageTrimmed = heroImageUrl?.trim() || null;
   const heroImageMobileTrimmed = heroImageMobileUrl?.trim() || null;
   const resolvedHeroImageMobile = heroImageMobileTrimmed || heroImageTrimmed;
+  const hasHeroImageAsset = !!(heroImageTrimmed || resolvedHeroImageMobile);
+  const heroMediaFrameClass = hasHeroImageAsset
+    ? "relative w-full rounded-xl overflow-hidden bg-amber-50"
+    : "relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50";
   const hasSplitHeroByViewport =
     !!heroImageTrimmed &&
     !!resolvedHeroImageMobile &&
@@ -842,19 +846,31 @@ export default function BranchSiteHomeView({
       {/* minHeight／背景在此層：裝飾圖 absolute 以此層為參考，勿只加在外層 section */}
       <div className="relative w-full min-h-0" style={getBlockStyle("hero")}>
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
-          <div className="relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50">
+          <div className={heroMediaFrameClass}>
           {heroImageTrimmed || resolvedHeroImageMobile ? (
             <>
               {hasSplitHeroByViewport ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={resolvedHeroImageMobile!} alt="" className="absolute inset-0 w-full h-full object-cover md:hidden" />
+                  <img
+                    src={resolvedHeroImageMobile!}
+                    alt=""
+                    className="block w-full max-w-full h-auto object-contain md:hidden"
+                  />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={heroImageTrimmed!} alt="" className="absolute inset-0 hidden w-full h-full object-cover md:block" />
+                  <img
+                    src={heroImageTrimmed!}
+                    alt=""
+                    className="hidden md:block w-full max-w-full h-auto object-contain"
+                  />
                 </>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={(heroImageTrimmed ?? resolvedHeroImageMobile)!} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <img
+                  src={(heroImageTrimmed ?? resolvedHeroImageMobile)!}
+                  alt=""
+                  className="block w-full max-w-full h-auto object-contain"
+                />
               )}
             </>
           ) : (

@@ -443,6 +443,11 @@ export default function AdminLayoutPage() {
   const [headerBgMobDraftUrl, setHeaderBgMobDraftUrl] = useState<string | null>(null);
   const [headerBgMobPendingFile, setHeaderBgMobPendingFile] = useState<File | null>(null);
   const headerBgMobFileRef = useRef<HTMLInputElement | null>(null);
+  const [headerBgDeskMarkedForRemoval, setHeaderBgDeskMarkedForRemoval] = useState(false);
+  const [headerBgMobMarkedForRemoval, setHeaderBgMobMarkedForRemoval] = useState(false);
+  const [heroImageDeskMarkedForRemoval, setHeroImageDeskMarkedForRemoval] = useState(false);
+  const [heroImageMobMarkedForRemoval, setHeroImageMobMarkedForRemoval] = useState(false);
+  const [fullWidthImageMarkedForRemoval, setFullWidthImageMarkedForRemoval] = useState(false);
   /** 輪播各則圖：index → blob 預覽／待上傳檔 */
   const [carouselSlideDraftUrls, setCarouselSlideDraftUrls] = useState<Record<number, string>>({});
   const [carouselSlidePendingFiles, setCarouselSlidePendingFiles] = useState<Record<number, File>>({});
@@ -503,6 +508,11 @@ export default function AdminLayoutPage() {
         setFeaturedSectionIconUrl(s.featuredSectionIconUrl ?? null);
         setLogoUrl(s.logoUrl ?? null);
         setLogoMarkedForRemoval(false);
+        setHeaderBgDeskMarkedForRemoval(false);
+        setHeaderBgMobMarkedForRemoval(false);
+        setHeroImageDeskMarkedForRemoval(false);
+        setHeroImageMobMarkedForRemoval(false);
+        setFullWidthImageMarkedForRemoval(false);
         setHeaderBackgroundUrl(s.headerBackgroundUrl ?? null);
         setHeaderBackgroundMobileUrl(s.headerBackgroundMobileUrl ?? null);
         setShowProductMenu(s.showProductMenu === true);
@@ -1059,6 +1069,7 @@ export default function AdminLayoutPage() {
       return URL.createObjectURL(file);
     });
     setFullWidthImagePendingFile(file);
+    setFullWidthImageMarkedForRemoval(false);
     setMessage(null);
   };
 
@@ -1068,6 +1079,18 @@ export default function AdminLayoutPage() {
       return null;
     });
     setFullWidthImagePendingFile(null);
+    setFullWidthImageMarkedForRemoval(false);
+  };
+
+  const removeFullWidthImage = () => {
+    setFullWidthImageDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setFullWidthImagePendingFile(null);
+    setFullWidthImageUrl(null);
+    setFullWidthImageMarkedForRemoval(true);
+    setMessage({ type: "success", text: "單張大圖已從預覽移除，請按「儲存版面」套用。" });
   };
 
   const handleHeroImageFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -1078,6 +1101,7 @@ export default function AdminLayoutPage() {
       return;
     }
     if (canvasViewportMode === "mobile") {
+      setHeroImageMobMarkedForRemoval(false);
       setHeroImageMobileDraftUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return URL.createObjectURL(file);
@@ -1092,6 +1116,7 @@ export default function AdminLayoutPage() {
         });
       setHeroImageMobilePendingFile(file);
     } else {
+      setHeroImageDeskMarkedForRemoval(false);
       setHeroImageDraftUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return URL.createObjectURL(file);
@@ -1174,6 +1199,7 @@ export default function AdminLayoutPage() {
       return URL.createObjectURL(file);
     });
     setHeaderBgDeskPendingFile(file);
+    setHeaderBgDeskMarkedForRemoval(false);
     setMessage(null);
   };
 
@@ -1183,6 +1209,18 @@ export default function AdminLayoutPage() {
       return null;
     });
     setHeaderBgDeskPendingFile(null);
+    setHeaderBgDeskMarkedForRemoval(false);
+  };
+
+  const removeHeaderBackgroundDesktop = () => {
+    setHeaderBgDeskDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setHeaderBgDeskPendingFile(null);
+    setHeaderBackgroundUrl(null);
+    setHeaderBgDeskMarkedForRemoval(true);
+    setMessage({ type: "success", text: "桌機頁首背景已從預覽移除，請按「儲存版面」套用。" });
   };
 
   const handleHeaderBgMobFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -1197,6 +1235,7 @@ export default function AdminLayoutPage() {
       return URL.createObjectURL(file);
     });
     setHeaderBgMobPendingFile(file);
+    setHeaderBgMobMarkedForRemoval(false);
     setMessage(null);
   };
 
@@ -1206,6 +1245,42 @@ export default function AdminLayoutPage() {
       return null;
     });
     setHeaderBgMobPendingFile(null);
+    setHeaderBgMobMarkedForRemoval(false);
+  };
+
+  const removeHeaderBackgroundMobile = () => {
+    setHeaderBgMobDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setHeaderBgMobPendingFile(null);
+    setHeaderBackgroundMobileUrl(null);
+    setHeaderBgMobMarkedForRemoval(true);
+    setMessage({ type: "success", text: "手機頁首背景已從預覽移除，請按「儲存版面」套用。" });
+  };
+
+  const removeHeroImageDesktop = () => {
+    setHeroImageDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setHeroImageDraftMobilePreviewUrl(null);
+    setHeroImagePendingFile(null);
+    setHeroImageUrl(null);
+    setHeroImageDeskMarkedForRemoval(true);
+    setMessage({ type: "success", text: "桌機首頁主圖已從預覽移除，請按「儲存版面」套用。" });
+  };
+
+  const removeHeroImageMobile = () => {
+    setHeroImageMobileDraftUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setHeroImageMobileDraftMobilePreviewUrl(null);
+    setHeroImageMobilePendingFile(null);
+    setHeroImageMobileUrl(null);
+    setHeroImageMobMarkedForRemoval(true);
+    setMessage({ type: "success", text: "手機首頁主圖已從預覽移除，請按「儲存版面」套用。" });
   };
 
   const handleCarouselSlideFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -1264,6 +1339,15 @@ export default function AdminLayoutPage() {
           return null;
         });
         setFullWidthImagePendingFile(null);
+        setFullWidthImageMarkedForRemoval(false);
+      } else if (fullWidthImageMarkedForRemoval) {
+        const savedMeta = await updateFullWidthImageUrl(null);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setFullWidthImageUrl(null);
+        setFullWidthImageMarkedForRemoval(false);
       }
 
       if (heroImagePendingFile) {
@@ -1286,6 +1370,15 @@ export default function AdminLayoutPage() {
         });
         setHeroImageDraftMobilePreviewUrl(null);
         setHeroImagePendingFile(null);
+        setHeroImageDeskMarkedForRemoval(false);
+      } else if (heroImageDeskMarkedForRemoval) {
+        const savedMeta = await updateHeroImageUrl(null);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setHeroImageUrl(null);
+        setHeroImageDeskMarkedForRemoval(false);
       }
       if (heroImageMobilePendingFile) {
         const fd = new FormData();
@@ -1307,6 +1400,15 @@ export default function AdminLayoutPage() {
         });
         setHeroImageMobileDraftMobilePreviewUrl(null);
         setHeroImageMobilePendingFile(null);
+        setHeroImageMobMarkedForRemoval(false);
+      } else if (heroImageMobMarkedForRemoval) {
+        const savedMeta = await updateHeroImageMobileUrl(null);
+        if (!savedMeta.success) {
+          setMessage({ type: "error", text: savedMeta.error });
+          return;
+        }
+        setHeroImageMobileUrl(null);
+        setHeroImageMobMarkedForRemoval(false);
       }
 
       const pendingCarouselKeys = Object.keys(carouselSlidePendingFiles);
@@ -1396,7 +1498,18 @@ export default function AdminLayoutPage() {
         }
         mobUrl = up.url;
       }
-      if (headerBgDeskPendingFile || headerBgMobPendingFile) {
+      if (headerBgDeskMarkedForRemoval && !headerBgDeskPendingFile) {
+        deskUrl = null;
+      }
+      if (headerBgMobMarkedForRemoval && !headerBgMobPendingFile) {
+        mobUrl = null;
+      }
+      const headerBgNeedsPersist =
+        headerBgDeskPendingFile ||
+        headerBgMobPendingFile ||
+        headerBgDeskMarkedForRemoval ||
+        headerBgMobMarkedForRemoval;
+      if (headerBgNeedsPersist) {
         const savedH = await updateHeaderBackgroundUrls(deskUrl, mobUrl);
         if (!savedH.success) {
           setMessage({ type: "error", text: savedH.error });
@@ -1414,6 +1527,8 @@ export default function AdminLayoutPage() {
           return null;
         });
         setHeaderBgMobPendingFile(null);
+        setHeaderBgDeskMarkedForRemoval(false);
+        setHeaderBgMobMarkedForRemoval(false);
       }
 
       const result = await updateLayoutBlocks(blocks, viewportFloatingIcons);
@@ -1446,6 +1561,55 @@ export default function AdminLayoutPage() {
   }, [selectedBlockFloatingIcons, blockDeletePick]);
   const selectedIndex = selectedBlockId != null ? getBlockIndex(selectedBlockId) : -1;
   const editLink = selectedBlockId ? BLOCK_EDIT_LINKS[selectedBlockId] : null;
+
+  const renderBlockBackgroundEditor = () => {
+    if (selectedIndex < 0 || !selectedBlock || selectedBlock.id === "footer") return null;
+    const bgUrl = selectedBlock.backgroundImageUrl?.trim() || null;
+    return (
+      <div>
+        <div className="mb-1 space-y-0.5">
+          <label className="block text-xs font-medium text-gray-700">區塊背景圖</label>
+          <p className="text-left text-[11px] leading-snug text-gray-500">{BLOCK_BACKGROUND_IMAGE_SIZE_HINT}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadingBlockId === selectedBlockId}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {uploadingBlockId === selectedBlockId ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ImageIcon className="h-4 w-4" />
+          )}
+          {bgUrl ? "更換背景圖" : "上傳背景圖"}
+        </button>
+        {bgUrl ? (
+          <div className="mt-2 space-y-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={bgUrl}
+              alt=""
+              className="w-full max-h-36 rounded-md border border-gray-200 object-contain bg-gray-50"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setBlockBackgroundUrlByIndex(selectedIndex, null);
+                setMessage({
+                  type: "success",
+                  text: "已移除區塊背景圖預覽，請按「儲存版面」寫入資料庫。",
+                });
+              }}
+              className="text-xs text-gray-600 hover:text-red-600 underline"
+            >
+              刪除背景圖
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const fullWidthImageEditorBlock =
     selectedBlockId === "full_width_image" ? (
@@ -1481,6 +1645,11 @@ export default function AdminLayoutPage() {
             className="text-xs text-gray-600 hover:text-red-600 underline"
           >
             取消待上傳預覽
+          </button>
+        ) : null}
+        {displayFullWidthImageUrl ? (
+          <button type="button" onClick={removeFullWidthImage} className="text-xs text-gray-600 hover:text-red-600 underline">
+            刪除單張大圖
           </button>
         ) : null}
       </div>
@@ -1531,6 +1700,15 @@ export default function AdminLayoutPage() {
             className="text-xs text-gray-600 hover:text-red-600 underline"
           >
             取消待上傳預覽
+          </button>
+        ) : null}
+        {(canvasViewportMode === "mobile" ? displayHeroImageMobileUrl : displayHeroImageUrl) ? (
+          <button
+            type="button"
+            onClick={canvasViewportMode === "mobile" ? removeHeroImageMobile : removeHeroImageDesktop}
+            className="text-xs text-gray-600 hover:text-red-600 underline"
+          >
+            刪除首頁主圖（{canvasViewportMode === "mobile" ? "手機" : "桌機"}）
           </button>
         ) : null}
       </div>
@@ -1604,6 +1782,15 @@ export default function AdminLayoutPage() {
               取消桌機背景預覽
             </button>
           ) : null}
+          {displayHeaderBackgroundUrl ? (
+            <button
+              type="button"
+              onClick={removeHeaderBackgroundDesktop}
+              className="text-xs text-gray-600 hover:text-red-600 underline"
+            >
+              刪除桌機頁首背景
+            </button>
+          ) : null}
         </div>
         <div className="space-y-1.5">
           <span className="text-xs font-medium text-gray-700">頁首背景（手機，可選）</span>
@@ -1633,6 +1820,15 @@ export default function AdminLayoutPage() {
               className="text-xs text-gray-600 hover:text-red-600 underline"
             >
               取消手機背景預覽
+            </button>
+          ) : null}
+          {displayHeaderBackgroundMobileUrl ? (
+            <button
+              type="button"
+              onClick={removeHeaderBackgroundMobile}
+              className="text-xs text-gray-600 hover:text-red-600 underline"
+            >
+              刪除手機頁首背景
             </button>
           ) : null}
         </div>
@@ -2458,25 +2654,7 @@ export default function AdminLayoutPage() {
                     />
                   </div>
 
-                  <div>
-                    <div className="mb-1 space-y-0.5">
-                      <label className="block text-xs font-medium text-gray-700">區塊背景圖</label>
-                      <p className="text-left text-[11px] leading-snug text-gray-500">{BLOCK_BACKGROUND_IMAGE_SIZE_HINT}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingBlockId === selectedBlockId}
-                      className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      {uploadingBlockId === selectedBlockId ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ImageIcon className="h-4 w-4" />
-                      )}
-                      {selectedBlock.backgroundImageUrl ? "更換背景圖" : "上傳背景圖"}
-                    </button>
-                  </div>
+                  {renderBlockBackgroundEditor()}
                 </>
               ) : null}
             </div>
@@ -2608,25 +2786,7 @@ export default function AdminLayoutPage() {
                   />
                 </div>
 
-                <div>
-                  <div className="mb-1 space-y-0.5">
-                    <label className="block text-xs font-medium text-gray-700">區塊背景圖</label>
-                    <p className="text-left text-[11px] leading-snug text-gray-500">{BLOCK_BACKGROUND_IMAGE_SIZE_HINT}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingBlockId === selectedBlockId}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {uploadingBlockId === selectedBlockId ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ImageIcon className="h-4 w-4" />
-                    )}
-                    {selectedBlock.backgroundImageUrl ? "更換背景圖" : "上傳背景圖"}
-                  </button>
-                </div>
+                {renderBlockBackgroundEditor()}
               </>
             ) : null}
           </div>
