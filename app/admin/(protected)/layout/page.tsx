@@ -491,7 +491,8 @@ export default function AdminLayoutPage() {
             : [];
         setBlocks(nextBlocks);
         setHeroImageUrl(s.heroImageUrl);
-        setHeroImageMobileUrl(s.heroImageMobileUrl ?? s.heroImageUrl ?? null);
+        /** 手機主圖為獨立欄位；勿載入時合併桌機網址（訪客前台另有沿用桌機之 fallback） */
+        setHeroImageMobileUrl(s.heroImageMobileUrl ?? null);
         setCarouselItems(s.carouselItems.length > 0 ? s.carouselItems : [
           { id: "w1", title: "熱門推薦", subtitle: "親子手作體驗", imageUrl: null, visible: true },
           { id: "w2", title: "新課上架", subtitle: "兒童烘焙工作坊", imageUrl: null, visible: true },
@@ -1019,9 +1020,10 @@ export default function AdminLayoutPage() {
     () => heroImageDraftUrl ?? heroImageUrl,
     [heroImageDraftUrl, heroImageUrl]
   );
+  /** 手機畫布／側欄僅預覽「手機專用主圖」，不含桌機網址 fallback（與桌機主圖分開） */
   const displayHeroImageMobileUrl = useMemo(
-    () => heroImageMobileDraftUrl ?? heroImageMobileUrl ?? heroImageUrl,
-    [heroImageMobileDraftUrl, heroImageMobileUrl, heroImageUrl]
+    () => heroImageMobileDraftUrl ?? heroImageMobileUrl,
+    [heroImageMobileDraftUrl, heroImageMobileUrl]
   );
   const mobilePreviewHeroImageUrl = useMemo(() => {
     if (displayHeroImageUrl?.startsWith("blob:")) {
@@ -1659,8 +1661,14 @@ export default function AdminLayoutPage() {
     selectedBlockId === "hero" || selectedBlockId === "hero_carousel" ? (
       <div className="space-y-2 rounded-lg border border-amber-200/80 bg-white/90 p-3">
         <p className="text-xs text-gray-600 leading-relaxed">
-          首頁主圖（{canvasViewportMode === "mobile" ? "手機版" : "桌機版"}）：
+          首頁主圖（{canvasViewportMode === "mobile" ? "手機版" : "桌機版"}）與另一視角為兩筆獨立設定；
           {canvasViewportMode === "mobile" ? HERO_MAIN_IMAGE_SIZE_HINT_MOBILE : HERO_MAIN_IMAGE_SIZE_HINT_DESKTOP}。
+          {canvasViewportMode === "mobile" ? (
+            <>
+              {" "}
+              未上傳手機專用圖時，手機畫布此區為空白；訪客手機仍會沿用桌機主圖顯示。
+            </>
+          ) : null}
         </p>
         <button
           type="button"

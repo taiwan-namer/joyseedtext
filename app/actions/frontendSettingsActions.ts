@@ -926,7 +926,8 @@ export async function updateFrontendSettings(formData: FormData): Promise<
       if (url) heroImageUrl = url;
     }
     const heroMobileUrl = (formData.get("hero_image_mobile_url") as string)?.trim() || null;
-    let heroImageMobileUrl = heroMobileUrl || existing.heroImageMobileUrl || existing.heroImageUrl;
+    /** 手機主圖獨立於桌機；勿在未指定時寫入桌機網址（訪客端另有沿用桌機之顯示邏輯） */
+    let heroImageMobileUrl = heroMobileUrl || existing.heroImageMobileUrl;
     const heroMobileFile = formData.get("hero_image_mobile") as File | null;
     if (!heroMobileUrl && heroMobileFile && heroMobileFile instanceof File && heroMobileFile.size > 0) {
       const url = await uploadOneToR2WithPrefix(formData, "hero_image_mobile", "home-hero-mobile");

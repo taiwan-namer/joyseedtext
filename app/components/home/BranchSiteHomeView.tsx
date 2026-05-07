@@ -827,47 +827,77 @@ export default function BranchSiteHomeView({
    */
   const heroImageTrimmed = heroImageUrl?.trim() || null;
   const heroImageMobileTrimmed = heroImageMobileUrl?.trim() || null;
-  const resolvedHeroImageMobile = heroImageMobileTrimmed || heroImageTrimmed;
-  const hasHeroImageAsset = !!(heroImageTrimmed || resolvedHeroImageMobile);
+  /** 訪客窄螢幕：未單獨設定手機主圖時沿用桌機圖 */
+  const visitorMergedHeroMobile = heroImageMobileTrimmed || heroImageTrimmed;
+  /** 後台手機畫布：僅顯示手機專用網址，不沿用桌機（與訪客 fallback 分開） */
+  const adminMobileHeroStrict =
+    isAdminCanvas && floatingCoordinateViewport === "mobile";
+  const heroMobileForNarrowCss = adminMobileHeroStrict
+    ? heroImageMobileTrimmed
+    : visitorMergedHeroMobile;
+  const hasHeroImageAsset = !!(heroImageTrimmed || heroImageMobileTrimmed);
   const heroMediaFrameClass = hasHeroImageAsset
     ? "relative w-full rounded-xl overflow-hidden bg-amber-50"
     : "relative w-full aspect-[4/5] sm:aspect-[3/2] md:aspect-auto md:h-[600px] rounded-xl overflow-hidden bg-amber-50";
   const hasSplitHeroByViewport =
     !!heroImageTrimmed &&
-    !!resolvedHeroImageMobile &&
-    heroImageTrimmed !== resolvedHeroImageMobile;
+    !!visitorMergedHeroMobile &&
+    heroImageTrimmed !== visitorMergedHeroMobile;
+  /** 後台僅有桌機主圖時仍拆成雙層，窄預覽列不顯示桌機圖，避免與手機專用圖混淆 */
+  const forceDualHeroAdminMobileOnlyDesktop =
+    adminMobileHeroStrict && !!heroImageTrimmed && !heroImageMobileTrimmed;
+  const useDualHeroLayout = hasSplitHeroByViewport || forceDualHeroAdminMobileOnlyDesktop;
   const hasMainHeroVisual =
     !!heroImageTrimmed ||
     (iconsForMainHeroSection != null && iconsForMainHeroSection.length > 0) ||
     !!admin;
 
+  /** 訪客有主圖時高度應跟隨圖片；勿套用畫布 minHeight（手機常 fallback 桌機 heightPx 而變成大片留白） */
+  const heroSectionLayoutStyle = (() => {
+    const style = getBlockStyle("hero");
+    if (isAdminCanvas || !hasHeroImageAsset) return style;
+    if (style.minHeight == null) return style;
+    const { minHeight: _omit, ...rest } = style;
+    return rest;
+  })();
+
   const heroInner = hasMainHeroVisual ? (
     <section className="relative w-full pt-0 pb-4">
       {/* minHeight／背景在此層：裝飾圖 absolute 以此層為參考，勿只加在外層 section */}
-      <div className="relative w-full min-h-0" style={getBlockStyle("hero")}>
+      <div className="relative w-full min-h-0" style={heroSectionLayoutStyle}>
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-4">
           <div className={heroMediaFrameClass}>
-          {heroImageTrimmed || resolvedHeroImageMobile ? (
+          {heroImageTrimmed || visitorMergedHeroMobile ? (
             <>
-              {hasSplitHeroByViewport ? (
+              {useDualHeroLayout ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={resolvedHeroImageMobile!}
-                    alt=""
-                    className="block w-full max-w-full h-auto object-contain md:hidden"
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={heroImageTrimmed!}
-                    alt=""
-                    className="hidden md:block w-full max-w-full h-auto object-contain"
-                  />
+                  <div className="md:hidden">
+                    {heroMobileForNarrowCss ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={heroMobileForNarrowCss}
+                        alt=""
+                        className="block w-full max-w-full h-auto object-contain"
+                      />
+                    ) : forceDualHeroAdminMobileOnlyDesktop ? (
+                      <div className="flex min-h-[120px] items-center justify-center bg-amber-50 px-4 py-6 text-center text-xs text-amber-900/80">
+                        尚未上傳手機專用首頁主圖；訪客手機仍會顯示桌機主圖。
+                      </div>
+                    ) : null}
+                  </div>
+                  {heroImageTrimmed ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={heroImageTrimmed}
+                      alt=""
+                      className="hidden md:block w-full max-w-full h-auto object-contain"
+                    />
+                  ) : null}
                 </>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={(heroImageTrimmed ?? resolvedHeroImageMobile)!}
+                  src={(heroImageTrimmed ?? visitorMergedHeroMobile)!}
                   alt=""
                   className="block w-full max-w-full h-auto object-contain"
                 />
@@ -960,7 +990,7 @@ export default function BranchSiteHomeView({
   );
 
   const heroCarouselStripInner =
-    admin && (heroImageTrimmed || resolvedHeroImageMobile) && heroBlock && heroCarouselBlock ? (
+    admin && (heroImageTrimmed || visitorMergedHeroMobile) && heroBlock && heroCarouselBlock ? (
       <section
         className="relative w-full border-t border-dashed border-amber-300/80 bg-amber-50/35"
         style={getBlockStyle("hero_carousel")}
@@ -1454,7 +1484,7 @@ export default function BranchSiteHomeView({
         return wrap("hero", heroInner, { blockOverride: heroBlock ?? undefined });
       }
       case "hero_carousel": {
-        if (!admin || (!heroImageTrimmed && !resolvedHeroImageMobile)) return null;
+        if (!admin || (!heroImageTrimmed && !visitorMergedHeroMobile)) return null;
         if (heroBlock && heroCarouselBlock && heroCarouselStripInner) {
           return wrap("hero_carousel", heroCarouselStripInner);
         }
