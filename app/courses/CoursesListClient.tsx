@@ -8,7 +8,12 @@ import { ChevronLeft, ChevronRight, Image as ImageIcon } from "lucide-react";
 import { useStoreSettings } from "@/app/providers/StoreSettingsProvider";
 import { HeaderMember } from "@/app/components/HeaderMember";
 import type { CourseForPublic } from "@/app/actions/productActions";
-import { COURSES_LIST_PAGE_SIZE, dedupeCategoryList } from "@/lib/constants";
+import {
+  COURSES_LIST_PAGE_SIZE,
+  dedupeCategoryList,
+  MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY,
+  marketplaceCategoryDisplayLabel,
+} from "@/lib/constants";
 
 function buildQueryString(next: Record<string, string | undefined>): string {
   const p = new URLSearchParams();
@@ -55,9 +60,11 @@ export default function CoursesListClient({
 
   const categoryFilterOptions = useMemo(() => {
     const list = dedupeCategoryList(remoteCategoryOptions);
+    const branchOnly = MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY;
+    const withBranch = list.includes(branchOnly) ? list : [branchOnly, ...list];
     const c = category.trim();
-    if (c && !list.includes(c)) return [...list, c];
-    return list;
+    if (c && !withBranch.includes(c)) return [...withBranch, c];
+    return withBranch;
   }, [remoteCategoryOptions, category]);
 
   const queryKey = useMemo(
@@ -172,7 +179,7 @@ export default function CoursesListClient({
                 <option value="">全部分類</option>
                 {categoryFilterOptions.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {marketplaceCategoryDisplayLabel(c)}
                   </option>
                 ))}
               </select>
@@ -277,7 +284,9 @@ export default function CoursesListClient({
                   <div className="p-4 flex-1 flex flex-col min-h-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       {course.marketplace_category ? (
-                        <span className="text-xs text-gray-500 truncate">{course.marketplace_category}</span>
+                        <span className="text-xs text-gray-500 truncate">
+                          {marketplaceCategoryDisplayLabel(course.marketplace_category)}
+                        </span>
                       ) : (
                         <span className="text-xs text-gray-400">課程</span>
                       )}

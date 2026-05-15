@@ -24,6 +24,10 @@ import {
   rowMatchesListPageAgeFilter,
   rowMatchesListPageDateFilter,
 } from "@/lib/coursesListFilters";
+import {
+  isBranchSiteOnlyMarketplaceCategory,
+  MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY,
+} from "@/lib/constants";
 
 /** 首頁課程列表等快取：與 model 對齊之集中 revalidate（joyseed 目前以 path 為主） */
 export async function revalidateHomepageCoursesListCache(): Promise<void> {
@@ -32,6 +36,25 @@ export async function revalidateHomepageCoursesListCache(): Promise<void> {
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+function isMissingTrialDiscountEnabledColumnError(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes("trial_discount_enabled") && (m.includes("does not exist") || m.includes("could not find"));
+}
+
+function parseTrialDiscountEnabledFromForm(formData: FormData): boolean {
+  const v = formData.get("trial_discount_enabled");
+  return v === "on" || v === "true" || v === "1";
+}
+
+/** 表單「主題／上架範圍」：總站主題字串或 {@link MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY} */
+function parseMarketplaceCategoryFromForm(formData: FormData): string | null {
+  const raw = (formData.get("marketplace_category") as string)?.trim() ?? "";
+  if (!raw) return null;
+  if (raw === MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY) return MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY;
+  if (isBranchSiteOnlyMarketplaceCategory(raw)) return MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY;
+  return raw;
+}
 
 /** 讀取並去除前後空白，避免 .env 隱形空白導致簽章錯誤 */
 function envTrim(key: string): string {
@@ -692,8 +715,11 @@ export async function createCourseFull(formData: FormData): Promise<
     const class_date = classDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(classDateRaw) ? classDateRaw : null;
     const class_time = classTimeRaw && /^\d{2}:\d{2}(:\d{2})?$/.test(classTimeRaw) ? classTimeRaw.slice(0, 5) : null;
 
-    const marketplace_category = (formData.get("marketplace_category") as string)?.trim() || null;
+    const marketplace_category = parseMarketplaceCategoryFromForm(formData);
     const store_category = (formData.get("store_category") as string)?.trim() || null;
+    if (!marketplace_category) {
+      return { success: false, error: "請選擇主題／上架範圍（本站或總站主題）" };
+    }
     const city_region = (formData.get("city_region") as string)?.trim() || null;
     const city_district = (formData.get("city_district") as string)?.trim() || null;
     const activity_address = (formData.get("activity_address") as string)?.trim() || null;
@@ -769,6 +795,7 @@ export async function createCourseFull(formData: FormData): Promise<
       inventory_merchant_id: inventory_merchant_id || null,
       inventory_class_id: inventory_class_id || null,
       course_faq_items: course_faq_items.length > 0 ? course_faq_items : null,
+      trial_discount_enabled: parseTrialDiscountEnabledFromForm(formData),
       ...hqListingForRow,
     };
 
@@ -802,6 +829,11 @@ export async function createCourseFull(formData: FormData): Promise<
         const { listing_bind_token: _lb, ...rest } = attemptRow;
         attemptRow = rest;
         mintedListingToken = null;
+        continue;
+      }
+      if (isMissingTrialDiscountEnabledColumnError(errMsg)) {
+        const { trial_discount_enabled: _t, ...rest } = attemptRow;
+        attemptRow = rest;
         continue;
       }
       if (/slug/i.test(errMsg) && "slug" in attemptRow) {
@@ -1227,6 +1259,8 @@ export type CourseForEdit = {
   map_embed_html: string | null;
   /** 附近大眾運輸（與總站共用 classes.nearby_transport） */
   nearby_transport: string | null;
+  /** 是否參與會員首次體驗價（與總站共用 classes.trial_discount_enabled） */
+  trial_discount_enabled?: boolean;
 };
 
 export async function getCourseForEdit(id: string): Promise<CourseForEdit | null> {
@@ -1290,6 +1324,7 @@ export async function getCourseForEdit(id: string): Promise<CourseForEdit | null
       activity_address: row.activity_address != null ? String(row.activity_address) : null,
       map_embed_html: row.map_embed_html != null ? String(row.map_embed_html) : null,
       nearby_transport: row.nearby_transport != null ? String(row.nearby_transport) : null,
+      trial_discount_enabled: row.trial_discount_enabled === true,
     };
   } catch {
     return null;
@@ -1468,8 +1503,11 @@ export async function updateCourseFull(
     const class_date = classDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(classDateRaw) ? classDateRaw : null;
     const class_time = classTimeRaw && /^\d{2}:\d{2}(:\d{2})?$/.test(classTimeRaw) ? classTimeRaw.slice(0, 5) : null;
 
-    const marketplace_category = (formData.get("marketplace_category") as string)?.trim() || null;
+    const marketplace_category = parseMarketplaceCategoryFromForm(formData);
     const store_category = (formData.get("store_category") as string)?.trim() || null;
+    if (!marketplace_category) {
+      return { success: false, error: "請選擇主題／上架範圍（本站或總站主題）" };
+    }
     const city_region = (formData.get("city_region") as string)?.trim() || null;
     const city_district = (formData.get("city_district") as string)?.trim() || null;
     const activity_address = (formData.get("activity_address") as string)?.trim() || null;
@@ -1540,6 +1578,7 @@ export async function updateCourseFull(
       inventory_merchant_id: inventory_merchant_id || null,
       inventory_class_id: inventory_class_id || null,
       course_faq_items: course_faq_items.length > 0 ? course_faq_items : null,
+      trial_discount_enabled: parseTrialDiscountEnabledFromForm(formData),
       ...hqListingPatch,
     };
 
@@ -1548,6 +1587,11 @@ export async function updateCourseFull(
       const { error: upErr } = await supabase.from("classes").update(attemptRow).eq("id", id).eq("merchant_id", merchantId);
       if (!upErr) break;
       const errMsg = upErr.message ?? "";
+      if (isMissingTrialDiscountEnabledColumnError(errMsg)) {
+        const { trial_discount_enabled: _t, ...rest } = attemptRow;
+        attemptRow = rest;
+        continue;
+      }
       if (/slug/i.test(errMsg) && "slug" in attemptRow) {
         const { slug: _s, ...rest } = attemptRow;
         attemptRow = rest;

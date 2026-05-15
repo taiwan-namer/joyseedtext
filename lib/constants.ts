@@ -33,13 +33,30 @@ export const COURSE_FORM_GALLERY_SLOT_COUNT = 14;
 /** 主圖 1 + 圖庫 {@link COURSE_FORM_GALLERY_SLOT_COUNT}，合計 15 張 */
 export const COURSE_FORM_IMAGE_SLOT_COUNT = 1 + COURSE_FORM_GALLERY_SLOT_COUNT;
 
+/**
+ * 存入 `classes.marketplace_category`：表示僅本分站顯示，不上總站市集列表。
+ * 總站查詢已發布課程時須排除此值（見 model 專案 `isBranchSiteOnlyMarketplaceCategory`）。
+ */
+export const MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY = "__branch_site_only__";
+
+export function isBranchSiteOnlyMarketplaceCategory(value: string | null | undefined): boolean {
+  return (value ?? "").trim() === MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY;
+}
+
+/** 後台／列表顯示用標籤 */
+export function marketplaceCategoryDisplayLabel(value: string | null | undefined): string {
+  if (isBranchSiteOnlyMarketplaceCategory(value)) return "本站";
+  const t = (value ?? "").trim();
+  return t || "—";
+}
+
 /** 總站主題 API 回傳：去空白、去重，保留首次出現順序 */
 export function dedupeCategoryList(categories: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const c of categories) {
     const t = (c ?? "").trim();
-    if (!t || seen.has(t)) continue;
+    if (!t || seen.has(t) || isBranchSiteOnlyMarketplaceCategory(t)) continue;
     seen.add(t);
     out.push(t);
   }

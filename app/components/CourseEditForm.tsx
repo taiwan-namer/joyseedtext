@@ -21,6 +21,7 @@ import {
   X,
   Plus,
   ImagePlus,
+  CircleHelp,
 } from "lucide-react";
 
 /** 與 DB 總站課程 merchant_id 一致（build 時寫入）；用於總站專屬 UI（自動產碼等） */
@@ -39,7 +40,12 @@ import {
   寵物攜帶規定選項,
   未達人數處置選項,
 } from "@/lib/courseFormOptions";
-import { CITY_REGIONS, dedupeCategoryList } from "@/lib/constants";
+import {
+  CITY_REGIONS,
+  dedupeCategoryList,
+  isBranchSiteOnlyMarketplaceCategory,
+  MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY,
+} from "@/lib/constants";
 import {
   COURSE_GALLERY_MAX,
   COURSE_IMAGE_SLOT_LABELS,
@@ -60,6 +66,63 @@ import {
 import { getDistrictsForCity } from "@/lib/taiwanDistricts";
 import { slugifyCourseTitle } from "@/lib/courseSlug";
 import { isValidImageUrl } from "@/lib/safeMedia";
+
+const TRIAL_DISCOUNT_HELP_TEXT =
+  "首次體驗抽成試算：例：售價 NT$1,000 → 50% 折讓給消費者（實付 NT$500），平台抽成 25%（NT$250），供應商實際收益 25%（NT$250）。若會員已用過該供應商首次體驗，再購有勾選本選項的課程時，平台抽成固定為成交金額的 6%。未勾選的課程依後台為該店家設定的抽成 % 計算。";
+
+/** 首次體驗價說明：桌機 hover、手機點擊；不開新視窗 */
+function TrialDiscountHelpHint() {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  return (
+    <span ref={wrapRef} className="relative inline-flex shrink-0 align-middle">
+      <button
+        type="button"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-amber-700/80 hover:bg-amber-100 hover:text-amber-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+        aria-label="首次體驗價說明"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        onMouseEnter={() => {
+          if (typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches) {
+            setOpen(true);
+          }
+        }}
+        onMouseLeave={() => {
+          if (typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches) {
+            setOpen(false);
+          }
+        }}
+      >
+        <CircleHelp className="h-4 w-4" aria-hidden />
+      </button>
+      {open ? (
+        <span
+          role="tooltip"
+          className="absolute left-1/2 top-full z-50 mt-1.5 w-[min(18rem,calc(100vw-2.5rem))] -translate-x-1/2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-left text-xs font-normal leading-relaxed text-gray-600 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {TRIAL_DISCOUNT_HELP_TEXT}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i + 9); // 9～21
@@ -512,7 +575,7 @@ export default function CourseEditForm({
   const globalCategories = useMemo(() => {
     const list = dedupeCategoryList(remoteGlobalCategories);
     const cur = initialData?.marketplace_category?.trim();
-    if (cur && !list.includes(cur)) return [...list, cur];
+    if (cur && !isBranchSiteOnlyMarketplaceCategory(cur) && !list.includes(cur)) return [...list, cur];
     return list;
   }, [remoteGlobalCategories, initialData?.marketplace_category]);
 
@@ -1528,19 +1591,29 @@ export default function CourseEditForm({
                   </div>
                 ) : null}
                 <div className="mb-4">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">總站主題分類</label>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">主題／上架範圍</label>
                   <select
                     key={`mc-${initialData?.id ?? "new"}-${globalCategories.join("\u0001")}`}
                     name="marketplace_category"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
                     disabled={isPending}
-                    defaultValue={initialData?.marketplace_category ?? ""}
+                    defaultValue={
+                      isBranchSiteOnlyMarketplaceCategory(initialData?.marketplace_category)
+                        ? MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY
+                        : (initialData?.marketplace_category ?? "")
+                    }
                   >
                     <option value="">請選擇</option>
+                    <option value={MARKETPLACE_CATEGORY_BRANCH_SITE_ONLY}>本站（僅本分站，不上總站市集）</option>
                     {globalCategories.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
+                      <option key={opt} value={opt}>
+                        {opt}（同步上架總站）
+                      </option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                    選「本站」時課程只在本分站首頁／課程列表顯示，不會出現在總站市集；若要總站曝光請選上方總站主題之一。精選分館仍可用下方「分站自訂分類」標記。
+                  </p>
                 </div>
                 {showHqCourseAdminUi ? (
                   <div className="mb-4">
@@ -1746,6 +1819,22 @@ export default function CourseEditForm({
                       <input name="sale_price" type="number" min={0} required={hasSale} className="w-full rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-gray-900" placeholder="特價金額" disabled={isPending} defaultValue={initialData?.sale_price ?? ""} />
                     </div>
                   )}
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+                    <label className="flex cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        name="trial_discount_enabled"
+                        value="true"
+                        defaultChecked={initialData?.trial_discount_enabled === true}
+                        className="shrink-0 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        disabled={isPending}
+                      />
+                      <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        首次體驗價
+                        <TrialDiscountHelpHint />
+                      </span>
+                    </label>
+                  </div>
                 </div>
                 <div className="mt-6">
                   <div className="mb-2 flex items-center justify-between">
