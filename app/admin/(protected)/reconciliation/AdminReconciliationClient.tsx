@@ -73,12 +73,12 @@ function ReconciliationTable({
           <th className="text-left py-3 px-4 font-medium text-gray-700">訂單時間</th>
           <th className="text-left py-3 px-4 font-medium text-gray-700">課程所屬店家</th>
           <th className="text-left py-3 px-4 font-medium text-gray-700">課程</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700">客付總額</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700">安心包</th>
           <th className="text-right py-3 px-4 font-medium text-gray-700">課程金額</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700">安心包</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700">客付總額</th>
           <th className="text-right py-3 px-4 font-medium text-gray-700">抽成%</th>
           <th className="text-right py-3 px-4 font-medium text-gray-700">平台服務費</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700">扣除平台服務費後（課程淨額）</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700">扣除平台服務費後（客付−平台費）</th>
         </tr>
       </thead>
       <tbody>
@@ -96,9 +96,9 @@ function ReconciliationTable({
                 </span>
               ) : null}
             </td>
-            <td className="py-3 px-4 text-right text-gray-600">NT$ {row.order_total.toLocaleString()}</td>
-            <td className="py-3 px-4 text-right text-gray-600">NT$ {row.peace_addon_amount.toLocaleString()}</td>
             <td className="py-3 px-4 text-right font-medium">NT$ {row.course_amount.toLocaleString()}</td>
+            <td className="py-3 px-4 text-right text-gray-600">NT$ {row.peace_addon_amount.toLocaleString()}</td>
+            <td className="py-3 px-4 text-right text-gray-600">NT$ {row.order_total.toLocaleString()}</td>
             <td className="text-right py-3 px-4 text-gray-600">{row.commission_rate_percent}%</td>
             <td className="py-3 px-4 text-right">NT$ {row.commission_amount.toLocaleString()}</td>
             <td className="py-3 px-4 text-right font-medium text-gray-900">
@@ -126,13 +126,17 @@ function PayoutClaimSection({
   return (
     <section className="space-y-3 rounded-xl border border-violet-200/90 bg-violet-50/40 p-4 sm:p-5">
       <h2 className="text-lg font-semibold text-gray-900">請款項目</h2>
+      <p className="text-xs text-violet-900/85 leading-relaxed">
+        請款金額＝總站訂單「扣除平台服務費後」小計（各筆為客付總額−平台服務費；平台服務費依課程金額×抽成%，安心包不計入抽成底）−
+        本站訂單之平台服務費小計。此為區間內參考匯總，實際撥付以雙方約定為準。
+      </p>
       <p className="text-sm text-gray-500 lg:hidden">
         總站淨額 − 本站平台服務費 = 請款金額
       </p>
       <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-stretch lg:gap-3">
         <div className="flex flex-1 flex-col justify-center rounded-xl border border-white/80 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">總站淨額</p>
-          <p className="mt-1 text-xs text-gray-400">總站訂單「扣除平台服務費後（課程淨額）」小計</p>
+          <p className="mt-1 text-xs text-gray-400">總站訂單「客付總額−平台服務費」小計</p>
           <p className="mt-2 text-xl font-bold text-gray-900">NT$ {hqNet.toLocaleString()}</p>
         </div>
         <div className="hidden items-center justify-center text-2xl font-light text-gray-400 lg:flex" aria-hidden>
@@ -181,19 +185,19 @@ function TotalsCards({ totals, title }: { totals: Totals | null; title: string }
       <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">客付總額</p>
-          <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.order_total.toLocaleString()}</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">課程金額</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.course_amount.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-sm text-gray-500">客付總額</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.order_total.toLocaleString()}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">平台服務費</p>
           <p className="mt-1 text-lg font-bold text-gray-900">NT$ {totals.commission.toLocaleString()}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">扣除平台服務費後（課程淨額）</p>
+          <p className="text-sm text-gray-500">扣除平台服務費後（客付−平台費）</p>
           <p className="mt-1 text-lg font-bold text-amber-900">NT$ {totals.net.toLocaleString()}</p>
         </div>
       </div>
@@ -321,6 +325,12 @@ export default function AdminReconciliationClient() {
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       ) : null}
+
+      <p className="text-xs text-gray-500 leading-relaxed">
+        僅列出已付款／已完成訂單。欄位順序：課程金額、安心包、客付總額、抽成%、平台服務費、扣除平台服務費後。平台服務費以
+        <strong className="font-medium text-gray-700">課程金額</strong>×抽成%計（安心包不計入抽成底）；「扣除平台服務費後」＝
+        <strong className="font-medium text-gray-700">客付總額</strong>−該筆平台服務費。
+      </p>
 
       {totalsAll ? <TotalsCards totals={totalsAll} title="全站合計（本篩選區間）" /> : null}
 

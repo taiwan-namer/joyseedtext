@@ -258,6 +258,7 @@ export type ReconciliationLine = {
   peace_addon_amount: number;
   commission_rate_percent: number;
   commission_amount: number;
+  /** 客付總額 − 平台服務費（≥0）；平台服務費仍依課程金額×抽成% */
   course_net_after_commission: number;
   is_trial_first_purchase: boolean;
   purchase_channel: "hq" | "local";
@@ -297,7 +298,7 @@ function buildLineFromOrderSnapshot(params: {
   }
   const rate = parseCommissionRate(o.applied_commission_rate_percent ?? 0);
   const commissionAmt = Math.max(0, o.commission_amount);
-  const courseNet = Math.max(0, o.vendor_net_amount);
+  const courseNet = Math.max(0, orderTotal - commissionAmt);
 
   return {
     booking_id: row.id,
@@ -361,7 +362,7 @@ export function buildReconciliationLines(
     );
     const rate = parseCommissionRate(rawRate);
     const commissionAmt = commissionFromCourseAmount(amounts.courseAmount, rate);
-    const courseNet = Math.max(0, amounts.courseAmount - commissionAmt);
+    const courseNet = Math.max(0, amounts.orderTotal - commissionAmt);
     const trialFirst = (o?.is_trial_first_purchase === true) || deriveTrialFirstFromMetadata(r.metadata);
 
     out.push({

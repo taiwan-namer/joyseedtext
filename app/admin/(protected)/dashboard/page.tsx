@@ -269,7 +269,7 @@ export default function AdminDashboardPage() {
                 </p>
               </div>
               <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-medium text-gray-500">扣除平台服務費後（課程淨額）</p>
+                <p className="text-sm font-medium text-gray-500">扣除平台服務費後（客付−平台費）</p>
                 <p className="mt-1 text-2xl font-bold text-amber-900">
                   NT$ {(recoSummary?.totals.net ?? 0).toLocaleString()}
                 </p>
@@ -282,7 +282,7 @@ export default function AdminDashboardPage() {
                   <span className="font-semibold tabular-nums text-gray-800">
                     {recoSummary.totals_hq.order_total.toLocaleString()}
                   </span>
-                  {" · "}淨額 NT${" "}
+                  {" · "}淨額（客付−平台費） NT${" "}
                   <span className="font-semibold tabular-nums text-gray-800">{recoSummary.totals_hq.net.toLocaleString()}</span>
                 </span>
                 <span>
@@ -290,7 +290,7 @@ export default function AdminDashboardPage() {
                   <span className="font-semibold tabular-nums text-gray-800">
                     {recoSummary.totals_local.order_total.toLocaleString()}
                   </span>
-                  {" · "}淨額 NT${" "}
+                  {" · "}淨額（客付−平台費） NT${" "}
                   <span className="font-semibold tabular-nums text-gray-800">
                     {recoSummary.totals_local.net.toLocaleString()}
                   </span>
